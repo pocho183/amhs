@@ -20,31 +20,19 @@ public class AMHS {
     private String keystorePath;
     @Value("${tls.keystore.password}")
     private String keystorePassword;
+    @Value("${tls.truststore.path:}")
+    private String truststorePath;
+    @Value("${tls.truststore.password:}")
+    private String truststorePassword;
 
     public static void main(String[] args) {
         SpringApplication.run(AMHS.class, args);
     }
-
-    /*
-    @Bean
-    public CommandLineRunner startServer(TLSContextFactory factory) {
-        return args -> {
-            SSLContext tls = factory.create(keystorePath, keystorePassword);
-            RFC1006Server server = new RFC1006Server(serverPort, tls);
-            new Thread(() -> {
-                try {
-                    server.start();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }).start();
-        };
-    }*/
     
     @Bean
     public SSLContext sslContext(TLSContextFactory factory) {
         try {
-            return factory.create(keystorePath, keystorePassword);
+            return factory.create(keystorePath, keystorePassword, truststorePath, truststorePassword);
         } catch (Exception e) {
             throw new RuntimeException("Failed to create SSLContext", e);
         }

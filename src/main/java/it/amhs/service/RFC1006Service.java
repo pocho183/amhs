@@ -3,10 +3,14 @@ package it.amhs.service;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.security.Principal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.naming.ldap.LdapName;
+import javax.naming.ldap.Rdn;
+import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSocket;
 
 import org.slf4j.Logger;
@@ -23,16 +27,18 @@ public class RFC1006Service {
 	
 	private static final Logger logger = LoggerFactory.getLogger(RFC1006Service.class);
 
-	private final AMHSMessageRepository amhsMessagesRepository;
-	private final MTAService mtaService;
+    private final AMHSMessageRepository amhsMessagesRepository;
+    private final MTAService mtaService;
 
-	public RFC1006Service(AMHSMessageRepository amhsMessagesRepository, MTAService mtaService) {
-		this.amhsMessagesRepository = amhsMessagesRepository;
-		this.mtaService = mtaService;
-	}
+    public RFC1006Service(AMHSMessageRepository amhsMessagesRepository, MTAService mtaService) {
+        this.amhsMessagesRepository = amhsMessagesRepository;
+        this.mtaService = mtaService;
+    }
 
-	public void handleClient(SSLSocket socket) {
+    public void handleClient(SSLSocket socket) {
         try (InputStream in = socket.getInputStream(); OutputStream out = socket.getOutputStream()) {
+            CertificateIdentity identity = extractCertificateIdentity(socket);
+
             while (true) {
                 byte[] lenBytes = new byte[2];
                 int read = in.read(lenBytes);
@@ -81,62 +87,100 @@ public class RFC1006Service {
                 String profileHeader = headers.getOrDefault("Profile", "P3");
                 String priorityHeader = headers.getOrDefault("Priority", "GG");
                 String subject = headers.getOrDefault("Subject", "");
+                String channel = headers.getOrDefault("Channel", "DEFAULT");
 
                 AMHSProfile profile = parseProfile(profileHeader);
                 AMHSPriority priority = parsePriority(priorityHeader);
 
-                // SAVE
-                mtaService.storeMessage(from, to, body, messageId, profile, priority, subject);
+                mtaService.storeMessage(
+                    from,
+                    to,
+                    body,
+                    messageId,
+                    profile,
+                    priority,
+                    subject,
+                    channel,
+                    identity.cn(),
+                    identity.ou()
+                );
                 // ACKWNOLEDGE MESSAGE RETURN
                 String ack = "Message-ID: " + messageId + "\n" + "From: " + to + "\n" + "To: " + from + "\n" + "Status: RECEIVED\n";
                 sendRFC1006(out, ack);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+        	logger.error("RFC1006 handling error", e);
         } finally {
             try { socket.close(); } catch (Exception ignored) {}
         }
     }
+    private void handleRetrieve(String command, OutputStream out) throws Exception {
+        String response;
+        if (command.equalsIgnoreCase("RETRIEVE ALL")) {
+            List<AMHSMessage> allMsgs = amhsMessagesRepository.findAll();
+            if (allMsgs.isEmpty()) {
+                response = "No messages.\n";
+            } else {
+                response = allMsgs.stream().map(m -> String.format("ID: %s | From: %s | Channel: %s | Body: %s",
+                    m.getMessageId(), m.getSender(), m.getChannelName(), m.getBody())).collect(java.util.stream.Collectors.joining("\n---\n")) + "\n";
+            }
+        } else if (command.toUpperCase().startsWith("RETRIEVE ")) {
+            String messageId = command.substring("RETRIEVE ".length()).trim();
+            response = amhsMessagesRepository.findByMessageId(messageId)
+                .map(m -> String.format("From: %s\nTo: %s\nChannel: %s\nProfile: %s\nPriority: %s\nBody: %s\n",
+                    m.getSender(), m.getRecipient(), m.getChannelName(), m.getProfile(), m.getPriority(), m.getBody()))
+                .orElse("Message-ID " + messageId + " not found.\n");
+        } else {
+            response = "Unknown command.\n";
+        }
+        sendRFC1006(out, response);
+    }
 
-	private void handleRetrieve(String command, OutputStream out) throws Exception {
-	    String response;
-	    if (command.equalsIgnoreCase("RETRIEVE ALL")) {
-	        List<AMHSMessage> allMsgs = amhsMessagesRepository.findAll();
-	        if (allMsgs.isEmpty()) {
-	            response = "No messages.\n";
-	        } else {
-	            response = allMsgs.stream().map(m -> String.format("ID: %s | From: %s | Body: %s", 
-	            		m.getMessageId(), m.getSender(), m.getBody())).collect(java.util.stream.Collectors.joining("\n---\n")) + "\n";
-	        }
-	    } else if (command.toUpperCase().startsWith("RETRIEVE ")) {
-	        String messageId = command.substring("RETRIEVE ".length()).trim();
-	        response = amhsMessagesRepository.findByMessageId(messageId)
-	                .map(m -> String.format("From: %s\nTo: %s\nBody: %s\n",  m.getSender(), m.getRecipient(), m.getBody()))
-	                .orElse("Message-ID " + messageId + " not found.\n");
-	    } else {
-	        response = "Unknown command.\n";
-	    }
-	    sendRFC1006(out, response);
-	}
-	
-	private AMHSProfile parseProfile(String value) {
-		try {
-			return AMHSProfile.valueOf(value.trim().toUpperCase());
-		} catch (Exception ex) {
-			logger.warn("Unsupported profile '{}', defaulting to P3", value);
-			return AMHSProfile.P3;
-		}
-	}
+    private AMHSProfile parseProfile(String value) {
+        try {
+            return AMHSProfile.valueOf(value.trim().toUpperCase());
+        } catch (Exception ex) {
+            logger.warn("Unsupported profile '{}', defaulting to P3", value);
+            return AMHSProfile.P3;
+        }
+    }
 
-	private AMHSPriority parsePriority(String value) {
-		try {
-			return AMHSPriority.valueOf(value.trim().toUpperCase());
-		} catch (Exception ex) {
-			logger.warn("Unsupported priority '{}', defaulting to GG", value);
-			return AMHSPriority.GG;
-		}
-	}
+    private AMHSPriority parsePriority(String value) {
+        try {
+            return AMHSPriority.valueOf(value.trim().toUpperCase());
+        } catch (Exception ex) {
+            logger.warn("Unsupported priority '{}', defaulting to GG", value);
+            return AMHSPriority.GG;
+        }
+    }
 
+    private CertificateIdentity extractCertificateIdentity(SSLSocket socket) {
+        try {
+            Principal principal = socket.getSession().getPeerPrincipal();
+            return parseDn(principal.getName());
+        } catch (SSLPeerUnverifiedException ex) {
+            logger.info("Client certificate not provided");
+            return new CertificateIdentity(null, null);
+        } catch (Exception ex) {
+            logger.warn("Failed to parse client certificate identity", ex);
+            return new CertificateIdentity(null, null);
+        }
+    }
+
+    private CertificateIdentity parseDn(String dn) throws Exception {
+        String cn = null;
+        String ou = null;
+        LdapName ldapName = new LdapName(dn);
+        for (Rdn rdn : ldapName.getRdns()) {
+            if ("CN".equalsIgnoreCase(rdn.getType())) {
+                cn = String.valueOf(rdn.getValue());
+            }
+            if ("OU".equalsIgnoreCase(rdn.getType())) {
+                ou = String.valueOf(rdn.getValue());
+            }
+        }
+        return new CertificateIdentity(cn, ou);
+    }
 
     private void sendRFC1006(OutputStream out, String message) throws Exception {
         byte[] msgBytes = message.getBytes("UTF-8");
@@ -145,5 +189,8 @@ public class RFC1006Service {
         bb.put(msgBytes);
         out.write(bb.array());
         out.flush();
+    }
+
+    private record CertificateIdentity(String cn, String ou) {
     }
 }

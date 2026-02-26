@@ -7,12 +7,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 public record MessageRequest(
-    String messageId,
+	String messageId,
     @NotBlank String from,
     @NotBlank String to,
     @NotBlank String body,
+    String channel,
     @NotNull AMHSProfile profile,
     @NotNull AMHSPriority priority,
     String subject
-) {
-}
+) { }

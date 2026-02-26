@@ -20,7 +20,7 @@ import lombok.Setter;
 @Setter
 public class AMHSMessage {
 
-    @Id
+	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     @Column(name = "message_id", nullable = false, unique = true)
@@ -31,6 +31,12 @@ public class AMHSMessage {
     private String recipient;
     @Column(nullable = false)
     private String body;
+    @Column(name = "channel_name", nullable = false, length = 64)
+    private String channelName;
+    @Column(name = "certificate_cn", length = 255)
+    private String certificateCn;
+    @Column(name = "certificate_ou", length = 255)
+    private String certificateOu;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AMHSProfile profile;

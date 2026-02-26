@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import it.amhs.compliance.AMHSComplianceValidator;
+import it.amhs.domain.AMHSChannel;
 import it.amhs.domain.AMHSMessage;
 import it.amhs.domain.AMHSPriority;
 import it.amhs.domain.AMHSProfile;
@@ -17,10 +18,16 @@ public class MTAService {
 
     private final AMHSMessageRepository amhsMessagesRepository;
     private final AMHSComplianceValidator complianceValidator;
+    private final AMHSChannelService channelService;
 
-    public MTAService(AMHSMessageRepository amhsMessagesRepository, AMHSComplianceValidator complianceValidator) {
+    public MTAService(
+        AMHSMessageRepository amhsMessagesRepository,
+        AMHSComplianceValidator complianceValidator,
+        AMHSChannelService channelService
+    ) {
         this.amhsMessagesRepository = amhsMessagesRepository;
         this.complianceValidator = complianceValidator;
+        this.channelService = channelService;
     }
 
     public AMHSMessage storeMessage(
@@ -30,9 +37,14 @@ public class MTAService {
         String messageId,
         AMHSProfile profile,
         AMHSPriority priority,
-        String subject
+        String subject,
+        String channelName,
+        String certificateCn,
+        String certificateOu
     ) {
         complianceValidator.validate(from, to, body, profile);
+        AMHSChannel channel = channelService.requireEnabledChannel(channelName);
+        complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
 
         AMHSMessage message = new AMHSMessage();
         message.setMessageId(resolveMessageId(messageId));
@@ -42,6 +54,9 @@ public class MTAService {
         message.setProfile(profile);
         message.setPriority(priority == null ? AMHSPriority.GG : priority);
         message.setSubject(normalize(subject));
+        message.setChannelName(channel.getName());
+        message.setCertificateCn(normalize(certificateCn));
+        message.setCertificateOu(normalize(certificateOu));
         return amhsMessagesRepository.save(message);
     }
 
@@ -53,9 +68,8 @@ public class MTAService {
         return StringUtils.hasText(messageId) ? messageId.trim() : UUID.randomUUID().toString();
     }
 
-	
     private String normalize(String value) {
-        return StringUtils.hasText(value) ? value.trim() : "";
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private String normalizeUpper(String value) {

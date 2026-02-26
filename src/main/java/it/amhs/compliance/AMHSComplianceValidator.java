@@ -5,6 +5,7 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import it.amhs.domain.AMHSChannel;
 import it.amhs.domain.AMHSProfile;
 
 @Component
@@ -23,6 +24,20 @@ public class AMHSComplianceValidator {
 
         if (profile == null) {
             throw new IllegalArgumentException("AMHS profile is mandatory");
+        }
+    }
+
+    public void validateCertificateIdentity(AMHSChannel channel, String certificateCn, String certificateOu) {
+        if (StringUtils.hasText(channel.getExpectedCn())) {
+            if (!StringUtils.hasText(certificateCn) || !channel.getExpectedCn().equalsIgnoreCase(certificateCn.trim())) {
+                throw new IllegalArgumentException("Certificate CN does not match channel policy");
+            }
+        }
+
+        if (StringUtils.hasText(channel.getExpectedOu())) {
+            if (!StringUtils.hasText(certificateOu) || !channel.getExpectedOu().equalsIgnoreCase(certificateOu.trim())) {
+                throw new IllegalArgumentException("Certificate OU does not match channel policy");
+            }
         }
     }
 

@@ -19,17 +19,22 @@ public class RFC1006Server {
 	private RFC1006Service rfc1006Service;
     private final int port;
     private final SSLContext tls;
+    private final boolean needClientAuth;
 
-    public RFC1006Server(@Value("${rfc1006.server.port:102}") int port, SSLContext tls, RFC1006Service rfc1006Service) {
+    public RFC1006Server(@Value("${rfc1006.server.port:102}") int port,
+                         @Value("${rfc1006.tls.need-client-auth:false}") boolean needClientAuth,
+                         SSLContext tls, RFC1006Service rfc1006Service) {
 		this.port = port;
 		this.tls = tls;
+		this.needClientAuth = needClientAuth;
 		this.rfc1006Service = rfc1006Service;
     }
 
     public void start() throws Exception {
         SSLServerSocket server = (SSLServerSocket) tls.getServerSocketFactory().createServerSocket(port);
         server.setEnabledProtocols(new String[]{"TLSv1.3", "TLSv1.2"});
-        server.setNeedClientAuth(false);
+        //server.setNeedClientAuth(false);
+        server.setNeedClientAuth(needClientAuth);
         logger.info("AMHS RFC1006 TLS Server listening on " + port);
         while (true) {
             SSLSocket socket = (SSLSocket) server.accept();

@@ -37,7 +37,10 @@ public class AMHSController {
             request.messageId(),
             request.profile(),
             request.priority(),
-            request.subject()
+            request.subject(),
+            request.channel(),
+            null,
+            null
         );
         return toResponse(saved);
     }
@@ -57,7 +60,8 @@ public class AMHSController {
         return Map.of(
             "profiles", AMHSProfile.values(),
             "priorities", AMHSPriority.values(),
-            "note", "Baseline implementation. Formal ICAO certification requires conformance testing and operational controls."
+            "management", "Use /api/amhs/channels to manage channel/CN/OU policies",
+            "note", "Operational ICAO certification requires conformance testing, PKI governance, and regulatory acceptance."
         );
     }
 
@@ -67,11 +71,13 @@ public class AMHSController {
             message.getSender(),
             message.getRecipient(),
             message.getBody(),
+            message.getChannelName(),
             message.getProfile(),
             message.getPriority(),
             message.getSubject(),
+            message.getCertificateCn(),
+            message.getCertificateOu(),
             message.getReceivedAt()
         );
     }
 }
-
