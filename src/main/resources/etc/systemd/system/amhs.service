@@ -1,0 +1,15 @@
+[Unit]
+
+Description=AMHS
+
+[Service]
+
+ExecStart=/opt/amhs/bin/amhs
+
+Restart=always
+
+User=amhs
+
+[Install]
+
+WantedBy=multi-user.target
