@@ -1,2 +1,8 @@
-/bin/
 /.gradle/
+/bin/
+/.metadata/
+.classpath
+.DS_Store
+.settings
+.project
+amhs.pid
