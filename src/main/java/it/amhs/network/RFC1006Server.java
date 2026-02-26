@@ -20,7 +20,7 @@ public class RFC1006Server {
     private final int port;
     private final SSLContext tls;
 
-    public RFC1006Server(@Value("${amhs.server.port:102}") int port, SSLContext tls, RFC1006Service rfc1006Service) {
+    public RFC1006Server(@Value("${rfc1006.server.port:102}") int port, SSLContext tls, RFC1006Service rfc1006Service) {
 		this.port = port;
 		this.tls = tls;
 		this.rfc1006Service = rfc1006Service;

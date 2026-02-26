@@ -11,10 +11,11 @@ import javax.net.ssl.SSLSocket;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import it.amhs.domain.AMHSMessage;
+import it.amhs.domain.AMHSPriority;
+import it.amhs.domain.AMHSProfile;
 import it.amhs.repository.AMHSMessageRepository;
 
 @Service
@@ -22,9 +23,13 @@ public class RFC1006Service {
 	
 	private static final Logger logger = LoggerFactory.getLogger(RFC1006Service.class);
 
-	@Autowired
-	private AMHSMessageRepository amhsMessagesRepository;
+	private final AMHSMessageRepository amhsMessagesRepository;
+	private final MTAService mtaService;
 
+	public RFC1006Service(AMHSMessageRepository amhsMessagesRepository, MTAService mtaService) {
+		this.amhsMessagesRepository = amhsMessagesRepository;
+		this.mtaService = mtaService;
+	}
 
 	public void handleClient(SSLSocket socket) {
         try (InputStream in = socket.getInputStream(); OutputStream out = socket.getOutputStream()) {
@@ -73,13 +78,15 @@ public class RFC1006Service {
                 String messageId = headers.getOrDefault("Message-ID", java.util.UUID.randomUUID().toString());
                 String from = headers.getOrDefault("From", "UNKNOWN");
                 String to = headers.getOrDefault("To", "UNKNOWN");
+                String profileHeader = headers.getOrDefault("Profile", "P3");
+                String priorityHeader = headers.getOrDefault("Priority", "GG");
+                String subject = headers.getOrDefault("Subject", "");
+
+                AMHSProfile profile = parseProfile(profileHeader);
+                AMHSPriority priority = parsePriority(priorityHeader);
+
                 // SAVE
-                AMHSMessage amhsMex = new AMHSMessage();
-                amhsMex.setMessageId(messageId);
-                amhsMex.setSender(from);
-                amhsMex.setRecipient(to);
-                amhsMex.setBody(body);
-                amhsMessagesRepository.save(amhsMex);
+                mtaService.storeMessage(from, to, body, messageId, profile, priority, subject);
                 // ACKWNOLEDGE MESSAGE RETURN
                 String ack = "Message-ID: " + messageId + "\n" + "From: " + to + "\n" + "To: " + from + "\n" + "Status: RECEIVED\n";
                 sendRFC1006(out, ack);
@@ -111,6 +118,25 @@ public class RFC1006Service {
 	    }
 	    sendRFC1006(out, response);
 	}
+	
+	private AMHSProfile parseProfile(String value) {
+		try {
+			return AMHSProfile.valueOf(value.trim().toUpperCase());
+		} catch (Exception ex) {
+			logger.warn("Unsupported profile '{}', defaulting to P3", value);
+			return AMHSProfile.P3;
+		}
+	}
+
+	private AMHSPriority parsePriority(String value) {
+		try {
+			return AMHSPriority.valueOf(value.trim().toUpperCase());
+		} catch (Exception ex) {
+			logger.warn("Unsupported priority '{}', defaulting to GG", value);
+			return AMHSPriority.GG;
+		}
+	}
+
 
     private void sendRFC1006(OutputStream out, String message) throws Exception {
         byte[] msgBytes = message.getBytes("UTF-8");
