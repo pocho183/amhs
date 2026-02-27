@@ -87,7 +87,7 @@ public class RFC1006Service {
                 String profileHeader = headers.getOrDefault("Profile", "P3");
                 String priorityHeader = headers.getOrDefault("Priority", "GG");
                 String subject = headers.getOrDefault("Subject", "");
-                String channel = headers.getOrDefault("Channel", "DEFAULT");
+                String channel = headers.getOrDefault("Channel", AMHSChannelService.DEFAULT_CHANNEL_NAME);
 
                 AMHSProfile profile = parseProfile(profileHeader);
                 AMHSPriority priority = parsePriority(priorityHeader);
