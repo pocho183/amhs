@@ -1,0 +1,66 @@
+package it.amhs.service;
+
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import it.amhs.api.X400MessageRequest;
+import it.amhs.domain.AMHSMessage;
+import it.amhs.domain.AMHSPriority;
+import it.amhs.domain.AMHSProfile;
+
+@Service
+public class X400MessageService {
+
+    private final MTAService mtaService;
+    private final X400AddressBuilder addressBuilder;
+
+    public X400MessageService(MTAService mtaService, X400AddressBuilder addressBuilder) {
+        this.mtaService = mtaService;
+        this.addressBuilder = addressBuilder;
+    }
+
+    public AMHSMessage storeFromP3(X400MessageRequest request) {
+        String senderOrAddress = addressBuilder.buildOrAddress(
+            request.p3CommonName(),
+            request.p3OrganizationUnit(),
+            request.p3OrganizationName(),
+            request.p3PrivateManagementDomain(),
+            request.p3AdministrationManagementDomain(),
+            request.p3CountryName()
+        );
+
+        String recipientOrAddress = addressBuilder.buildOrAddress(
+            request.p3CommonNameRecipient(),
+            request.p3OrganizationUnitRecipient(),
+            request.p3OrganizationNameRecipient(),
+            request.p3PrivateManagementDomainRecipient(),
+            request.p3AdministrationManagementDomainRecipient(),
+            request.p3CountryNameRecipient()
+        );
+
+        String presentationAddress = addressBuilder.buildPresentationAddress(
+            request.p3ProtocolIndex(),
+            request.p3ProtocolAddress(),
+            request.p3ServerAddress()
+        );
+
+        return mtaService.storeX400Message(
+            senderOrAddress,
+            recipientOrAddress,
+            request.body(),
+            request.messageId(),
+            AMHSProfile.P3,
+            request.priority() == null ? AMHSPriority.GG : request.priority(),
+            request.p3Subject(),
+            StringUtils.hasText(request.channel()) ? request.channel() : "DEFAULT",
+            request.certificateCn(),
+            request.certificateOu(),
+            senderOrAddress,
+            recipientOrAddress,
+            presentationAddress,
+            request.ipnRequest(),
+            request.deliveryReport(),
+            request.timeoutDr()
+        );
+    }
+}

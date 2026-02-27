@@ -37,14 +37,26 @@ public class AMHSMessage {
     private String certificateCn;
     @Column(name = "certificate_ou", length = 255)
     private String certificateOu;
+    @Column(name = "sender_or_address", length = 1024)
+    private String senderOrAddress;
+    @Column(name = "recipient_or_address", length = 1024)
+    private String recipientOrAddress;
+    @Column(name = "presentation_address", length = 255)
+    private String presentationAddress;
+    @Column(name = "ipn_request")
+    private Integer ipnRequest;
+    @Column(name = "delivery_report", length = 64)
+    private String deliveryReport;
+    @Column(name = "timeout_dr")
+    private Integer timeoutDr;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AMHSProfile profile;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AMHSPriority priority;
-    @Column(name = "subject", length = 255)
-    private String subject;
+	@Column(name = "subject", length = 255)
+	private String subject;
     @Column(name = "received_at", updatable = false)
     @Temporal(TemporalType.TIMESTAMP)
     private Date receivedAt;
