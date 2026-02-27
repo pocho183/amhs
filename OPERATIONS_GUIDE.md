@@ -233,7 +233,25 @@ with socket.create_connection((HOST, PORT)) as tcp:
         print("ACK:\n", ack)
 ```
 
-### 5.2 Retrieval via RFC1006 (stesso framing)
+### 5.2 Client Java di test incluso nel progetto
+
+Nel package `it.amhs.test` è disponibile `AMHSTestClient` con canale configurabile da CLI (o variabili ambiente):
+
+```bash
+# Invio su canale ATFM (2 messaggi)
+java -cp build/classes/java/main it.amhs.test.AMHSTestClient --channel ATFM --count 2
+
+# Retrieval completo
+java -cp build/classes/java/main it.amhs.test.AMHSTestClient --retrieve-all
+```
+
+Opzioni principali:
+
+- `--channel <name>` (es. `DEFAULT`, `ATFM`)
+- `--from`, `--to`, `--profile`, `--priority`
+- `--host`, `--port`, `--truststore`, `--truststore-password`
+
+### 5.3 Retrieval via RFC1006 (stesso framing)
 
 Payload da inviare:
 
