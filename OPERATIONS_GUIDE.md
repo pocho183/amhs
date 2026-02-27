@@ -47,7 +47,7 @@ Output atteso:
 AMHS server running
 ```
 
-> Nota: all'avvio vengono creati automaticamente i canali `ATFM` (default) e `AFTN` abilitati, senza vincoli CN/OU (utile quando `rfc1006.tls.need-client-auth=false`).
+> Nota: all'avvio vengono creati automaticamente i canali `ATFM` (default) e `AFTN` abilitati.
 
 ---
 
