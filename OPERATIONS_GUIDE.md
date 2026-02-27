@@ -267,6 +267,28 @@ RETRIEVE MSG-RFC-0001
 
 ---
 
+
+### 5.4 Troubleshooting `bad_certificate` (mTLS)
+
+Se vedi `SSLHandshakeException: bad_certificate`, il server sta richiedendo un certificato client (default: `rfc1006.tls.need-client-auth=true`).
+
+Opzione A (consigliata): usa certificato client nel test client Java:
+
+```bash
+java -cp build/classes/java/main it.amhs.test.AMHSTestClient \
+  --channel ATFM \
+  --keystore src/main/resources/certs/client.p12 \
+  --keystore-password changeit
+```
+
+Opzione B (solo sviluppo locale): disabilita mTLS server impostando in `application.properties`:
+
+```properties
+rfc1006.tls.need-client-auth=false
+```
+
+Poi riavvia il server.
+
 ## 6) Certificati (CN/OU) - flusso operativo
 
 Nel repository sono presenti esempi comando per:
