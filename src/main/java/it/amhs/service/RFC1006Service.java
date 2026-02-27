@@ -92,21 +92,26 @@ public class RFC1006Service {
                 AMHSProfile profile = parseProfile(profileHeader);
                 AMHSPriority priority = parsePriority(priorityHeader);
 
-                mtaService.storeMessage(
-                    from,
-                    to,
-                    body,
-                    messageId,
-                    profile,
-                    priority,
-                    subject,
-                    channel,
-                    identity.cn(),
-                    identity.ou()
-                );
-                // ACKWNOLEDGE MESSAGE RETURN
-                String ack = "Message-ID: " + messageId + "\n" + "From: " + to + "\n" + "To: " + from + "\n" + "Status: RECEIVED\n";
-                sendRFC1006(out, ack);
+                try {
+                    mtaService.storeMessage(
+                        from,
+                        to,
+                        body,
+                        messageId,
+                        profile,
+                        priority,
+                        subject,
+                        channel,
+                        identity.cn(),
+                        identity.ou()
+                    );
+                    String ack = "Message-ID: " + messageId + "\n" + "From: " + to + "\n" + "To: " + from + "\n" + "Status: RECEIVED\n";
+                    sendRFC1006(out, ack);
+                } catch (IllegalArgumentException ex) {
+                    logger.warn("AMHS message rejected: {}", ex.getMessage());
+                    String nack = "Message-ID: " + messageId + "\n" + "Status: REJECTED\n" + "Error: " + ex.getMessage() + "\n";
+                    sendRFC1006(out, nack);
+                }
             }
         } catch (Exception e) {
         	logger.error("RFC1006 handling error", e);
