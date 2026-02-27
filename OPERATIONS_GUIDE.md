@@ -28,9 +28,11 @@ Parametri principali:
 - `tls.truststore.path=classpath:certs/client-truststore.jks`
 - `tls.truststore.password=...`
 
-Nota operativa:
-- con `rfc1006.tls.need-client-auth=false` il client può connettersi senza certificato client;
-- con `rfc1006.tls.need-client-auth=true` il client deve presentare un certificato valido per la trust chain del server.
+```text
+AMHS server running
+```
+
+> Nota: all'avvio vengono creati automaticamente i canali `ATFM` (default) e `AFTN` abilitati.
 
 ---
 
@@ -38,8 +40,10 @@ Nota operativa:
 
 All'avvio vengono creati i canali:
 
-- `ATFM` (default)
-- `AFTN`
+- `name`: nome canale (es. `AFTN`, `ATFM`)
+- `expectedCn`: CN richiesto dal certificato client (opzionale)
+- `expectedOu`: OU richiesto dal certificato client (opzionale)
+- `enabled`: abilitazione canale
 
 I seed attuali non impongono CN/OU obbligatori, così funzionano anche in modalità non-mTLS.
 
@@ -83,7 +87,11 @@ java -cp build/classes/java/main it.amhs.test.AMHSTestClient --channel ATFM --co
 java -cp build/classes/java/main it.amhs.test.AMHSTestClient --retrieve-all
 ```
 
----
+Opzioni principali:
+
+- `--channel <name>` (es. `ATFM`, `AFTN`)
+- `--from`, `--to`, `--profile`, `--priority`
+- `--host`, `--port`, `--truststore`, `--truststore-password`
 
 ## 6) mTLS e errore "Certificate CN does not match channel policy"
 

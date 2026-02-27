@@ -16,7 +16,7 @@ public class AMHSBootstrapService implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        channelService.createOrUpdate(new ChannelRequest(AMHSChannelService.DEFAULT_CHANNEL_NAME, null, null, true));
-        channelService.createOrUpdate(new ChannelRequest("AFTN", null, null, true));
+        channelService.createOrUpdate(new ChannelRequest(AMHSChannelService.DEFAULT_CHANNEL_NAME, "amhs-client-01", "ATM", true));
+        channelService.createOrUpdate(new ChannelRequest("AFTN", "amhs-aftn-gateway", "AFTN", true));
     }
 }
