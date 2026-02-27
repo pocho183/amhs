@@ -46,6 +46,93 @@ public class MTAService {
         AMHSChannel channel = channelService.requireEnabledChannel(channelName);
         complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
 
+        AMHSMessage message = buildCommonMessage(
+            from,
+            to,
+            body,
+            messageId,
+            profile,
+            priority,
+            subject,
+            channel,
+            certificateCn,
+            certificateOu
+        );
+        return amhsMessagesRepository.save(message);
+    }
+
+    public AMHSMessage storeX400Message(
+        String from,
+        String to,
+        String body,
+        String messageId,
+        AMHSProfile profile,
+        AMHSPriority priority,
+        String subject,
+        String channelName,
+        String certificateCn,
+        String certificateOu,
+        String senderOrAddress,
+        String recipientOrAddress,
+        String presentationAddress,
+        Integer ipnRequest,
+        String deliveryReport,
+        Integer timeoutDr
+    ) {
+        complianceValidator.validate(from, to, body, profile);
+        AMHSChannel channel = channelService.requireEnabledChannel(channelName);
+        complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
+
+        AMHSMessage message = buildCommonMessage(
+            from,
+            to,
+            body,
+            messageId,
+            profile,
+            priority,
+            subject,
+            channel,
+            certificateCn,
+            certificateOu
+        );
+        message.setSenderOrAddress(normalize(senderOrAddress));
+        message.setRecipientOrAddress(normalize(recipientOrAddress));
+        message.setPresentationAddress(normalize(presentationAddress));
+        message.setIpnRequest(ipnRequest);
+        message.setDeliveryReport(normalize(deliveryReport));
+        message.setTimeoutDr(timeoutDr);
+        return amhsMessagesRepository.save(message);
+    }
+
+    public List<AMHSMessage> findAll() {
+        return amhsMessagesRepository.findAll();
+    }
+
+    public List<AMHSMessage> findByFilters(String channelName, AMHSProfile profile) {
+        if (StringUtils.hasText(channelName) && profile != null) {
+            return amhsMessagesRepository.findByChannelNameIgnoreCaseAndProfile(channelName.trim(), profile);
+        }
+        if (StringUtils.hasText(channelName)) {
+            return amhsMessagesRepository.findByChannelNameIgnoreCase(channelName.trim());
+        }
+        if (profile != null) {
+            return amhsMessagesRepository.findByProfile(profile);
+        }
+        return amhsMessagesRepository.findAll();
+    }
+
+    private AMHSMessage buildCommonMessage(
+        String from,
+        String to,
+        String body,
+        String messageId,
+        AMHSProfile profile,
+        AMHSPriority priority,
+        String subject,
+        AMHSChannel channel,
+        String certificateCn,
+        String certificateOu
+    ) {
         AMHSMessage message = new AMHSMessage();
         message.setMessageId(resolveMessageId(messageId));
         message.setSender(normalizeUpper(from));
@@ -57,53 +144,7 @@ public class MTAService {
         message.setChannelName(channel.getName());
         message.setCertificateCn(normalize(certificateCn));
         message.setCertificateOu(normalize(certificateOu));
-        return amhsMessagesRepository.save(message);
-    }
-    
-    public AMHSMessage storeX400Message(
-            String from,
-            String to,
-            String body,
-            String messageId,
-            AMHSProfile profile,
-            AMHSPriority priority,
-            String subject,
-            String channelName,
-            String certificateCn,
-            String certificateOu,
-            String senderOrAddress,
-            String recipientOrAddress,
-            String presentationAddress,
-            Integer ipnRequest,
-            String deliveryReport,
-            Integer timeoutDr
-        ) {
-            complianceValidator.validate(from, to, body, profile);
-            AMHSChannel channel = channelService.requireEnabledChannel(channelName);
-            complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
-
-            AMHSMessage message = new AMHSMessage();
-            message.setMessageId(resolveMessageId(messageId));
-            message.setSender(normalizeUpper(from));
-            message.setRecipient(normalizeUpper(to));
-            message.setBody(normalize(body));
-            message.setProfile(profile);
-            message.setPriority(priority == null ? AMHSPriority.GG : priority);
-            message.setSubject(normalize(subject));
-            message.setChannelName(channel.getName());
-            message.setCertificateCn(normalize(certificateCn));
-            message.setCertificateOu(normalize(certificateOu));
-            message.setSenderOrAddress(normalize(senderOrAddress));
-            message.setRecipientOrAddress(normalize(recipientOrAddress));
-            message.setPresentationAddress(normalize(presentationAddress));
-            message.setIpnRequest(ipnRequest);
-            message.setDeliveryReport(normalize(deliveryReport));
-            message.setTimeoutDr(timeoutDr);
-            return amhsMessagesRepository.save(message);
-        }
-
-    public List<AMHSMessage> findAll() {
-        return amhsMessagesRepository.findAll();
+        return message;
     }
 
     private String resolveMessageId(String messageId) {
@@ -115,6 +156,7 @@ public class MTAService {
     }
 
     private String normalizeUpper(String value) {
-        return normalize(value).toUpperCase();
+        String normalized = normalize(value);
+        return normalized == null ? null : normalized.toUpperCase();
     }
 }
