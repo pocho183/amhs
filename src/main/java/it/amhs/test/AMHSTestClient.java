@@ -1,8 +1,6 @@
 package it.amhs.test;
 
-import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
@@ -23,9 +21,6 @@ import java.util.Map;
  *   java it.amhs.test.AMHSTestClient --channel ATFM --count 3
  *   java it.amhs.test.AMHSTestClient --retrieve-all
  *   java it.amhs.test.AMHSTestClient --retrieve MSG-1
- *
- * When server requires mutual TLS (rfc1006.tls.need-client-auth=true),
- * provide a client certificate with --keystore and --keystore-password.
  */
 public class AMHSTestClient {
 
@@ -55,13 +50,6 @@ public class AMHSTestClient {
                 String payload = buildMessagePayload(options, messageId, i);
                 sendAndPrint(out, in, payload);
             }
-        } catch (SSLHandshakeException handshakeException) {
-            System.err.println("TLS handshake failed: " + handshakeException.getMessage());
-            System.err.println("Hint: if server has rfc1006.tls.need-client-auth=true, configure client cert:");
-            System.err.println("  --keystore <client.p12> --keystore-password <pwd> [--keystore-type PKCS12]");
-            System.err.println("Or disable mTLS only in local dev: rfc1006.tls.need-client-auth=false");
-            handshakeException.printStackTrace(System.err);
-            System.exit(2);
         } catch (Exception e) {
             System.err.println("AMHS test client failed: " + e.getMessage());
             e.printStackTrace(System.err);
@@ -70,7 +58,7 @@ public class AMHSTestClient {
     }
 
     private static SSLSocket createSocket(ClientOptions options) throws Exception {
-        KeyStore trustStore = KeyStore.getInstance(options.trustStoreType);
+        KeyStore trustStore = KeyStore.getInstance("JKS");
         try (InputStream trustStoreStream = new FileInputStream(options.trustStorePath)) {
             trustStore.load(trustStoreStream, options.trustStorePassword.toCharArray());
         }
@@ -78,18 +66,8 @@ public class AMHSTestClient {
         TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         tmf.init(trustStore);
 
-        KeyManagerFactory kmf = null;
-        if (options.keyStorePath != null) {
-            KeyStore keyStore = KeyStore.getInstance(options.keyStoreType);
-            try (InputStream keyStoreStream = new FileInputStream(options.keyStorePath)) {
-                keyStore.load(keyStoreStream, options.keyStorePassword.toCharArray());
-            }
-            kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            kmf.init(keyStore, options.keyStorePassword.toCharArray());
-        }
-
         SSLContext context = SSLContext.getInstance("TLS");
-        context.init(kmf == null ? null : kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+        context.init(null, tmf.getTrustManagers(), null);
 
         SSLSocketFactory factory = context.getSocketFactory();
         SSLSocket socket = (SSLSocket) factory.createSocket(options.host, options.port);
@@ -151,10 +129,6 @@ public class AMHSTestClient {
         private final int port;
         private final String trustStorePath;
         private final String trustStorePassword;
-        private final String trustStoreType;
-        private final String keyStorePath;
-        private final String keyStorePassword;
-        private final String keyStoreType;
         private final String from;
         private final String to;
         private final String profile;
@@ -172,10 +146,6 @@ public class AMHSTestClient {
             int port,
             String trustStorePath,
             String trustStorePassword,
-            String trustStoreType,
-            String keyStorePath,
-            String keyStorePassword,
-            String keyStoreType,
             String from,
             String to,
             String profile,
@@ -192,10 +162,6 @@ public class AMHSTestClient {
             this.port = port;
             this.trustStorePath = trustStorePath;
             this.trustStorePassword = trustStorePassword;
-            this.trustStoreType = trustStoreType;
-            this.keyStorePath = keyStorePath;
-            this.keyStorePassword = keyStorePassword;
-            this.keyStoreType = keyStoreType;
             this.from = from;
             this.to = to;
             this.profile = profile;
@@ -219,17 +185,14 @@ public class AMHSTestClient {
             String host = values.getOrDefault("host", envOrDefault("AMHS_HOST", DEFAULT_HOST));
             int port = parseInt(values.get("port"), parseInt(envOrDefault("AMHS_PORT", String.valueOf(DEFAULT_PORT)), DEFAULT_PORT));
 
-            String trustStorePath = values.getOrDefault("truststore", envOrDefault("AMHS_TRUSTSTORE", DEFAULT_TRUSTSTORE_PATH));
-            String trustStorePassword = values.getOrDefault("truststore-password", envOrDefault("AMHS_TRUSTSTORE_PASSWORD", DEFAULT_TRUSTSTORE_PASSWORD));
-            String trustStoreType = values.getOrDefault("truststore-type", envOrDefault("AMHS_TRUSTSTORE_TYPE", "JKS"));
-
-            String keyStorePath = values.getOrDefault("keystore", envOrDefault("AMHS_KEYSTORE", null));
-            String keyStorePassword = values.getOrDefault("keystore-password", envOrDefault("AMHS_KEYSTORE_PASSWORD", null));
-            String keyStoreType = values.getOrDefault("keystore-type", envOrDefault("AMHS_KEYSTORE_TYPE", "PKCS12"));
-
-            if (keyStorePath != null && (keyStorePassword == null || keyStorePassword.isBlank())) {
-                throw new IllegalArgumentException("When --keystore is set, --keystore-password is required");
-            }
+            String trustStorePath = values.getOrDefault(
+                "truststore",
+                envOrDefault("AMHS_TRUSTSTORE", DEFAULT_TRUSTSTORE_PATH)
+            );
+            String trustStorePassword = values.getOrDefault(
+                "truststore-password",
+                envOrDefault("AMHS_TRUSTSTORE_PASSWORD", DEFAULT_TRUSTSTORE_PASSWORD)
+            );
 
             String from = values.getOrDefault("from", envOrDefault("AMHS_FROM", "LIRRAAAA"));
             String to = values.getOrDefault("to", envOrDefault("AMHS_TO", "LIRRBBBB"));
@@ -237,7 +200,10 @@ public class AMHSTestClient {
             String priority = values.getOrDefault("priority", envOrDefault("AMHS_PRIORITY", "GG"));
             String channel = values.getOrDefault("channel", envOrDefault("AMHS_CHANNEL", "DEFAULT"));
             String subject = values.getOrDefault("subject", envOrDefault("AMHS_SUBJECT", "AMHS TEST"));
-            String bodyTemplate = values.getOrDefault("body", envOrDefault("AMHS_BODY", "Test payload #{seq} for channel {channel} ({messageId})"));
+            String bodyTemplate = values.getOrDefault(
+                "body",
+                envOrDefault("AMHS_BODY", "Test payload #{seq} for channel {channel} ({messageId})")
+            );
             int count = parseInt(values.get("count"), parseInt(envOrDefault("AMHS_COUNT", "1"), 1));
             String messagePrefix = values.getOrDefault("message-prefix", envOrDefault("AMHS_MESSAGE_PREFIX", "MSG"));
 
@@ -249,10 +215,6 @@ public class AMHSTestClient {
                 port,
                 trustStorePath,
                 trustStorePassword,
-                trustStoreType,
-                keyStorePath,
-                keyStorePassword,
-                keyStoreType,
                 from,
                 to,
                 profile,
@@ -308,10 +270,6 @@ public class AMHSTestClient {
                 "  --port <port>                      Default: 102\n" +
                 "  --truststore <path>                Default: src/main/resources/certs/client-truststore.jks\n" +
                 "  --truststore-password <pwd>        Default: changeit\n" +
-                "  --truststore-type <JKS|PKCS12>     Default: JKS\n" +
-                "  --keystore <path>                  Client cert keystore for mTLS\n" +
-                "  --keystore-password <pwd>          Password for client keystore\n" +
-                "  --keystore-type <JKS|PKCS12>       Default: PKCS12\n" +
                 "  --from <8-char>                    Default: LIRRAAAA\n" +
                 "  --to <8-char>                      Default: LIRRBBBB\n" +
                 "  --profile <P1|P3|P7>               Default: P3\n" +
