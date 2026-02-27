@@ -87,26 +87,31 @@ public class RFC1006Service {
                 String profileHeader = headers.getOrDefault("Profile", "P3");
                 String priorityHeader = headers.getOrDefault("Priority", "GG");
                 String subject = headers.getOrDefault("Subject", "");
-                String channel = headers.getOrDefault("Channel", "DEFAULT");
+                String channel = headers.getOrDefault("Channel", AMHSChannelService.DEFAULT_CHANNEL_NAME);
 
                 AMHSProfile profile = parseProfile(profileHeader);
                 AMHSPriority priority = parsePriority(priorityHeader);
 
-                mtaService.storeMessage(
-                    from,
-                    to,
-                    body,
-                    messageId,
-                    profile,
-                    priority,
-                    subject,
-                    channel,
-                    identity.cn(),
-                    identity.ou()
-                );
-                // ACKWNOLEDGE MESSAGE RETURN
-                String ack = "Message-ID: " + messageId + "\n" + "From: " + to + "\n" + "To: " + from + "\n" + "Status: RECEIVED\n";
-                sendRFC1006(out, ack);
+                try {
+                    mtaService.storeMessage(
+                        from,
+                        to,
+                        body,
+                        messageId,
+                        profile,
+                        priority,
+                        subject,
+                        channel,
+                        identity.cn(),
+                        identity.ou()
+                    );
+                    String ack = "Message-ID: " + messageId + "\n" + "From: " + to + "\n" + "To: " + from + "\n" + "Status: RECEIVED\n";
+                    sendRFC1006(out, ack);
+                } catch (IllegalArgumentException ex) {
+                    logger.warn("AMHS message rejected: {}", ex.getMessage());
+                    String nack = "Message-ID: " + messageId + "\n" + "Status: REJECTED\n" + "Error: " + ex.getMessage() + "\n";
+                    sendRFC1006(out, nack);
+                }
             }
         } catch (Exception e) {
         	logger.error("RFC1006 handling error", e);

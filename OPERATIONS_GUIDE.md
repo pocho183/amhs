@@ -1,187 +1,57 @@
-# AMHS Server - Guida operativa pronta all'uso
+# AMHS Server - Guida operativa (modalità non-web)
 
-Questa guida è pensata per portare il server AMHS in esercizio rapidamente, con esempi pratici per:
-
-- avvio servizio,
-- gestione canali (`Channel`) con policy certificato (`CN`/`OU`),
-- invio/ricezione messaggi via REST,
-- invio/ricezione messaggi via RFC1006/TLS,
-- checklist di deploy pre-produzione.
+Questa guida è allineata all'implementazione attuale: il servizio gira **senza API REST** ed espone solo endpoint RFC1006 su TLS.
 
 ---
 
-## 1) Prerequisiti
+## 1) Architettura runtime attuale
 
-- Java 17+ installato.
-- PostgreSQL raggiungibile dal server.
-- Porta RFC1006 aperta (default: `102`).
-- Certificati TLS presenti in `src/main/resources/certs` (keystore server e truststore client).
+- L'applicazione Spring Boot parte in modalità **non-web** (`WebApplicationType.NONE`).
+- Non c'è listener HTTP su `:8080`.
+- Il server AMHS è in ascolto su RFC1006/TLS (`rfc1006.server.port`, default `102`).
+- Il campo `Channel` è una proprietà del messaggio AMHS (routing/policy), **non** una porta di ascolto.
 
-Configurazione base predefinita in `application.properties`:
-
-- DB: `jdbc:postgresql://localhost:5432/amhs`
-- RFC1006: `rfc1006.server.port=102`
-- mTLS: `rfc1006.tls.need-client-auth=true`
-- Keystore: `tls.keystore.path=classpath:certs/server.p12`
-- Truststore: `tls.truststore.path=classpath:certs/client-truststore.jks`
+In pratica:
+- **Listening endpoint server**: `host:102` (o porta configurata)
+- **Channel AMHS**: header applicativo (`Channel: ATFM`, `Channel: AFTN`, ...)
 
 ---
 
-## 2) Avvio rapido
+## 2) Configurazione base (`application.properties`)
 
-### 2.1 Avvio applicazione
+Parametri principali:
 
-```bash
-./gradlew bootRun
-```
+- `rfc1006.server.port=102`
+- `rfc1006.tls.need-client-auth=false|true`
+- `tls.keystore.path=classpath:certs/server.p12`
+- `tls.keystore.password=...`
+- `tls.truststore.path=classpath:certs/client-truststore.jks`
+- `tls.truststore.password=...`
 
-### 2.2 Verifica health
-
-```bash
-curl -s http://localhost:8080/api/amhs/messages/health
-```
-
-Output atteso:
-
-```text
-AMHS server running
-```
-
-> Nota: all'avvio viene creato automaticamente il canale `DEFAULT` abilitato.
+Nota operativa:
+- con `rfc1006.tls.need-client-auth=false` il client può connettersi senza certificato client;
+- con `rfc1006.tls.need-client-auth=true` il client deve presentare un certificato valido per la trust chain del server.
 
 ---
 
-## 3) Gestione canali (CN/OU policy)
+## 3) Canali seedati all'avvio
 
-I canali governano la policy di accettazione lato MTA:
+All'avvio vengono creati i canali:
 
-- `name`: nome canale (es. `AFTN`, `ATFM`, `DEFAULT`)
-- `expectedCn`: CN richiesto dal certificato client (opzionale)
-- `expectedOu`: OU richiesto dal certificato client (opzionale)
-- `enabled`: abilitazione canale
+- `ATFM` (default)
+- `AFTN`
 
-### 3.1 Creare/aggiornare un canale con vincolo CN+OU
-
-```bash
-curl -s -X POST http://localhost:8080/api/amhs/channels \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "name": "ATFM",
-    "expectedCn": "amhs-client-01",
-    "expectedOu": "ATM",
-    "enabled": true
-  }'
-```
-
-### 3.2 Elencare i canali
-
-```bash
-curl -s http://localhost:8080/api/amhs/channels
-```
-
-### 3.3 Disabilitare un canale
-
-```bash
-curl -s -X POST http://localhost:8080/api/amhs/channels \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "name": "ATFM",
-    "expectedCn": "amhs-client-01",
-    "expectedOu": "ATM",
-    "enabled": false
-  }'
-```
+I seed attuali non impongono CN/OU obbligatori, così funzionano anche in modalità non-mTLS.
 
 ---
 
-## 4) Invio messaggi via REST
+## 4) Formato messaggio RFC1006
 
-## Requisiti payload AMHS
+Frame richiesto:
+1. 2 byte iniziali (big-endian) con lunghezza payload
+2. payload UTF-8 con header testuali
 
-- `from` / `to`: formato OR-address short (8 caratteri alfanumerici maiuscoli).
-- `profile`: uno tra `P1`, `P3`, `P7`.
-- `priority`: una priorità supportata (es. `GG`, `FF`, `DD`, `SS`).
-- `channel`: canale esistente e abilitato.
-
-### 4.1 Invio messaggio REST
-
-```bash
-curl -s -X POST http://localhost:8080/api/amhs/messages \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "messageId": "MSG-ATFM-0001",
-    "from": "LIRRAAAA",
-    "to": "LIRRBBBB",
-    "body": "ATFM SLOT REVISION FOR FLIGHT AZ123",
-    "channel": "ATFM",
-    "profile": "P3",
-    "priority": "GG",
-    "subject": "ATFM UPDATE"
-  }'
-```
-
-### 4.2 Lista messaggi ricevuti
-
-```bash
-curl -s http://localhost:8080/api/amhs/messages
-```
-
-### 4.3 Lista messaggi filtrati (channel/profile)
-
-```bash
-curl -s "http://localhost:8080/api/amhs/messages?channel=ATFM&profile=P3"
-```
-
-### 4.4 Capabilities
-
-```bash
-curl -s http://localhost:8080/api/amhs/messages/capabilities
-```
-
----
-
-## 4-bis) Submit messaggi X.400/P3 (stile Isode)
-
-Per registrare metadati P3/X.400 (OR-address mittente/destinatario, presentation address, IPN/DR, timeout DR), usare endpoint dedicato:
-
-```bash
-curl -s -X POST http://localhost:8080/api/amhs/messages/x400 \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "messageId": "MSG-P3-0001",
-    "body": "(FPL-AZA123-IS ...)",
-    "p3Subject": "FLIGHT PLAN",
-    "priority": "GG",
-    "ipnRequest": 1,
-    "deliveryReport": "DR_YES",
-    "timeoutDr": 30000,
-    "p3ProtocolIndex": "1006",
-    "p3ProtocolAddress": "tcp",
-    "p3ServerAddress": "10.10.10.20",
-    "p3CommonName": "amhs-originator",
-    "p3OrganizationUnit": "ATM",
-    "p3OrganizationName": "ENAV",
-    "p3PrivateManagementDomain": "AFTN",
-    "p3AdministrationManagementDomain": "ICAO",
-    "p3CountryName": "IT",
-    "p3CommonNameRecipient": "amhs-destination",
-    "p3OrganizationUnitRecipient": "AIM",
-    "p3OrganizationNameRecipient": "ENAV",
-    "p3PrivateManagementDomainRecipient": "AFTN",
-    "p3AdministrationManagementDomainRecipient": "ICAO",
-    "p3CountryNameRecipient": "IT",
-    "channel": "ATFM",
-    "certificateCn": "amhs-client-01",
-    "certificateOu": "ATM"
-  }'
-```
-
-## 5) Invio/Retrieval via RFC1006 su TLS
-
-Il server usa frame con:
-
-1. 2 byte iniziali (`short`) = lunghezza payload UTF-8,
-2. payload testuale con header stile:
+Esempio payload:
 
 ```text
 Message-ID: MSG-RFC-0001
@@ -194,169 +64,83 @@ Subject: TEST RFC1006
 Body: THIS IS A RFC1006 AMHS MESSAGE
 ```
 
-Comandi retrieval supportati nel payload:
-
+Comandi retrieval supportati:
 - `RETRIEVE ALL`
 - `RETRIEVE <MESSAGE_ID>`
 
-### 5.1 Client di esempio Python (TLS + lunghezza 2 byte)
+---
 
-```python
-import socket
-import ssl
-
-HOST = "127.0.0.1"
-PORT = 102
-
-context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="src/main/resources/certs/server.crt")
-context.load_cert_chain(certfile="client.crt", keyfile="client.key")
-
-payload = """Message-ID: MSG-RFC-0001
-From: LIRRAAAA
-To: LIRRBBBB
-Profile: P3
-Priority: GG
-Channel: ATFM
-Subject: TEST RFC1006
-Body: THIS IS A RFC1006 AMHS MESSAGE
-""".encode("utf-8")
-
-packet = len(payload).to_bytes(2, byteorder="big") + payload
-
-with socket.create_connection((HOST, PORT)) as tcp:
-    with context.wrap_socket(tcp, server_hostname="amhs.local") as tls:
-        tls.sendall(packet)
-
-        # ricezione ACK
-        size = int.from_bytes(tls.recv(2), byteorder="big")
-        ack = tls.recv(size).decode("utf-8", errors="replace")
-        print("ACK:\n", ack)
-```
-
-### 5.2 Client Java di test incluso nel progetto
-
-Nel package `it.amhs.test` è disponibile `AMHSTestClient` con canale configurabile da CLI (o variabili ambiente):
+## 5) Test rapido con client Java incluso
 
 ```bash
-# Invio su canale ATFM (2 messaggi)
-java -cp build/classes/java/main it.amhs.test.AMHSTestClient --channel ATFM --count 2
+# build
+./gradlew classes
 
-# Retrieval completo
+# invio 1 messaggio su ATFM
+java -cp build/classes/java/main it.amhs.test.AMHSTestClient --channel ATFM --count 1
+
+# retrieval
 java -cp build/classes/java/main it.amhs.test.AMHSTestClient --retrieve-all
 ```
 
-Opzioni principali:
+---
 
-- `--channel <name>` (es. `DEFAULT`, `ATFM`)
-- `--from`, `--to`, `--profile`, `--priority`
-- `--host`, `--port`, `--truststore`, `--truststore-password`
+## 6) mTLS e errore "Certificate CN does not match channel policy"
 
-### 5.3 Retrieval via RFC1006 (stesso framing)
-
-Payload da inviare:
+Se ricevi:
 
 ```text
-RETRIEVE ALL
+Status: REJECTED
+Error: Certificate CN does not match channel policy
 ```
 
-oppure:
+significa che:
+1. il server ha letto il certificato client (o una policy canale CN/OU è configurata),
+2. il `Channel` del messaggio punta a un canale la cui policy `expectedCn`/`expectedOu` non combacia con DN del certificato client.
 
-```text
-RETRIEVE MSG-RFC-0001
+### Cosa verificare
+
+1. **Quale canale stai usando nel payload**
+   - es. `Channel: ATFM`.
+2. **Policy del canale nel DB** (`amhs_channel`)
+   - colonne: `name`, `expected_cn`, `expected_ou`, `enabled`.
+3. **Subject del certificato client**
+   - verifica CN/OU reali del cert usato dal client.
+
+### Query utili (PostgreSQL)
+
+```sql
+SELECT id, name, expected_cn, expected_ou, enabled
+FROM amhs_channel
+ORDER BY name;
+```
+
+Se vuoi testare velocemente con mTLS attivo senza blocchi di policy, puoi azzerare i vincoli CN/OU del canale:
+
+```sql
+UPDATE amhs_channel
+SET expected_cn = NULL,
+    expected_ou = NULL,
+    enabled = TRUE
+WHERE name = 'ATFM';
+```
+
+Se invece vuoi enforcement stretto, imposta valori coerenti col certificato client:
+
+```sql
+UPDATE amhs_channel
+SET expected_cn = 'amhs-client-01',
+    expected_ou = 'ATM',
+    enabled = TRUE
+WHERE name = 'ATFM';
 ```
 
 ---
 
+## 7) Checklist pre-produzione
 
-### 5.4 Troubleshooting `bad_certificate` (mTLS)
-
-Se vedi `SSLHandshakeException: bad_certificate`, il server sta richiedendo un certificato client (default: `rfc1006.tls.need-client-auth=true`).
-
-Opzione A (consigliata): usa certificato client nel test client Java:
-
-```bash
-java -cp build/classes/java/main it.amhs.test.AMHSTestClient \
-  --channel ATFM \
-  --keystore src/main/resources/certs/client.p12 \
-  --keystore-password changeit
-```
-
-Opzione B (solo sviluppo locale): disabilita mTLS server impostando in `application.properties`:
-
-```properties
-rfc1006.tls.need-client-auth=false
-```
-
-Poi riavvia il server.
-
-## 6) Certificati (CN/OU) - flusso operativo
-
-Nel repository sono presenti esempi comando per:
-
-- generare `server.p12` (`crea.certificato.server.p12.txt`),
-- esportare certificato server e creare truststore client (`crea.certificato.client.p12.txt`).
-
-Flusso consigliato:
-
-1. Genera certificato server con `CN` coerente al DNS/FQDN reale.
-2. Distribuisci la CA/cert server ai client AMHS.
-3. Crea certificato client con `CN`/`OU` coerenti alla policy canale.
-4. Importa la CA/cert client nel truststore server (`client-truststore.jks`).
-5. Configura canale con gli stessi valori `expectedCn`/`expectedOu`.
-
----
-
-## 7) Checklist deploy (pre-produzione)
-
-## Sicurezza e PKI
-
-- [ ] Password di default (`changeit`) sostituite in keystore/truststore e datasource.
-- [ ] Certificati non self-signed in produzione (CA interna/autorità qualificata).
-- [ ] `CN`/`OU` client allineati alle policy dei canali AMHS.
-- [ ] Rotazione periodica certificati e piano revoca/CRL/OCSP.
-
-## Rete e hardening
-
-- [ ] Porta 102 esposta solo a peer autorizzati.
-- [ ] Firewall e ACL configurati.
-- [ ] Logging centralizzato e retention conforme policy operativa.
-
-## Applicazione e DB
-
-- [ ] DB PostgreSQL con backup, restore testato e monitoraggio.
-- [ ] Parametri `application.properties` esternalizzati (env/secret manager).
-- [ ] Verifica endpoint `/health`, `/capabilities`, `/channels`, `/messages`.
-
-## Esercizio operativo
-
-- [ ] Test end-to-end REST (submit/list).
-- [ ] Test end-to-end RFC1006 TLS (submit/retrieve).
-- [ ] Test negativi (canale disabilitato, CN mismatch, OU mismatch).
-- [ ] Piano di capacity/performance e sizing thread/connessioni.
-
-## Compliance ICAO (nota)
-
-- [ ] Conformance testing ufficiale (P1/P3/P7) pianificato con ente/lab accreditato.
-- [ ] Evidenze operative, security governance e processi regolatori documentati.
-
----
-
-## 8) Comandi rapidi utili
-
-### Leggere capacità server
-
-```bash
-curl -s http://localhost:8080/api/amhs/messages/capabilities | jq .
-```
-
-### Leggere ultimi messaggi
-
-```bash
-curl -s http://localhost:8080/api/amhs/messages | jq .
-```
-
-### Leggere canali
-
-```bash
-curl -s http://localhost:8080/api/amhs/channels | jq .
-```
+- TLS server certificate valido e ruotato.
+- Truststore client governance (CA interne/esterne).
+- `rfc1006.tls.need-client-auth=true` in ambienti operativi.
+- Policy canali (`expected_cn` / `expected_ou`) allineate ai certificati autorizzati.
+- Audit DB su messaggi e controlli periodici di retention.
