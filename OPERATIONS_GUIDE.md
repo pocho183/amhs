@@ -47,7 +47,7 @@ Output atteso:
 AMHS server running
 ```
 
-> Nota: all'avvio viene creato automaticamente il canale `DEFAULT` abilitato.
+> Nota: all'avvio vengono creati automaticamente i canali `ATFM` (default) e `AFTN` abilitati.
 
 ---
 
@@ -55,7 +55,7 @@ AMHS server running
 
 I canali governano la policy di accettazione lato MTA:
 
-- `name`: nome canale (es. `AFTN`, `ATFM`, `DEFAULT`)
+- `name`: nome canale (es. `AFTN`, `ATFM`)
 - `expectedCn`: CN richiesto dal certificato client (opzionale)
 - `expectedOu`: OU richiesto dal certificato client (opzionale)
 - `enabled`: abilitazione canale
@@ -247,7 +247,7 @@ java -cp build/classes/java/main it.amhs.test.AMHSTestClient --retrieve-all
 
 Opzioni principali:
 
-- `--channel <name>` (es. `DEFAULT`, `ATFM`)
+- `--channel <name>` (es. `ATFM`, `AFTN`)
 - `--from`, `--to`, `--profile`, `--priority`
 - `--host`, `--port`, `--truststore`, `--truststore-password`
 

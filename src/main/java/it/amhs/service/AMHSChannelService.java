@@ -13,6 +13,8 @@ import it.amhs.repository.AMHSChannelRepository;
 @Service
 public class AMHSChannelService {
 
+    public static final String DEFAULT_CHANNEL_NAME = "ATFM";
+
     private final AMHSChannelRepository channelRepository;
 
     public AMHSChannelService(AMHSChannelRepository channelRepository) {
@@ -35,7 +37,7 @@ public class AMHSChannelService {
     }
 
     public AMHSChannel requireEnabledChannel(String channelName) {
-        String normalized = StringUtils.hasText(channelName) ? channelName.trim().toUpperCase() : "DEFAULT";
+        String normalized = StringUtils.hasText(channelName) ? channelName.trim().toUpperCase() : DEFAULT_CHANNEL_NAME;
         AMHSChannel channel = channelRepository.findByNameIgnoreCase(normalized)
             .orElseThrow(() -> new IllegalArgumentException("Unknown AMHS channel: " + normalized));
         if (!channel.isEnabled()) {

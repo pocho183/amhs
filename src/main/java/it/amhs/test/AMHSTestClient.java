@@ -28,6 +28,7 @@ public class AMHSTestClient {
     private static final int DEFAULT_PORT = 102;
     private static final String DEFAULT_TRUSTSTORE_PATH = "src/main/resources/certs/client-truststore.jks";
     private static final String DEFAULT_TRUSTSTORE_PASSWORD = "changeit";
+    private static final String DEFAULT_CHANNEL = "ATFM";
 
     public static void main(String[] args) {
         ClientOptions options = ClientOptions.fromArgs(args);
@@ -198,7 +199,7 @@ public class AMHSTestClient {
             String to = values.getOrDefault("to", envOrDefault("AMHS_TO", "LIRRBBBB"));
             String profile = values.getOrDefault("profile", envOrDefault("AMHS_PROFILE", "P3"));
             String priority = values.getOrDefault("priority", envOrDefault("AMHS_PRIORITY", "GG"));
-            String channel = values.getOrDefault("channel", envOrDefault("AMHS_CHANNEL", "DEFAULT"));
+            String channel = values.getOrDefault("channel", envOrDefault("AMHS_CHANNEL", DEFAULT_CHANNEL));
             String subject = values.getOrDefault("subject", envOrDefault("AMHS_SUBJECT", "AMHS TEST"));
             String bodyTemplate = values.getOrDefault(
                 "body",
@@ -274,7 +275,7 @@ public class AMHSTestClient {
                 "  --to <8-char>                      Default: LIRRBBBB\n" +
                 "  --profile <P1|P3|P7>               Default: P3\n" +
                 "  --priority <GG|FF|DD|SS>           Default: GG\n" +
-                "  --channel <name>                   Default: DEFAULT\n" +
+                "  --channel <name>                   Default: " + DEFAULT_CHANNEL + "\n" +
                 "  --subject <text>                   Default: AMHS TEST\n" +
                 "  --body <template>                  Variables: {seq}, {channel}, {messageId}\n" +
                 "  --count <n>                        Default: 1\n" +
