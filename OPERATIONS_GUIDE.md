@@ -126,13 +126,55 @@ curl -s -X POST http://localhost:8080/api/amhs/messages \
 curl -s http://localhost:8080/api/amhs/messages
 ```
 
-### 4.3 Capabilities
+### 4.3 Lista messaggi filtrati (channel/profile)
+
+```bash
+curl -s "http://localhost:8080/api/amhs/messages?channel=ATFM&profile=P3"
+```
+
+### 4.4 Capabilities
 
 ```bash
 curl -s http://localhost:8080/api/amhs/messages/capabilities
 ```
 
 ---
+
+## 4-bis) Submit messaggi X.400/P3 (stile Isode)
+
+Per registrare metadati P3/X.400 (OR-address mittente/destinatario, presentation address, IPN/DR, timeout DR), usare endpoint dedicato:
+
+```bash
+curl -s -X POST http://localhost:8080/api/amhs/messages/x400 \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "messageId": "MSG-P3-0001",
+    "body": "(FPL-AZA123-IS ...)",
+    "p3Subject": "FLIGHT PLAN",
+    "priority": "GG",
+    "ipnRequest": 1,
+    "deliveryReport": "DR_YES",
+    "timeoutDr": 30000,
+    "p3ProtocolIndex": "1006",
+    "p3ProtocolAddress": "tcp",
+    "p3ServerAddress": "10.10.10.20",
+    "p3CommonName": "amhs-originator",
+    "p3OrganizationUnit": "ATM",
+    "p3OrganizationName": "ENAV",
+    "p3PrivateManagementDomain": "AFTN",
+    "p3AdministrationManagementDomain": "ICAO",
+    "p3CountryName": "IT",
+    "p3CommonNameRecipient": "amhs-destination",
+    "p3OrganizationUnitRecipient": "AIM",
+    "p3OrganizationNameRecipient": "ENAV",
+    "p3PrivateManagementDomainRecipient": "AFTN",
+    "p3AdministrationManagementDomainRecipient": "ICAO",
+    "p3CountryNameRecipient": "IT",
+    "channel": "ATFM",
+    "certificateCn": "amhs-client-01",
+    "certificateOu": "ATM"
+  }'
+```
 
 ## 5) Invio/Retrieval via RFC1006 su TLS
 
