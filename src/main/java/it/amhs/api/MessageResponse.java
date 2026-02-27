@@ -6,8 +6,8 @@ import it.amhs.domain.AMHSPriority;
 import it.amhs.domain.AMHSProfile;
 
 public record MessageResponse(
-	String messageId,
-	String from,
+    String messageId,
+    String from,
     String to,
     String body,
     String channel,
@@ -16,5 +16,11 @@ public record MessageResponse(
     String subject,
     String certificateCn,
     String certificateOu,
+    String senderOrAddress,
+    String recipientOrAddress,
+    String presentationAddress,
+    Integer ipnRequest,
+    String deliveryReport,
+    Integer timeoutDr,
     Date receivedAt
 ) { }
