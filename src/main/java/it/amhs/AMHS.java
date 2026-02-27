@@ -26,7 +26,9 @@ public class AMHS {
     private String truststorePassword;
 
     public static void main(String[] args) {
-        SpringApplication.run(AMHS.class, args);
+    	SpringApplication app = new SpringApplication(AMHS.class);
+        app.setBanner((environment, sourceClass, out) -> { out.println("✈️ ✈️ ✈️  AMHS SERVER ️✈️ ✈️ ✈️️"); });
+        app.run(args);
     }
     
     @Bean

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <configuration>
+
+	<!-- Disable Logback internal status messages -->
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
+
 	<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
 		<encoder>
 			<pattern>%d{HH:mm:ss.SSS} %-5level %logger - %msg%n
@@ -18,18 +22,13 @@
 		</encoder>
 	</appender>
 
-	<springProfile name="local">
-		<logger name="it.camera" level="DEBUG" additivity="false">
-			<appender-ref ref="STDOUT"/>
-		</logger>
-	</springProfile>
+	<!-- Root Logger -->
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
 
-	<springProfile name="develop | test">
-		<logger name="org.springframework" level="WARN" additivity="false">
-			<appender-ref ref="STDOUT" />
-		</logger>
-	</springProfile>
-	<root level="WARN">
-		<appender-ref ref="STDOUT" />
-	</root>
+    <!-- Reduce Spring logs -->
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="org.hibernate" level="WARN"/>
+	
 </configuration>
