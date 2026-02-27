@@ -126,13 +126,55 @@ curl -s -X POST http://localhost:8080/api/amhs/messages \
 curl -s http://localhost:8080/api/amhs/messages
 ```
 
-### 4.3 Capabilities
+### 4.3 Lista messaggi filtrati (channel/profile)
+
+```bash
+curl -s "http://localhost:8080/api/amhs/messages?channel=ATFM&profile=P3"
+```
+
+### 4.4 Capabilities
 
 ```bash
 curl -s http://localhost:8080/api/amhs/messages/capabilities
 ```
 
 ---
+
+## 4-bis) Submit messaggi X.400/P3 (stile Isode)
+
+Per registrare metadati P3/X.400 (OR-address mittente/destinatario, presentation address, IPN/DR, timeout DR), usare endpoint dedicato:
+
+```bash
+curl -s -X POST http://localhost:8080/api/amhs/messages/x400 \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "messageId": "MSG-P3-0001",
+    "body": "(FPL-AZA123-IS ...)",
+    "p3Subject": "FLIGHT PLAN",
+    "priority": "GG",
+    "ipnRequest": 1,
+    "deliveryReport": "DR_YES",
+    "timeoutDr": 30000,
+    "p3ProtocolIndex": "1006",
+    "p3ProtocolAddress": "tcp",
+    "p3ServerAddress": "10.10.10.20",
+    "p3CommonName": "amhs-originator",
+    "p3OrganizationUnit": "ATM",
+    "p3OrganizationName": "ENAV",
+    "p3PrivateManagementDomain": "AFTN",
+    "p3AdministrationManagementDomain": "ICAO",
+    "p3CountryName": "IT",
+    "p3CommonNameRecipient": "amhs-destination",
+    "p3OrganizationUnitRecipient": "AIM",
+    "p3OrganizationNameRecipient": "ENAV",
+    "p3PrivateManagementDomainRecipient": "AFTN",
+    "p3AdministrationManagementDomainRecipient": "ICAO",
+    "p3CountryNameRecipient": "IT",
+    "channel": "ATFM",
+    "certificateCn": "amhs-client-01",
+    "certificateOu": "ATM"
+  }'
+```
 
 ## 5) Invio/Retrieval via RFC1006 su TLS
 
@@ -191,7 +233,25 @@ with socket.create_connection((HOST, PORT)) as tcp:
         print("ACK:\n", ack)
 ```
 
-### 5.2 Retrieval via RFC1006 (stesso framing)
+### 5.2 Client Java di test incluso nel progetto
+
+Nel package `it.amhs.test` è disponibile `AMHSTestClient` con canale configurabile da CLI (o variabili ambiente):
+
+```bash
+# Invio su canale ATFM (2 messaggi)
+java -cp build/classes/java/main it.amhs.test.AMHSTestClient --channel ATFM --count 2
+
+# Retrieval completo
+java -cp build/classes/java/main it.amhs.test.AMHSTestClient --retrieve-all
+```
+
+Opzioni principali:
+
+- `--channel <name>` (es. `DEFAULT`, `ATFM`)
+- `--from`, `--to`, `--profile`, `--priority`
+- `--host`, `--port`, `--truststore`, `--truststore-password`
+
+### 5.3 Retrieval via RFC1006 (stesso framing)
 
 Payload da inviare:
 
@@ -206,6 +266,28 @@ RETRIEVE MSG-RFC-0001
 ```
 
 ---
+
+
+### 5.4 Troubleshooting `bad_certificate` (mTLS)
+
+Se vedi `SSLHandshakeException: bad_certificate`, il server sta richiedendo un certificato client (default: `rfc1006.tls.need-client-auth=true`).
+
+Opzione A (consigliata): usa certificato client nel test client Java:
+
+```bash
+java -cp build/classes/java/main it.amhs.test.AMHSTestClient \
+  --channel ATFM \
+  --keystore src/main/resources/certs/client.p12 \
+  --keystore-password changeit
+```
+
+Opzione B (solo sviluppo locale): disabilita mTLS server impostando in `application.properties`:
+
+```properties
+rfc1006.tls.need-client-auth=false
+```
+
+Poi riavvia il server.
 
 ## 6) Certificati (CN/OU) - flusso operativo
 
