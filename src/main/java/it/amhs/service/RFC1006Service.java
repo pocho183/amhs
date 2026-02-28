@@ -20,6 +20,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.io.ByteArrayOutputStream;
 
 import javax.naming.ldap.LdapName;
 import javax.naming.ldap.Rdn;
@@ -42,6 +43,11 @@ public class RFC1006Service {
     private static final byte TPKT_VERSION = 0x03;
     private static final byte TPKT_RESERVED = 0x00;
     private static final byte[] COTP_DATA_HEADER = new byte[] { 0x02, (byte) 0xF0, (byte) 0x80 };
+    private static final byte COTP_PDU_CR = (byte) 0xE0;
+    private static final byte COTP_PDU_CC = (byte) 0xD0;
+    private static final byte COTP_PDU_DT = (byte) 0xF0;
+    private static final int MAX_TPKT_LENGTH = 65_535;
+    private static final int MAX_DT_USER_DATA_PER_FRAME = 16_384;
 
     private final AMHSMessageRepository amhsMessagesRepository;
     private final MTAService mtaService;
@@ -62,12 +68,30 @@ public class RFC1006Service {
     public void handleClient(SSLSocket socket) {
         try (InputStream in = socket.getInputStream(); OutputStream out = socket.getOutputStream()) {
             CertificateIdentity identity = extractCertificateIdentity(socket);
+            ByteArrayOutputStream segmentedPayload = new ByteArrayOutputStream();
 
             while (true) {
-                byte[] payload = readFramedPayload(in);
-                if (payload == null) {
+                COTPFrame frame = readFramedPayload(in);
+                if (frame == null) {
                     break;
                 }
+
+                if (frame.type == COTP_PDU_CR) {
+                    sendConnectionConfirm(out, frame.payload);
+                    continue;
+                }
+
+                if (frame.type != COTP_PDU_DT) {
+                    throw new IllegalArgumentException("Unsupported COTP TPDU type: 0x" + Integer.toHexString(frame.type & 0xFF));
+                }
+
+                segmentedPayload.write(frame.payload);
+                if (!frame.endOfTSDU) {
+                    continue;
+                }
+
+                byte[] payload = segmentedPayload.toByteArray();
+                segmentedPayload.reset();
 
                 String message = new String(payload, StandardCharsets.UTF_8).trim();
 
@@ -279,7 +303,7 @@ public class RFC1006Service {
         return new CertificateIdentity(cn, ou);
     }
 
-    private byte[] readFramedPayload(InputStream in) throws Exception {
+    private COTPFrame readFramedPayload(InputStream in) throws Exception {
         int first = in.read();
         if (first == -1) {
             return null;
@@ -297,20 +321,43 @@ public class RFC1006Service {
                 throw new EOFException("Connection closed while reading TPKT length");
             }
             int tpktLength = ((lenHi & 0xFF) << 8) | (lenLo & 0xFF);
-            if (tpktLength < 7) {
+            if (tpktLength < 7 || tpktLength > MAX_TPKT_LENGTH) {
                 throw new IllegalArgumentException("Invalid TPKT frame length: " + tpktLength);
             }
 
-            byte[] cotp = readFully(in, 3);
-            if (cotp[0] != COTP_DATA_HEADER[0] || cotp[1] != COTP_DATA_HEADER[1] || cotp[2] != COTP_DATA_HEADER[2]) {
-                throw new IllegalArgumentException("Unsupported COTP header in RFC1006 payload");
+            byte[] cotpTpdu = readFully(in, tpktLength - 4);
+            if (cotpTpdu.length < 2) {
+                throw new IllegalArgumentException("COTP TPDU is too short");
+            }
+            int lengthIndicator = cotpTpdu[0] & 0xFF;
+            if (lengthIndicator + 1 > cotpTpdu.length) {
+                throw new IllegalArgumentException("Invalid COTP length indicator: " + lengthIndicator);
+            }
+            byte type = (byte) (cotpTpdu[1] & (byte) 0xF0);
+
+            if (type == COTP_PDU_CR || type == COTP_PDU_CC) {
+                return new COTPFrame(type, true, cotpTpdu);
             }
 
-            return readFully(in, tpktLength - 7);
+            if (type == COTP_PDU_DT) {
+                if (lengthIndicator < 2) {
+                    throw new IllegalArgumentException("Invalid COTP DT header length indicator: " + lengthIndicator);
+                }
+                if (cotpTpdu[1] != COTP_DATA_HEADER[1]) {
+                    throw new IllegalArgumentException("Unsupported COTP DT TPDU code: " + String.format("0x%02X", cotpTpdu[1]));
+                }
+                boolean eot = (cotpTpdu[2] & (byte) 0x80) != 0;
+                int dataOffset = lengthIndicator + 1;
+                byte[] userData = new byte[cotpTpdu.length - dataOffset];
+                System.arraycopy(cotpTpdu, dataOffset, userData, 0, userData.length);
+                return new COTPFrame(type, eot, userData);
+            }
+
+            throw new IllegalArgumentException("Unsupported COTP TPDU type: " + String.format("0x%02X", cotpTpdu[1]));
         }
 
         int legacyLength = ((first & 0xFF) << 8) | (second & 0xFF);
-        return readFully(in, legacyLength);
+        return new COTPFrame(COTP_PDU_DT, true, readFully(in, legacyLength));
     }
 
     private byte[] readFully(InputStream in, int length) throws Exception {
@@ -328,18 +375,65 @@ public class RFC1006Service {
 
     private void sendRFC1006(OutputStream out, String message) throws Exception {
         byte[] msgBytes = message.getBytes(StandardCharsets.UTF_8);
-        int tpktLength = 4 + COTP_DATA_HEADER.length + msgBytes.length;
+        int offset = 0;
+
+        while (offset < msgBytes.length || msgBytes.length == 0) {
+            int chunkLen = Math.min(MAX_DT_USER_DATA_PER_FRAME, msgBytes.length - offset);
+            boolean eot = offset + chunkLen >= msgBytes.length;
+            sendDtFrame(out, msgBytes, offset, chunkLen, eot);
+            offset += chunkLen;
+            if (msgBytes.length == 0) {
+                break;
+            }
+        }
+        out.flush();
+    }
+
+    private void sendConnectionConfirm(OutputStream out, byte[] requestTpdu) throws Exception {
+        if (requestTpdu.length < 7) {
+            throw new IllegalArgumentException("COTP CR TPDU too short");
+        }
+
+        byte[] ccTpdu = new byte[7];
+        ccTpdu[0] = 0x06;
+        ccTpdu[1] = COTP_PDU_CC;
+        ccTpdu[2] = requestTpdu[4];
+        ccTpdu[3] = requestTpdu[5];
+        ccTpdu[4] = requestTpdu[2];
+        ccTpdu[5] = requestTpdu[3];
+        ccTpdu[6] = 0x00;
+        sendTpktFrame(out, ccTpdu);
+        out.flush();
+    }
+
+    private void sendDtFrame(OutputStream out, byte[] bytes, int offset, int chunkLength, boolean eot) throws Exception {
+        byte[] dtTpdu = new byte[3 + chunkLength];
+        dtTpdu[0] = COTP_DATA_HEADER[0];
+        dtTpdu[1] = COTP_DATA_HEADER[1];
+        dtTpdu[2] = eot ? (byte) 0x80 : 0x00;
+        if (chunkLength > 0) {
+            System.arraycopy(bytes, offset, dtTpdu, 3, chunkLength);
+        }
+        sendTpktFrame(out, dtTpdu);
+    }
+
+    private void sendTpktFrame(OutputStream out, byte[] cotpTpdu) throws Exception {
+        int tpktLength = 4 + cotpTpdu.length;
+        if (tpktLength > MAX_TPKT_LENGTH) {
+            throw new IllegalArgumentException("TPKT frame exceeds maximum allowed length: " + tpktLength);
+        }
         ByteBuffer bb = ByteBuffer.allocate(tpktLength);
         bb.put(TPKT_VERSION);
         bb.put(TPKT_RESERVED);
         bb.putShort((short) tpktLength);
-        bb.put(COTP_DATA_HEADER);
-        bb.put(msgBytes);
+        bb.put(cotpTpdu);
         out.write(bb.array());
-        out.flush();
     }
 
     private record CertificateIdentity(String cn, String ou) {
+    }
+
+    private record COTPFrame(byte type, boolean endOfTSDU, byte[] payload) {
     }
 
     private record IncomingMessage(

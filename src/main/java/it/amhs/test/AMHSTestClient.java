@@ -14,6 +14,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,6 +42,11 @@ public class AMHSTestClient {
     private static final byte TPKT_VERSION = 0x03;
     private static final byte TPKT_RESERVED = 0x00;
     private static final byte[] COTP_DATA_HEADER = new byte[] {0x02, (byte) 0xF0, (byte) 0x80};
+    private static final int MAX_TPKT_LENGTH = 65_535;
+    private static final byte COTP_PDU_CR = (byte) 0xE0;
+    private static final byte COTP_PDU_CC = (byte) 0xD0;
+    private static final byte COTP_PDU_DT = (byte) 0xF0;
+    private static final int MAX_DT_USER_DATA_PER_FRAME = 16_384;
 
     public static void main(String[] args) {
         ClientOptions options = ClientOptions.fromArgs(args);
@@ -54,6 +60,7 @@ public class AMHSTestClient {
             try (SSLSocket socket = createSocket(options)) {
                 OutputStream out = socket.getOutputStream();
                 InputStream in = socket.getInputStream();
+                performCotpHandshake(out, in);
 
                 if (options.retrieveAll) {
                     sendAndPrint(out, in, "RETRIEVE ALL");
@@ -98,6 +105,7 @@ public class AMHSTestClient {
         try (SSLSocket socket = createSocket(options)) {
             OutputStream out = socket.getOutputStream();
             InputStream in = socket.getInputStream();
+            performCotpHandshake(out, in);
             sendWithOptionalCorruptLength(out, payload, corruptLength);
             byte[] response = readRFC1006Payload(in);
             logger.info("Negative case '{}' response:\n{}", caseName, new String(response, StandardCharsets.UTF_8));
@@ -115,8 +123,11 @@ public class AMHSTestClient {
             final int idx = i + 1;
             Thread t = new Thread(() -> {
                 try (SSLSocket socket = createSocket(options)) {
+                    OutputStream out = socket.getOutputStream();
+                    InputStream in = socket.getInputStream();
+                    performCotpHandshake(out, in);
                     String messageId = options.messagePrefix + "-C" + idx + "-" + Instant.now().toEpochMilli();
-                    sendAndPrint(socket.getOutputStream(), socket.getInputStream(), buildMessagePayload(options, messageId, idx));
+                    sendAndPrint(out, in, buildMessagePayload(options, messageId, idx));
                 } catch (Exception ex) {
                     logger.warn("Concurrency worker {} failed: {}", idx, ex.getMessage());
                 } finally {
@@ -245,42 +256,130 @@ public class AMHSTestClient {
 
     private static void sendWithOptionalCorruptLength(OutputStream out, String payload, boolean corruptLength) throws Exception {
         byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
-        int tpktLength = 4 + COTP_DATA_HEADER.length + payloadBytes.length;
-        if (corruptLength) {
-            tpktLength -= 1;
+        int maxPayloadPerFrame = MAX_DT_USER_DATA_PER_FRAME;
+        int offset = 0;
+
+        while (offset < payloadBytes.length || payloadBytes.length == 0) {
+            int chunkLength = Math.min(maxPayloadPerFrame, payloadBytes.length - offset);
+            boolean eot = offset + chunkLength >= payloadBytes.length;
+
+            int userDataLength = chunkLength;
+            if (corruptLength && eot && userDataLength > 0) {
+                userDataLength -= 1;
+            }
+
+            int tpktLength = 4 + COTP_DATA_HEADER.length + userDataLength;
+            if (tpktLength > MAX_TPKT_LENGTH) {
+                throw new IllegalArgumentException("TPKT frame exceeds maximum allowed length: " + tpktLength);
+            }
+
+            ByteBuffer packet = ByteBuffer.allocate(tpktLength);
+            packet.put(TPKT_VERSION);
+            packet.put(TPKT_RESERVED);
+            packet.putShort((short) tpktLength);
+            packet.put(COTP_DATA_HEADER[0]);
+            packet.put(COTP_DATA_HEADER[1]);
+            packet.put(eot ? (byte) 0x80 : 0x00);
+            if (userDataLength > 0) {
+                packet.put(payloadBytes, offset, userDataLength);
+            }
+
+            out.write(packet.array());
+            offset += chunkLength;
+            if (payloadBytes.length == 0) {
+                break;
+            }
+        }
+        out.flush();
+    }
+
+    private static byte[] readRFC1006Payload(InputStream in) throws Exception {
+        ByteArrayOutputStream message = new ByteArrayOutputStream();
+
+        while (true) {
+            byte[] tpkt = readFully(in, 4);
+            if (tpkt[0] != TPKT_VERSION || tpkt[1] != TPKT_RESERVED) {
+                throw new IllegalArgumentException("Unexpected TPKT header");
+            }
+
+            int tpktLength = ((tpkt[2] & 0xFF) << 8) | (tpkt[3] & 0xFF);
+            if (tpktLength < 7 || tpktLength > MAX_TPKT_LENGTH) {
+                throw new IllegalArgumentException("Invalid TPKT length: " + tpktLength);
+            }
+
+            byte[] cotpTpdu = readFully(in, tpktLength - 4);
+            int li = cotpTpdu[0] & 0xFF;
+            if (li + 1 > cotpTpdu.length) {
+                throw new IllegalArgumentException("Invalid COTP length indicator: " + li);
+            }
+
+            byte pduType = (byte) (cotpTpdu[1] & (byte) 0xF0);
+            if (pduType != COTP_PDU_DT) {
+                throw new IllegalArgumentException("Unexpected COTP TPDU type in response: " + String.format("0x%02X", pduType));
+            }
+            if (cotpTpdu[1] != COTP_DATA_HEADER[1]) {
+                throw new IllegalArgumentException("Unexpected COTP DT code in response: " + String.format("0x%02X", cotpTpdu[1]));
+            }
+
+            boolean eot = (cotpTpdu[2] & (byte) 0x80) != 0;
+            int dataOffset = li + 1;
+            if (dataOffset < cotpTpdu.length) {
+                message.write(cotpTpdu, dataOffset, cotpTpdu.length - dataOffset);
+            }
+
+            if (eot) {
+                return message.toByteArray();
+            }
+        }
+    }
+
+    private static void performCotpHandshake(OutputStream out, InputStream in) throws Exception {
+        byte[] crTpdu = new byte[] {
+            0x06,
+            COTP_PDU_CR,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x00
+        };
+
+        sendTpktWithTpdu(out, crTpdu);
+        out.flush();
+
+        byte[] tpkt = readFully(in, 4);
+        if (tpkt[0] != TPKT_VERSION || tpkt[1] != TPKT_RESERVED) {
+            throw new IllegalArgumentException("Unexpected TPKT header while waiting for COTP CC");
+        }
+
+        int tpktLength = ((tpkt[2] & 0xFF) << 8) | (tpkt[3] & 0xFF);
+        if (tpktLength < 11 || tpktLength > MAX_TPKT_LENGTH) {
+            throw new IllegalArgumentException("Invalid TPKT length for COTP CC: " + tpktLength);
+        }
+
+        byte[] cotpTpdu = readFully(in, tpktLength - 4);
+        int li = cotpTpdu[0] & 0xFF;
+        if (li + 1 > cotpTpdu.length) {
+            throw new IllegalArgumentException("Invalid COTP CC length indicator: " + li);
+        }
+
+        byte pduType = (byte) (cotpTpdu[1] & (byte) 0xF0);
+        if (pduType != COTP_PDU_CC) {
+            throw new IllegalArgumentException("Expected COTP CC, received: " + String.format("0x%02X", cotpTpdu[1]));
+        }
+    }
+
+    private static void sendTpktWithTpdu(OutputStream out, byte[] cotpTpdu) throws Exception {
+        int tpktLength = 4 + cotpTpdu.length;
+        if (tpktLength > MAX_TPKT_LENGTH) {
+            throw new IllegalArgumentException("TPKT frame exceeds maximum allowed length: " + tpktLength);
         }
         ByteBuffer packet = ByteBuffer.allocate(tpktLength);
         packet.put(TPKT_VERSION);
         packet.put(TPKT_RESERVED);
         packet.putShort((short) tpktLength);
-        packet.put(COTP_DATA_HEADER);
-        if (corruptLength) {
-            packet.put(payloadBytes, 0, payloadBytes.length - 1);
-        } else {
-            packet.put(payloadBytes);
-        }
-
+        packet.put(cotpTpdu);
         out.write(packet.array());
-        out.flush();
-    }
-
-    private static byte[] readRFC1006Payload(InputStream in) throws Exception {
-        byte[] tpkt = readFully(in, 4);
-        if (tpkt[0] != TPKT_VERSION || tpkt[1] != TPKT_RESERVED) {
-            throw new IllegalArgumentException("Unexpected TPKT header");
-        }
-
-        int tpktLength = ((tpkt[2] & 0xFF) << 8) | (tpkt[3] & 0xFF);
-        if (tpktLength < 7) {
-            throw new IllegalArgumentException("Invalid TPKT length: " + tpktLength);
-        }
-
-        byte[] cotp = readFully(in, 3);
-        if (cotp[0] != COTP_DATA_HEADER[0] || cotp[1] != COTP_DATA_HEADER[1] || cotp[2] != COTP_DATA_HEADER[2]) {
-            throw new IllegalArgumentException("Unexpected COTP data header in response");
-        }
-
-        return readFully(in, tpktLength - 7);
     }
 
     private static byte[] readFully(InputStream in, int length) throws Exception {
