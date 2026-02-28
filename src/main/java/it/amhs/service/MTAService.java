@@ -3,6 +3,9 @@ package it.amhs.service;
 import java.util.List;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -16,18 +19,23 @@ import it.amhs.repository.AMHSMessageRepository;
 @Service
 public class MTAService {
 
+    private static final Logger logger = LoggerFactory.getLogger(MTAService.class);
+
     private final AMHSMessageRepository amhsMessagesRepository;
     private final AMHSComplianceValidator complianceValidator;
     private final AMHSChannelService channelService;
+    private final boolean databaseEnabled;
 
     public MTAService(
         AMHSMessageRepository amhsMessagesRepository,
         AMHSComplianceValidator complianceValidator,
-        AMHSChannelService channelService
+        AMHSChannelService channelService,
+        @Value("${amhs.database.enabled:true}") boolean databaseEnabled
     ) {
         this.amhsMessagesRepository = amhsMessagesRepository;
         this.complianceValidator = complianceValidator;
         this.channelService = channelService;
+        this.databaseEnabled = databaseEnabled;
     }
 
     public AMHSMessage storeMessage(
@@ -42,22 +50,16 @@ public class MTAService {
         String certificateCn,
         String certificateOu
     ) {
+        AMHSMessage message = buildBaseMessage(from, to, body, messageId, profile, priority, subject, channelName, certificateCn, certificateOu);
+        if (!databaseEnabled) {
+            logReceivedMessage(message);
+            return message;
+        }
+
         complianceValidator.validate(from, to, body, profile);
         AMHSChannel channel = channelService.requireEnabledChannel(channelName);
         complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
-
-        AMHSMessage message = buildCommonMessage(
-            from,
-            to,
-            body,
-            messageId,
-            profile,
-            priority,
-            subject,
-            channel,
-            certificateCn,
-            certificateOu
-        );
+        message.setChannelName(channel.getName());
         return amhsMessagesRepository.save(message);
     }
 
@@ -79,28 +81,23 @@ public class MTAService {
         String deliveryReport,
         Integer timeoutDr
     ) {
-        complianceValidator.validate(from, to, body, profile);
-        AMHSChannel channel = channelService.requireEnabledChannel(channelName);
-        complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
-
-        AMHSMessage message = buildCommonMessage(
-            from,
-            to,
-            body,
-            messageId,
-            profile,
-            priority,
-            subject,
-            channel,
-            certificateCn,
-            certificateOu
-        );
+        AMHSMessage message = buildBaseMessage(from, to, body, messageId, profile, priority, subject, channelName, certificateCn, certificateOu);
         message.setSenderOrAddress(normalize(senderOrAddress));
         message.setRecipientOrAddress(normalize(recipientOrAddress));
         message.setPresentationAddress(normalize(presentationAddress));
         message.setIpnRequest(ipnRequest);
         message.setDeliveryReport(normalize(deliveryReport));
         message.setTimeoutDr(timeoutDr);
+
+        if (!databaseEnabled) {
+            logReceivedMessage(message);
+            return message;
+        }
+
+        complianceValidator.validate(from, to, body, profile);
+        AMHSChannel channel = channelService.requireEnabledChannel(channelName);
+        complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
+        message.setChannelName(channel.getName());
         return amhsMessagesRepository.save(message);
     }
 
@@ -121,7 +118,7 @@ public class MTAService {
         return amhsMessagesRepository.findAll();
     }
 
-    private AMHSMessage buildCommonMessage(
+    private AMHSMessage buildBaseMessage(
         String from,
         String to,
         String body,
@@ -129,7 +126,7 @@ public class MTAService {
         AMHSProfile profile,
         AMHSPriority priority,
         String subject,
-        AMHSChannel channel,
+        String channelName,
         String certificateCn,
         String certificateOu
     ) {
@@ -141,10 +138,24 @@ public class MTAService {
         message.setProfile(profile);
         message.setPriority(priority == null ? AMHSPriority.GG : priority);
         message.setSubject(normalize(subject));
-        message.setChannelName(channel.getName());
+        message.setChannelName(normalize(channelName));
         message.setCertificateCn(normalize(certificateCn));
         message.setCertificateOu(normalize(certificateOu));
         return message;
+    }
+
+    private void logReceivedMessage(AMHSMessage message) {
+        logger.info(
+            "Database disabled. Received AMHS message [messageId={}, from={}, to={}, channel={}, profile={}, priority={}, subject={}, body={}]",
+            message.getMessageId(),
+            message.getSender(),
+            message.getRecipient(),
+            message.getChannelName(),
+            message.getProfile(),
+            message.getPriority(),
+            message.getSubject(),
+            message.getBody()
+        );
     }
 
     private String resolveMessageId(String messageId) {
