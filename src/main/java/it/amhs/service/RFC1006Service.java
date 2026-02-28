@@ -86,7 +86,7 @@ public class RFC1006Service {
         try (InputStream in = socket.getInputStream(); OutputStream out = socket.getOutputStream()) {
             CertificateIdentity identity = extractCertificateIdentity(socket);
             ByteArrayOutputStream segmentedPayload = new ByteArrayOutputStream();
-            P1AssociationState associationState = new P1AssociationState(false);
+            P1AssociationState associationState = new P1AssociationState(false, MAX_DT_USER_DATA_PER_FRAME);
 
             while (true) {
                 COTPFrame frame = readFramedPayload(in);
@@ -95,7 +95,9 @@ public class RFC1006Service {
                 }
 
                 if (frame.type == COTP_PDU_CR) {
-                    sendConnectionConfirm(out, frame.payload);
+                    CotpConnectionTpdu request = CotpConnectionTpdu.parse(frame.payload);
+                    associationState.negotiatedMaxUserData = Math.min(MAX_DT_USER_DATA_PER_FRAME, request.negotiatedMaxUserData());
+                    sendConnectionConfirm(out, request);
                     continue;
                 }
 
@@ -103,6 +105,9 @@ public class RFC1006Service {
                     throw new IllegalArgumentException("Unsupported COTP TPDU type: 0x" + Integer.toHexString(frame.type & 0xFF));
                 }
 
+                if (frame.payload.length > associationState.negotiatedMaxUserData) {
+                    throw new IllegalArgumentException("COTP DT segment exceeds negotiated maximum user data");
+                }
                 segmentedPayload.write(frame.payload);
                 if (!frame.endOfTSDU) {
                     continue;
@@ -578,20 +583,16 @@ public class RFC1006Service {
         out.flush();
     }
 
-    private void sendConnectionConfirm(OutputStream out, byte[] requestTpdu) throws Exception {
-        if (requestTpdu.length < 7) {
-            throw new IllegalArgumentException("COTP CR TPDU too short");
-        }
-
-        byte[] ccTpdu = new byte[7];
-        ccTpdu[0] = 0x06;
-        ccTpdu[1] = COTP_PDU_CC;
-        ccTpdu[2] = requestTpdu[4];
-        ccTpdu[3] = requestTpdu[5];
-        ccTpdu[4] = requestTpdu[2];
-        ccTpdu[5] = requestTpdu[3];
-        ccTpdu[6] = 0x00;
-        sendTpktFrame(out, ccTpdu);
+    private void sendConnectionConfirm(OutputStream out, CotpConnectionTpdu requestTpdu) throws Exception {
+        CotpConnectionTpdu confirm = new CotpConnectionTpdu(
+            CotpConnectionTpdu.PDU_CC,
+            requestTpdu.sourceReference(),
+            requestTpdu.destinationReference(),
+            requestTpdu.tpduClass(),
+            requestTpdu.tpduSize(),
+            requestTpdu.unknownParameters()
+        );
+        sendTpktFrame(out, confirm.serialize());
         out.flush();
     }
 
@@ -625,10 +626,12 @@ public class RFC1006Service {
     private static final class P1AssociationState {
         private boolean bound;
         private boolean active;
+        private int negotiatedMaxUserData;
 
-        private P1AssociationState(boolean bound) {
+        private P1AssociationState(boolean bound, int negotiatedMaxUserData) {
             this.bound = bound;
             this.active = true;
+            this.negotiatedMaxUserData = negotiatedMaxUserData;
         }
 
         private boolean bound() {

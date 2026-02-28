@@ -51,7 +51,7 @@ public class P1AssociationProtocol {
             mtsApdu,
             presentationContext
         );
-        return BerCodec.encode(new BerTlv(2, true, 0, 0, payload.length, payload));
+        return BerCodec.encode(new BerTlv(2, true, X411TagMap.APDU_BIND, 0, payload.length, payload));
     }
 
     public Pdu decode(byte[] payload) {
@@ -60,15 +60,16 @@ public class P1AssociationProtocol {
             throw new IllegalArgumentException("P1 association PDU must use context-specific constructed tags");
         }
 
+        X411TagMap.validateAssociationApduTag(pdu.tagNumber());
         return switch (pdu.tagNumber()) {
-            case 0 -> decodeBind(pdu.value());
-            case 1 -> new TransferPdu(pdu.value());
-            case 2 -> new ReleasePdu();
-            case 3 -> decodeAbort(pdu.value());
-            case 4 -> decodeError(pdu.value());
-            case 10 -> decodeBindResult(pdu.value());
-            case 11 -> new ReleaseResultPdu();
-            case 12 -> decodeTransferResult(pdu.value());
+            case X411TagMap.APDU_BIND -> decodeBind(pdu.value());
+            case X411TagMap.APDU_TRANSFER -> new TransferPdu(pdu.value());
+            case X411TagMap.APDU_RELEASE -> new ReleasePdu();
+            case X411TagMap.APDU_ABORT -> decodeAbort(pdu.value());
+            case X411TagMap.APDU_ERROR -> decodeError(pdu.value());
+            case X411TagMap.APDU_BIND_RESULT -> decodeBindResult(pdu.value());
+            case X411TagMap.APDU_RELEASE_RESULT -> new ReleaseResultPdu();
+            case X411TagMap.APDU_TRANSFER_RESULT -> decodeTransferResult(pdu.value());
             default -> throw new IllegalArgumentException("Unsupported P1 association PDU tag [" + pdu.tagNumber() + "]");
         };
     }
@@ -79,11 +80,11 @@ public class P1AssociationProtocol {
             BerCodec.encode(new BerTlv(2, false, 0, 0, 1, new byte[] {(byte) (accepted ? 1 : 0)})),
             BerCodec.encode(new BerTlv(2, false, 1, 0, diagnosticBytes.length, diagnosticBytes))
         );
-        return BerCodec.encode(new BerTlv(2, true, 10, 0, payload.length, payload));
+        return BerCodec.encode(new BerTlv(2, true, X411TagMap.APDU_BIND_RESULT, 0, payload.length, payload));
     }
 
     public byte[] encodeReleaseResult() {
-        return BerCodec.encode(new BerTlv(2, true, 11, 0, 0, new byte[0]));
+        return BerCodec.encode(new BerTlv(2, true, X411TagMap.APDU_RELEASE_RESULT, 0, 0, new byte[0]));
     }
 
     public byte[] encodeTransferResult(boolean accepted, String mtsIdentifier, List<RecipientTransferResult> recipientResults) {
@@ -94,12 +95,12 @@ public class P1AssociationProtocol {
             encodeOptionalIa5(2, mtsIdentifier),
             encodeRecipientResults(recipientResults)
         );
-        return BerCodec.encode(new BerTlv(2, true, 12, 0, payload.length, payload));
+        return BerCodec.encode(new BerTlv(2, true, X411TagMap.APDU_TRANSFER_RESULT, 0, payload.length, payload));
     }
 
     public byte[] encodeAbort(String diagnostic) {
         byte[] bytes = diagnostic.getBytes(StandardCharsets.UTF_8);
-        return BerCodec.encode(new BerTlv(2, true, 3, 0, bytes.length, bytes));
+        return BerCodec.encode(new BerTlv(2, true, X411TagMap.APDU_ABORT, 0, bytes.length, bytes));
     }
 
     public byte[] encodeError(String code, String diagnostic) {
@@ -109,27 +110,27 @@ public class P1AssociationProtocol {
             BerCodec.encode(new BerTlv(2, false, 0, 0, codeBytes.length, codeBytes)),
             BerCodec.encode(new BerTlv(2, false, 1, 0, diagnosticBytes.length, diagnosticBytes))
         );
-        return BerCodec.encode(new BerTlv(2, true, 4, 0, payload.length, payload));
+        return BerCodec.encode(new BerTlv(2, true, X411TagMap.APDU_ERROR, 0, payload.length, payload));
     }
 
     private BindPdu decodeBind(byte[] payload) {
         List<BerTlv> fields = BerCodec.decodeAll(payload);
-        Optional<String> calling = BerCodec.findOptional(fields, 2, 0)
+        Optional<String> calling = BerCodec.findOptional(fields, 2, X411TagMap.BIND_CALLING_MTA)
             .map(value -> new String(value.value(), StandardCharsets.US_ASCII));
-        Optional<String> called = BerCodec.findOptional(fields, 2, 1)
+        Optional<String> called = BerCodec.findOptional(fields, 2, X411TagMap.BIND_CALLED_MTA)
             .map(value -> new String(value.value(), StandardCharsets.US_ASCII));
-        String abstractSyntax = BerCodec.findOptional(fields, 2, 2)
+        String abstractSyntax = BerCodec.findOptional(fields, 2, X411TagMap.BIND_ABSTRACT_SYNTAX)
             .map(this::decodeOid)
             .orElseThrow(() -> new IllegalArgumentException("P1 bind does not include abstract syntax"));
-        int protocolVersion = BerCodec.findOptional(fields, 2, 3)
+        int protocolVersion = BerCodec.findOptional(fields, 2, X411TagMap.BIND_PROTOCOL_VERSION)
             .map(this::decodeProtocolVersion)
             .orElseThrow(() -> new IllegalArgumentException("P1 bind does not include protocol version"));
-        Optional<String> authentication = BerCodec.findOptional(fields, 2, 4)
+        Optional<String> authentication = BerCodec.findOptional(fields, 2, X411TagMap.BIND_AUTHENTICATION)
             .map(value -> new String(value.value(), StandardCharsets.UTF_8));
-        Optional<String> security = BerCodec.findOptional(fields, 2, 5)
+        Optional<String> security = BerCodec.findOptional(fields, 2, X411TagMap.BIND_SECURITY)
             .map(value -> new String(value.value(), StandardCharsets.UTF_8));
-        boolean mtsApduPresent = BerCodec.findOptional(fields, 2, 6).isPresent();
-        boolean presentationContextPresent = BerCodec.findOptional(fields, 2, 7).isPresent();
+        boolean mtsApduPresent = BerCodec.findOptional(fields, 2, X411TagMap.BIND_MTS_APDU).isPresent();
+        boolean presentationContextPresent = BerCodec.findOptional(fields, 2, X411TagMap.BIND_PRESENTATION_CONTEXT).isPresent();
 
         if (!ICAO_AMHS_P1_ABSTRACT_SYNTAX.equals(abstractSyntax)) {
             throw new IllegalArgumentException("Unsupported P1 abstract syntax OID " + abstractSyntax);
@@ -217,7 +218,7 @@ public class P1AssociationProtocol {
                 })
                 .orElse(new byte[0])
         );
-        return BerCodec.encode(new BerTlv(2, true, 0, 0, payload.length, payload));
+        return BerCodec.encode(new BerTlv(2, true, X411TagMap.APDU_BIND, 0, payload.length, payload));
     }
 
     private byte[] encodeOptionalIa5(int tag, String value) {
