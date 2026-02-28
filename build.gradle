@@ -31,4 +31,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-jdbc'
 	implementation 'org.bouncycastle:bcprov-jdk18on:1.78' 
 	implementation 'org.postgresql:postgresql:42.7.3' 
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
+
+test {
+    useJUnitPlatform()
+}
+

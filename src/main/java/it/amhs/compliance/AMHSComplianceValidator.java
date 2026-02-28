@@ -49,6 +49,20 @@ public class AMHSComplianceValidator {
         }
     }
 
+    public void validateOrAddressBinding(String from, String certificateCn, String certificateOu) {
+        if (!StringUtils.hasText(certificateCn) && !StringUtils.hasText(certificateOu)) {
+            return;
+        }
+
+        String icaoUnit = extractIcaoUnit(from);
+        String normalizedCn = normalized(certificateCn);
+        String normalizedOu = normalized(certificateOu);
+
+        if (!icaoUnit.equals(normalizedCn) && !icaoUnit.equals(normalizedOu)) {
+            throw new IllegalArgumentException("Certificate subject is not bound to sender O/R address ICAO unit");
+        }
+    }
+
     private void validateAddress(String address, String fieldName) {
         if (!StringUtils.hasText(address)) {
             throw new IllegalArgumentException("AMHS " + fieldName + " address is mandatory");
@@ -104,6 +118,20 @@ public class AMHSComplianceValidator {
                 throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must not skip OU levels");
             }
         }
+    }
+
+    private String extractIcaoUnit(String address) {
+        String normalizedAddress = address.trim().toUpperCase(Locale.ROOT);
+        if (ICAO_8_CHAR.matcher(normalizedAddress).matches()) {
+            return normalizedAddress;
+        }
+
+        ORAddress orAddress = ORAddress.parse(normalizedAddress);
+        return orAddress.organizationalUnits().stream()
+            .map(this::normalized)
+            .filter(unit -> ICAO_8_CHAR.matcher(unit).matches())
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("Sender O/R address does not contain an ICAO unit for certificate binding"));
     }
 
     private String normalized(String value) {
