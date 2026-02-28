@@ -34,9 +34,25 @@ class P1BerMessageParserTest {
         assertEquals("LIRRZQZX", parsed.from());
         assertEquals("LIIRYAYX", parsed.to());
         assertEquals("HELLO", parsed.body());
-        assertEquals(AMHSProfile.P7, parsed.profile());
+        assertEquals(AMHSProfile.P3, parsed.profile());
         assertEquals(AMHSPriority.SS, parsed.priority());
         assertEquals("SUBJECT", parsed.subject());
+    }
+
+
+    @Test
+    void shouldParseP1ProfileValue() {
+        byte[] content = concat(
+            BerCodec.encode(new BerTlv(2, false, 0, 0, 8, "LIRRZQZX".getBytes(StandardCharsets.US_ASCII))),
+            BerCodec.encode(new BerTlv(2, false, 1, 0, 8, "LIIRYAYX".getBytes(StandardCharsets.US_ASCII))),
+            BerCodec.encode(new BerTlv(2, false, 2, 0, 5, "HELLO".getBytes(StandardCharsets.UTF_8))),
+            BerCodec.encode(new BerTlv(2, false, 3, 0, 1, new byte[] {0x00}))
+        );
+
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, content.length, content));
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+
+        assertEquals(AMHSProfile.P1, parsed.profile());
     }
 
     @Test
