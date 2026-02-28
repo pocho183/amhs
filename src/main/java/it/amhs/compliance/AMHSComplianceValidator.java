@@ -28,6 +28,10 @@ public class AMHSComplianceValidator {
     }
 
     public void validateCertificateIdentity(AMHSChannel channel, String certificateCn, String certificateOu) {
+        if (!StringUtils.hasText(certificateCn) && !StringUtils.hasText(certificateOu)) {
+            return;
+        }
+
         if (StringUtils.hasText(channel.getExpectedCn())) {
             if (!StringUtils.hasText(certificateCn) || !channel.getExpectedCn().equalsIgnoreCase(certificateCn.trim())) {
                 throw new IllegalArgumentException("Certificate CN does not match channel policy");
