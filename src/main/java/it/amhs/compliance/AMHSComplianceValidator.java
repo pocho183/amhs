@@ -98,11 +98,8 @@ public class AMHSComplianceValidator {
             throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must include at least OU1");
         }
 
-        boolean hasIcao = orAddress.organizationalUnits().stream()
-            .map(this::normalized)
-            .anyMatch(unit -> ICAO_8_CHAR.matcher(unit).matches());
-        if (!hasIcao) {
-            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must contain an 8-character ICAO unit in OU1-OU4");
+        if (!containsIcaoUnit(orAddress)) {
+            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must contain an 8-character ICAO unit in OU, O or CN");
         }
 
         ensureOrderedOu(orAddress, fieldName);
@@ -127,11 +124,23 @@ public class AMHSComplianceValidator {
         }
 
         ORAddress orAddress = ORAddress.parse(normalizedAddress);
-        return orAddress.organizationalUnits().stream()
-            .map(this::normalized)
-            .filter(unit -> ICAO_8_CHAR.matcher(unit).matches())
-            .findFirst()
+        return firstIcaoUnit(orAddress)
             .orElseThrow(() -> new IllegalArgumentException("Sender O/R address does not contain an ICAO unit for certificate binding"));
+    }
+
+    private boolean containsIcaoUnit(ORAddress orAddress) {
+        return firstIcaoUnit(orAddress).isPresent();
+    }
+
+    private java.util.Optional<String> firstIcaoUnit(ORAddress orAddress) {
+        return java.util.stream.Stream.concat(
+                orAddress.organizationalUnits().stream(),
+                java.util.stream.Stream.of(orAddress.get("O"), orAddress.get("CN"))
+            )
+            .map(this::normalized)
+            .filter(StringUtils::hasText)
+            .filter(unit -> ICAO_8_CHAR.matcher(unit).matches())
+            .findFirst();
     }
 
     private String normalized(String value) {
