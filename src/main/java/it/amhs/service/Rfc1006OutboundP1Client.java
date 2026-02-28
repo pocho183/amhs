@@ -116,8 +116,8 @@ public class Rfc1006OutboundP1Client implements OutboundP1Client {
         byte[] to = contextIa5(1, message.getRecipient());
         byte[] body = contextUtf8(2, message.getBody());
         byte[] profile = contextEnumerated(3, message.getProfile() == null ? 0 : switch (message.getProfile()) {
-            case P1 -> 0;
-            case P3 -> 1;
+        	case P1 -> 0;    
+        	case P3 -> 1;
             case P7 -> 2;
         });
         byte[] priority = contextEnumerated(4, message.getPriority() == null ? 3 : switch (message.getPriority()) {
