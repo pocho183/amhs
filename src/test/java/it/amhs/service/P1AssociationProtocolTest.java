@@ -24,6 +24,13 @@ class P1AssociationProtocolTest {
             contextPrimitive(1, "CALLED-MTA"),
             contextConstructed(2, BerCodec.encode(new BerTlv(0, false, 6, 0, 5, new byte[] {
                 0x56, 0x00, 0x01, 0x06, 0x01
+            }))),
+            BerCodec.encode(new BerTlv(2, false, 3, 0, 1, new byte[] { 0x01 })),
+            contextPrimitiveUtf8(4, "auth"),
+            contextPrimitiveUtf8(5, "sec"),
+            BerCodec.encode(new BerTlv(2, true, 6, 0, 0, new byte[0])),
+            contextConstructed(7, BerCodec.encode(new BerTlv(0, false, 6, 0, 5, new byte[] {
+                0x56, 0x00, 0x01, 0x06, 0x01
             })))
         );
 
@@ -35,6 +42,11 @@ class P1AssociationProtocolTest {
         assertEquals("2.6.0.1.6.1", bind.abstractSyntaxOid());
         assertEquals("CALLING-MTA", bind.callingMta().orElseThrow());
         assertEquals("CALLED-MTA", bind.calledMta().orElseThrow());
+        assertEquals(1, bind.protocolVersion());
+        assertEquals("auth", bind.authenticationParameters().orElseThrow());
+        assertEquals("sec", bind.securityParameters().orElseThrow());
+        assertTrue(bind.mtsApduPresent());
+        assertTrue(bind.presentationContextPresent());
     }
 
     @Test
@@ -78,8 +90,33 @@ class P1AssociationProtocolTest {
         assertEquals(11, tlv.tagNumber());
     }
 
+
+    @Test
+    void shouldEncodeAndDecodeCompliantBind() {
+        byte[] pdu = protocol.encodeBind(
+            java.util.Optional.of("CALLING-MTA"),
+            java.util.Optional.of("CALLED-MTA"),
+            java.util.Optional.of("auth-token"),
+            java.util.Optional.of("sec-label")
+        );
+
+        P1AssociationProtocol.BindPdu bind = assertInstanceOf(P1AssociationProtocol.BindPdu.class, protocol.decode(pdu));
+
+        assertEquals("2.6.0.1.6.1", bind.abstractSyntaxOid());
+        assertEquals(1, bind.protocolVersion());
+        assertEquals("auth-token", bind.authenticationParameters().orElseThrow());
+        assertEquals("sec-label", bind.securityParameters().orElseThrow());
+        assertTrue(bind.mtsApduPresent());
+        assertTrue(bind.presentationContextPresent());
+    }
+
     private static byte[] contextPrimitive(int tag, String value) {
         byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+    private static byte[] contextPrimitiveUtf8(int tag, String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
         return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
     }
 
