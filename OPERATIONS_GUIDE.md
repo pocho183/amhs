@@ -2,6 +2,8 @@
 
 Questa guida è allineata all'implementazione attuale: il servizio gira **senza API REST** ed espone solo endpoint RFC1006 su TLS.
 
+> ⚠️ **Importante**: questa implementazione è un **simulatore AMHS applicativo** (header testuali + policy AMHS). Non implementa uno stack X.400/P1/P3 ASN.1 completo conforme ICAO Doc 9880/9705 end-to-end.
+
 ---
 
 ## 1) Architettura runtime attuale
@@ -52,8 +54,9 @@ I seed attuali non impongono CN/OU obbligatori, così funzionano anche in modali
 ## 4) Formato messaggio RFC1006
 
 Frame richiesto:
-1. 2 byte iniziali (big-endian) con lunghezza payload
-2. payload UTF-8 con header testuali
+1. **TPKT** (4 byte): versione `0x03`, reserved `0x00`, lunghezza totale (big-endian)
+2. **COTP Data TPDU** (3 byte): `0x02 0xF0 0x80`
+3. payload UTF-8 con header testuali
 
 Esempio payload:
 
@@ -92,6 +95,9 @@ Opzioni principali:
 - `--channel <name>` (es. `ATFM`, `AFTN`)
 - `--from`, `--to`, `--profile`, `--priority`
 - `--host`, `--port`, `--truststore`, `--truststore-password`
+- `--connect-timeout-ms`, `--read-timeout-ms`
+- `--negative-suite` (invalid profile / frame corrotto / oversized)
+- `--concurrency <n>` (test concorrente happy-path)
 
 ## 6) mTLS e errore "Certificate CN does not match channel policy"
 
