@@ -50,6 +50,15 @@ public class AMHSMessage {
     @Column(name = "timeout_dr")
     private Integer timeoutDr;
     @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle_state", nullable = false, length = 32)
+    private AMHSMessageState lifecycleState;
+    @Column(name = "last_state_change", nullable = false)
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date lastStateChange;
+    @Column(name = "dr_expiration_at")
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date drExpirationAt;
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AMHSProfile profile;
     @Enumerated(EnumType.STRING)
@@ -68,6 +77,12 @@ public class AMHSMessage {
     protected void onCreate() {
         if (filingTime == null) {
             filingTime = new Date();
+        }
+        if (lifecycleState == null) {
+            lifecycleState = AMHSMessageState.SUBMITTED;
+        }
+        if (lastStateChange == null) {
+            lastStateChange = new Date();
         }
         receivedAt = new Date();
     }

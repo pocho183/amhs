@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import it.amhs.domain.AMHSMessage;
+import it.amhs.domain.AMHSMessageState;
 import it.amhs.domain.AMHSProfile;
 
 @Repository
@@ -20,6 +21,8 @@ public interface AMHSMessageRepository extends JpaRepository<AMHSMessage, Long> 
 	List<AMHSMessage> findByProfile(AMHSProfile profile);
 
 	List<AMHSMessage> findByChannelNameIgnoreCaseAndProfile(String channelName, AMHSProfile profile);
+
+	List<AMHSMessage> findByLifecycleStateIn(List<AMHSMessageState> states);
 
 	long deleteByReceivedAtBefore(Date cutoff);
 
