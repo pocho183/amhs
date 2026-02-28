@@ -1,5 +1,6 @@
 package it.amhs.service;
 
+import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,9 +49,10 @@ public class MTAService {
         String subject,
         String channelName,
         String certificateCn,
-        String certificateOu
+        String certificateOu,
+        Date filingTime
     ) {
-        AMHSMessage message = buildBaseMessage(from, to, body, messageId, profile, priority, subject, channelName, certificateCn, certificateOu);
+        AMHSMessage message = buildBaseMessage(from, to, body, messageId, profile, priority, subject, channelName, certificateCn, certificateOu, filingTime);
         if (!databaseEnabled) {
             logReceivedMessage(message);
             return message;
@@ -74,6 +76,7 @@ public class MTAService {
         String channelName,
         String certificateCn,
         String certificateOu,
+        Date filingTime,
         String senderOrAddress,
         String recipientOrAddress,
         String presentationAddress,
@@ -81,7 +84,7 @@ public class MTAService {
         String deliveryReport,
         Integer timeoutDr
     ) {
-        AMHSMessage message = buildBaseMessage(from, to, body, messageId, profile, priority, subject, channelName, certificateCn, certificateOu);
+        AMHSMessage message = buildBaseMessage(from, to, body, messageId, profile, priority, subject, channelName, certificateCn, certificateOu, filingTime);
         message.setSenderOrAddress(normalize(senderOrAddress));
         message.setRecipientOrAddress(normalize(recipientOrAddress));
         message.setPresentationAddress(normalize(presentationAddress));
@@ -128,7 +131,8 @@ public class MTAService {
         String subject,
         String channelName,
         String certificateCn,
-        String certificateOu
+        String certificateOu,
+        Date filingTime
     ) {
         AMHSMessage message = new AMHSMessage();
         message.setMessageId(resolveMessageId(messageId));
@@ -141,6 +145,7 @@ public class MTAService {
         message.setChannelName(normalize(channelName));
         message.setCertificateCn(normalize(certificateCn));
         message.setCertificateOu(normalize(certificateOu));
+        message.setFilingTime(filingTime == null ? new Date() : filingTime);
         return message;
     }
 

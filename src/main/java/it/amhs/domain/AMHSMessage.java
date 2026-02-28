@@ -57,12 +57,18 @@ public class AMHSMessage {
     private AMHSPriority priority;
 	@Column(name = "subject", length = 255)
 	private String subject;
+    @Column(name = "filing_time", nullable = false, updatable = false)
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date filingTime;
     @Column(name = "received_at", updatable = false)
     @Temporal(TemporalType.TIMESTAMP)
     private Date receivedAt;
 
     @PrePersist
     protected void onCreate() {
+        if (filingTime == null) {
+            filingTime = new Date();
+        }
         receivedAt = new Date();
     }
 }
