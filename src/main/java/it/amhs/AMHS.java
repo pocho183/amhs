@@ -27,6 +27,10 @@ public class AMHS {
     private String truststorePath;
     @Value("${tls.truststore.password:}")
     private String truststorePassword;
+    @Value("${tls.pkix.revocation-enabled:false}")
+    private boolean tlsRevocationEnabled;
+    @Value("${tls.pkix.required-policy-oids:}")
+    private String tlsRequiredPolicyOids;
 
     public static void main(String[] args) {
     	SpringApplication app = new SpringApplication(AMHS.class);
@@ -38,12 +42,29 @@ public class AMHS {
     @Bean
     public SSLContext sslContext(TLSContextFactory factory) {
         try {
-            return factory.create(keystorePath, keystorePassword, truststorePath, truststorePassword);
+            return factory.create(
+                keystorePath,
+                keystorePassword,
+                truststorePath,
+                truststorePassword,
+                tlsRevocationEnabled,
+                parsePolicyOids(tlsRequiredPolicyOids)
+            );
         } catch (Exception e) {
             throw new RuntimeException("Failed to create SSLContext", e);
         }
     }
     
+    private java.util.Set<String> parsePolicyOids(String csv) {
+        if (csv == null || csv.isBlank()) {
+            return java.util.Set.of();
+        }
+        return java.util.Arrays.stream(csv.split(","))
+            .map(String::trim)
+            .filter(value -> !value.isEmpty())
+            .collect(java.util.stream.Collectors.toSet());
+    }
+
     @Bean
     public CommandLineRunner startServer(RFC1006Server server) {
         return args -> {
