@@ -1,5 +1,6 @@
 package it.amhs.test;
 
+import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -15,12 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Minimal AMHS RFC1006/TLS test client.
- *
- * Examples:
- *   java it.amhs.test.AMHSTestClient --channel ATFM --count 3
- *   java it.amhs.test.AMHSTestClient --retrieve-all
- *   java it.amhs.test.AMHSTestClient --retrieve MSG-1
+ * AMHS RFC1006/TLS test client aligned with this AMHS server implementation.
  */
 public class AMHSTestClient {
 
@@ -59,6 +55,21 @@ public class AMHSTestClient {
     }
 
     private static SSLSocket createSocket(ClientOptions options) throws Exception {
+        TrustManagerFactory tmf = buildTrustManagers(options);
+        KeyManagerFactory kmf = buildKeyManagers(options);
+
+        SSLContext context = SSLContext.getInstance("TLS");
+        context.init(kmf == null ? null : kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+
+        SSLSocketFactory factory = context.getSocketFactory();
+        SSLSocket socket = (SSLSocket) factory.createSocket(options.host, options.port);
+        socket.setEnabledProtocols(new String[] { "TLSv1.3", "TLSv1.2" });
+        socket.startHandshake();
+        System.out.printf("Connected to %s:%d (channel=%s)%n", options.host, options.port, options.channel);
+        return socket;
+    }
+
+    private static TrustManagerFactory buildTrustManagers(ClientOptions options) throws Exception {
         KeyStore trustStore = KeyStore.getInstance("JKS");
         try (InputStream trustStoreStream = new FileInputStream(options.trustStorePath)) {
             trustStore.load(trustStoreStream, options.trustStorePassword.toCharArray());
@@ -66,15 +77,22 @@ public class AMHSTestClient {
 
         TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         tmf.init(trustStore);
+        return tmf;
+    }
 
-        SSLContext context = SSLContext.getInstance("TLS");
-        context.init(null, tmf.getTrustManagers(), null);
+    private static KeyManagerFactory buildKeyManagers(ClientOptions options) throws Exception {
+        if (options.keyStorePath == null || options.keyStorePath.isBlank()) {
+            return null;
+        }
 
-        SSLSocketFactory factory = context.getSocketFactory();
-        SSLSocket socket = (SSLSocket) factory.createSocket(options.host, options.port);
-        socket.setEnabledProtocols(new String[]{"TLSv1.3", "TLSv1.2"});
-        System.out.printf("Connected to %s:%d (channel=%s)%n", options.host, options.port, options.channel);
-        return socket;
+        KeyStore keyStore = KeyStore.getInstance("PKCS12");
+        try (InputStream keyStoreStream = new FileInputStream(options.keyStorePath)) {
+            keyStore.load(keyStoreStream, options.keyStorePassword.toCharArray());
+        }
+
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(keyStore, options.keyStorePassword.toCharArray());
+        return kmf;
     }
 
     private static String buildMessagePayload(ClientOptions options, String messageId, int sequence) {
@@ -83,12 +101,15 @@ public class AMHSTestClient {
             .replace("{channel}", options.channel)
             .replace("{messageId}", messageId);
 
+        String filingTime = Instant.now().toString();
+
         return "Message-ID: " + messageId + "\n" +
             "From: " + options.from + "\n" +
             "To: " + options.to + "\n" +
             "Profile: " + options.profile + "\n" +
             "Priority: " + options.priority + "\n" +
             "Channel: " + options.channel + "\n" +
+            "Filing-Time: " + filingTime + "\n" +
             "Subject: " + options.subject + "\n" +
             "Body: " + body + "\n";
     }
@@ -130,6 +151,8 @@ public class AMHSTestClient {
         private final int port;
         private final String trustStorePath;
         private final String trustStorePassword;
+        private final String keyStorePath;
+        private final String keyStorePassword;
         private final String from;
         private final String to;
         private final String profile;
@@ -147,6 +170,8 @@ public class AMHSTestClient {
             int port,
             String trustStorePath,
             String trustStorePassword,
+            String keyStorePath,
+            String keyStorePassword,
             String from,
             String to,
             String profile,
@@ -163,6 +188,8 @@ public class AMHSTestClient {
             this.port = port;
             this.trustStorePath = trustStorePath;
             this.trustStorePassword = trustStorePassword;
+            this.keyStorePath = keyStorePath;
+            this.keyStorePassword = keyStorePassword;
             this.from = from;
             this.to = to;
             this.profile = profile;
@@ -195,6 +222,9 @@ public class AMHSTestClient {
                 envOrDefault("AMHS_TRUSTSTORE_PASSWORD", DEFAULT_TRUSTSTORE_PASSWORD)
             );
 
+            String keyStorePath = values.getOrDefault("keystore", envOrDefault("AMHS_KEYSTORE", ""));
+            String keyStorePassword = values.getOrDefault("keystore-password", envOrDefault("AMHS_KEYSTORE_PASSWORD", "changeit"));
+
             String from = values.getOrDefault("from", envOrDefault("AMHS_FROM", "LIRRAAAA"));
             String to = values.getOrDefault("to", envOrDefault("AMHS_TO", "LIRRBBBB"));
             String profile = values.getOrDefault("profile", envOrDefault("AMHS_PROFILE", "P3"));
@@ -211,11 +241,20 @@ public class AMHSTestClient {
             boolean retrieveAll = values.containsKey("retrieve-all");
             String retrieveMessageId = values.get("retrieve");
 
+            if (values.containsKey("from-or")) {
+                from = values.get("from-or");
+            }
+            if (values.containsKey("to-or")) {
+                to = values.get("to-or");
+            }
+
             return new ClientOptions(
                 host,
                 port,
                 trustStorePath,
                 trustStorePassword,
+                keyStorePath,
+                keyStorePassword,
                 from,
                 to,
                 profile,
@@ -271,10 +310,14 @@ public class AMHSTestClient {
                 "  --port <port>                      Default: 102\n" +
                 "  --truststore <path>                Default: src/main/resources/certs/client-truststore.jks\n" +
                 "  --truststore-password <pwd>        Default: changeit\n" +
-                "  --from <8-char>                    Default: LIRRAAAA\n" +
-                "  --to <8-char>                      Default: LIRRBBBB\n" +
+                "  --keystore <path.p12>              Optional client cert for mTLS\n" +
+                "  --keystore-password <pwd>          Default: changeit\n" +
+                "  --from <8-char or O/R>             Default: LIRRAAAA\n" +
+                "  --to <8-char or O/R>               Default: LIRRBBBB\n" +
+                "  --from-or <O/R address>            Override from using O/R form\n" +
+                "  --to-or <O/R address>              Override to using O/R form\n" +
                 "  --profile <P1|P3|P7>               Default: P3\n" +
-                "  --priority <GG|FF|DD|SS>           Default: GG\n" +
+                "  --priority <SS|DD|FF|GG|KK>        Default: GG\n" +
                 "  --channel <name>                   Default: " + DEFAULT_CHANNEL + "\n" +
                 "  --subject <text>                   Default: AMHS TEST\n" +
                 "  --body <template>                  Variables: {seq}, {channel}, {messageId}\n" +
