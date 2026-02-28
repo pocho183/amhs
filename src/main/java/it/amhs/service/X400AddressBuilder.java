@@ -19,15 +19,16 @@ public class X400AddressBuilder {
         String countryName
     ) {
         StringBuilder builder = new StringBuilder();
+        builder.append("/C=").append(normalize(countryName).toUpperCase());
+        builder.append("/ADMD=").append(normalize(administrationManagementDomain).toUpperCase());
+        builder.append("/PRMD=").append(normalize(privateManagementDomain).toUpperCase());
+        builder.append("/O=").append(normalize(organizationName).toUpperCase());
+        builder.append("/OU1=").append(normalize(organizationUnit).toUpperCase());
+
         if (StringUtils.hasText(commonName) && !"\"\"".equals(commonName.trim())) {
             builder.append("/CN=").append(commonName.trim());
         }
-        builder.append("/OU=").append(normalize(organizationUnit));
-        builder.append("/O=").append(normalize(organizationName));
-        builder.append("/PRMD=").append(normalize(privateManagementDomain));
-        builder.append("/ADMD=").append(normalize(administrationManagementDomain));
-        builder.append("/C=").append(normalize(countryName));
-        builder.append("/");
+
         return builder.toString();
     }
 
