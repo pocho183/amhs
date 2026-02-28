@@ -2,7 +2,7 @@ package it.amhs.security;
 
 import java.io.InputStream;
 import java.security.KeyStore;
-import java.security.cert.CertPathTrustManagerParameters;
+import javax.net.ssl.CertPathTrustManagerParameters;
 import java.security.cert.PKIXBuilderParameters;
 import java.security.cert.PKIXRevocationChecker;
 import java.security.cert.X509CertSelector;
