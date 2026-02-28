@@ -185,6 +185,7 @@ public class AMHSTestClient {
         socket.setEnabledProtocols(new String[] { "TLSv1.3", "TLSv1.2" });
         socket.startHandshake();
         logger.info("Connected to {}:{} (channel={})", options.host, options.port, options.channel);
+        logger.info("Expecting server-side trace hop injection as {}@{}", options.localMtaName, options.localRoutingDomain);
         return socket;
     }
 
@@ -417,6 +418,8 @@ public class AMHSTestClient {
         private final int readTimeoutMs;
         private final boolean negativeSuite;
         private final int concurrency;
+        private final String localMtaName;
+        private final String localRoutingDomain;
 
         private ClientOptions(
             String host,
@@ -439,7 +442,9 @@ public class AMHSTestClient {
             int connectTimeoutMs,
             int readTimeoutMs,
             boolean negativeSuite,
-            int concurrency
+            int concurrency,
+            String localMtaName,
+            String localRoutingDomain
         ) {
             this.host = host;
             this.port = port;
@@ -462,6 +467,8 @@ public class AMHSTestClient {
             this.readTimeoutMs = readTimeoutMs;
             this.negativeSuite = negativeSuite;
             this.concurrency = concurrency;
+            this.localMtaName = localMtaName;
+            this.localRoutingDomain = localRoutingDomain;
         }
 
         private static ClientOptions fromArgs(String[] args) {
@@ -505,6 +512,8 @@ public class AMHSTestClient {
             int readTimeoutMs = parseInt(values.get("read-timeout-ms"), parseInt(envOrDefault("AMHS_READ_TIMEOUT_MS", String.valueOf(DEFAULT_TIMEOUT_MS)), DEFAULT_TIMEOUT_MS));
             boolean negativeSuite = values.containsKey("negative-suite");
             int concurrency = parseInt(values.get("concurrency"), parseInt(envOrDefault("AMHS_CONCURRENCY", "1"), 1));
+            String localMtaName = values.getOrDefault("local-mta-name", envOrDefault("AMHS_MTA_LOCAL_NAME", "LOCAL-MTA"));
+            String localRoutingDomain = values.getOrDefault("routing-domain", envOrDefault("AMHS_MTA_ROUTING_DOMAIN", "LOCAL"));
 
             if (values.containsKey("from-or")) {
                 from = values.get("from-or");
@@ -534,7 +543,9 @@ public class AMHSTestClient {
                 connectTimeoutMs,
                 readTimeoutMs,
                 negativeSuite,
-                concurrency
+                concurrency,
+                localMtaName,
+                localRoutingDomain
             );
         }
 
@@ -595,6 +606,8 @@ public class AMHSTestClient {
                 "  --connect-timeout-ms <ms>          Default: " + DEFAULT_TIMEOUT_MS + "\n" +
                 "  --read-timeout-ms <ms>             Default: " + DEFAULT_TIMEOUT_MS + "\n" +
                 "  --concurrency <n>                  Default: 1 (parallel happy-path clients)\n" +
+                "  --local-mta-name <name>            Expected server local MTA (for trace checks/logging)\n" +
+                "  --routing-domain <domain>          Expected server routing domain (for trace checks/logging)\n" +
                 "  --negative-suite                   Run invalid/corrupted/oversized tests\n" +
                 "  --retrieve-all                     Send RETRIEVE ALL command\n" +
                 "  --retrieve <messageId>             Send RETRIEVE <messageId> command\n" +
