@@ -69,7 +69,11 @@ public class X400MessageService {
             presentationAddress,
             request.ipnRequest(),
             request.deliveryReport(),
-            request.timeoutDr()
+            request.timeoutDr(),
+            null,
+            null,
+            null,
+            null
         );
     }
 }

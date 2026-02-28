@@ -86,7 +86,11 @@ public class MTAService {
         String presentationAddress,
         Integer ipnRequest,
         String deliveryReport,
-        Integer timeoutDr
+        Integer timeoutDr,
+        String mtsIdentifier,
+        String transferContentTypeOid,
+        String transferTrace,
+        String perRecipientFields
     ) {
         AMHSMessage message = buildBaseMessage(from, to, body, messageId, profile, priority, subject, channelName, certificateCn, certificateOu, filingTime);
         message.setSenderOrAddress(normalize(senderOrAddress));
@@ -95,6 +99,10 @@ public class MTAService {
         message.setIpnRequest(ipnRequest);
         message.setDeliveryReport(normalize(deliveryReport));
         message.setTimeoutDr(timeoutDr);
+        message.setMtsIdentifier(normalize(mtsIdentifier));
+        message.setTransferContentTypeOid(normalize(transferContentTypeOid));
+        message.setTransferTrace(normalize(transferTrace));
+        message.setPerRecipientFields(normalize(perRecipientFields));
 
         if (!databaseEnabled) {
             logReceivedMessage(message);
