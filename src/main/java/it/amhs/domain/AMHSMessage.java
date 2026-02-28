@@ -57,6 +57,15 @@ public class AMHSMessage {
     private String transferTrace;
     @Column(name = "per_recipient_fields", length = 4000)
     private String perRecipientFields;
+    @Column(name = "relay_attempt_count", nullable = false)
+    private int relayAttemptCount;
+    @Column(name = "next_retry_at")
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date nextRetryAt;
+    @Column(name = "last_relay_error", length = 512)
+    private String lastRelayError;
+    @Column(name = "dead_letter_reason", length = 512)
+    private String deadLetterReason;
     @Enumerated(EnumType.STRING)
     @Column(name = "lifecycle_state", nullable = false, length = 32)
     private AMHSMessageState lifecycleState;

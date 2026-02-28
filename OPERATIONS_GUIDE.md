@@ -164,7 +164,7 @@ WHERE name = 'ATFM';
 Questa base di codice **non è** uno stack AMHS X.400 completo. In particolare:
 
 - non implementa ASN.1 BER P1/P3 end-to-end (MTA association, transfer envelope, PDU X.411 complete);
-- non implementa ancora relay MTA remoto con sessioni P1 bilaterali e retry su peer esterni;
+- implementa ora un relay MTA outbound di base con tabella di routing ADMD/PRMD, selezione next-hop/alternate-hop e retry esponenziale;
 - non sostituisce una piattaforma AMHS certificata Doc 9880/9705.
 
 Miglioramenti introdotti in questa versione:
@@ -172,3 +172,20 @@ Miglioramenti introdotti in questa versione:
 - O/R address gestito come modello strutturato (normalizzazione attributi + ordering canonico);
 - supporto OU multipli (OU1..OU4) con validazione sequenziale;
 - validazione codice paese ISO e controllo presenza ICAO designator su uno dei livelli OU.
+
+
+### Routing relay outbound (nuovo)
+
+Configurazione minima in `application.properties`:
+
+```properties
+amhs.relay.enabled=true
+amhs.relay.routing-table=/C=IT/ADMD=ICAO/PRMD=ENAV->10.10.10.20:102|10.10.10.21:102
+amhs.relay.max-attempts=5
+amhs.relay.scan-delay-ms=5000
+```
+
+- `routing-table`: matching O/R address (C/ADMD/PRMD/O/OU/CN) con next-hop multipli separati da `|`.
+- Retry con backoff esponenziale (2^n secondi).
+- Dopo `max-attempts`, il messaggio va in dead-letter (`FAILED` + `deadLetterReason`).
+- Rilevazione loop basata su trace hop locale (`MTA@DOMAIN[timestamp]`).
