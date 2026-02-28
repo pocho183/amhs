@@ -1,5 +1,7 @@
 package it.amhs.service;
 
+import java.util.Date;
+
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -55,6 +57,7 @@ public class X400MessageService {
             StringUtils.hasText(request.channel()) ? request.channel() : AMHSChannelService.DEFAULT_CHANNEL_NAME,
             request.certificateCn(),
             request.certificateOu(),
+            new Date(),
             senderOrAddress,
             recipientOrAddress,
             presentationAddress,
