@@ -49,6 +49,14 @@ public class AMHSMessage {
     private String deliveryReport;
     @Column(name = "timeout_dr")
     private Integer timeoutDr;
+    @Column(name = "mts_identifier", length = 255)
+    private String mtsIdentifier;
+    @Column(name = "transfer_content_type_oid", length = 255)
+    private String transferContentTypeOid;
+    @Column(name = "transfer_trace", length = 4000)
+    private String transferTrace;
+    @Column(name = "per_recipient_fields", length = 4000)
+    private String perRecipientFields;
     @Enumerated(EnumType.STRING)
     @Column(name = "lifecycle_state", nullable = false, length = 32)
     private AMHSMessageState lifecycleState;

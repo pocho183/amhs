@@ -129,7 +129,7 @@ public class RFC1006Service {
     }
 
     private void storeWithStrictPriority(IncomingMessage incoming) {
-        PriorityFutureTask task = new PriorityFutureTask(incoming, () -> mtaService.storeMessage(
+        PriorityFutureTask task = new PriorityFutureTask(incoming, () -> mtaService.storeX400Message(
             incoming.from,
             incoming.to,
             incoming.body,
@@ -140,7 +140,17 @@ public class RFC1006Service {
             incoming.channel,
             incoming.certificateCn,
             incoming.certificateOu,
-            incoming.filingTime
+            incoming.filingTime,
+            incoming.from,
+            incoming.to,
+            null,
+            null,
+            null,
+            null,
+            incoming.mtsIdentifier,
+            incoming.contentTypeOid,
+            incoming.traceInformation,
+            incoming.perRecipientFields
         ));
         priorityExecutor.execute(task);
         try {
@@ -172,6 +182,14 @@ public class RFC1006Service {
                 identity.cn(),
                 identity.ou(),
                 berMessage.filingTime(),
+                berMessage.transferEnvelope().mtsIdentifier().flatMap(P1BerMessageParser.MTSIdentifier::localIdentifier).orElse(null),
+                berMessage.transferEnvelope().contentTypeOid().orElse(null),
+                berMessage.transferEnvelope().traceInformation().map(t -> String.join(">", t.hops())).orElse(null),
+                berMessage.transferEnvelope().perRecipientFields().isEmpty()
+                    ? null
+                    : berMessage.transferEnvelope().perRecipientFields().stream()
+                        .map(p -> p.recipient() + p.responsibility().map(r -> "(" + r + ")").orElse(""))
+                        .collect(java.util.stream.Collectors.joining(",")),
                 System.nanoTime()
             );
         }
@@ -216,6 +234,10 @@ public class RFC1006Service {
             identity.cn(),
             identity.ou(),
             filingTime,
+            null,
+            null,
+            null,
+            null,
             System.nanoTime()
         );
     }
@@ -470,6 +492,10 @@ public class RFC1006Service {
         String certificateCn,
         String certificateOu,
         Date filingTime,
+        String mtsIdentifier,
+        String contentTypeOid,
+        String traceInformation,
+        String perRecipientFields,
         long sequence
     ) {
     }

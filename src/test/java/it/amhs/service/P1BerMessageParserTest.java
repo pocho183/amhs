@@ -1,6 +1,7 @@
 package it.amhs.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 
@@ -36,6 +37,74 @@ class P1BerMessageParserTest {
         assertEquals(AMHSProfile.P7, parsed.profile());
         assertEquals(AMHSPriority.SS, parsed.priority());
         assertEquals("SUBJECT", parsed.subject());
+    }
+
+    @Test
+    void shouldParseTransferEnvelopeWithMtsIdentifierPerRecipientTraceAndContentType() {
+        byte[] mtsIdentifier = sequence(
+            contextPrimitive(0, "MTS-ABC-123"),
+            contextPrimitive(8, "20260228123045Z")
+        );
+
+        byte[] perRecipient = sequence(
+            sequence(
+                contextPrimitive(0, "LIIRYAYX"),
+                contextEnumerated(1, 2)
+            ),
+            sequence(
+                contextPrimitive(0, "LIRRZQZX")
+            )
+        );
+
+        byte[] traceInformation = sequence(
+            sequence(contextPrimitive(0, "MTA1")),
+            sequence(contextPrimitive(0, "MTA2"))
+        );
+
+        byte[] envelope = sequence(
+            contextConstructed(0, mtsIdentifier),
+            contextConstructed(1, perRecipient),
+            contextConstructed(2, traceInformation),
+            contextConstructed(3, BerCodec.encode(new BerTlv(0, false, 6, 0, 9, new byte[] {
+                0x2A, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xF7, 0x0D, 0x01, 0x07, 0x01
+            }))),
+            contextPrimitive(4, "LIRRZQZX")
+        );
+
+        byte[] payloadContent = concat(
+            contextPrimitive(2, "Hello envelope"),
+            contextConstructed(9, envelope)
+        );
+
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, payloadContent.length, payloadContent));
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+
+        assertEquals("LIRRZQZX", parsed.from());
+        assertEquals("LIIRYAYX", parsed.to());
+        assertEquals("MTS-ABC-123", parsed.messageId());
+        assertTrue(parsed.transferEnvelope().mtsIdentifier().isPresent());
+        assertEquals("1.2.840.113549.1.7.1", parsed.transferEnvelope().contentTypeOid().orElseThrow());
+        assertEquals(2, parsed.transferEnvelope().perRecipientFields().size());
+        assertTrue(parsed.transferEnvelope().traceInformation().isPresent());
+        assertEquals("MTA1", parsed.transferEnvelope().traceInformation().orElseThrow().hops().get(0));
+    }
+
+    private static byte[] contextPrimitive(int tag, String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+    private static byte[] contextEnumerated(int tag, int value) {
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, 1, new byte[] {(byte) value}));
+    }
+
+    private static byte[] contextConstructed(int tag, byte[] value) {
+        return BerCodec.encode(new BerTlv(2, true, tag, 0, value.length, value));
+    }
+
+    private static byte[] sequence(byte[]... chunks) {
+        byte[] content = concat(chunks);
+        return BerCodec.encode(new BerTlv(0, true, 16, 0, content.length, content));
     }
 
     private static byte[] concat(byte[]... chunks) {
