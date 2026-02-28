@@ -17,6 +17,9 @@ public record X400MessageRequest(
 
     String p3CommonName,
     @NotBlank String p3OrganizationUnit,
+    String p3OrganizationUnit2,
+    String p3OrganizationUnit3,
+    String p3OrganizationUnit4,
     @NotBlank String p3OrganizationName,
     @NotBlank String p3PrivateManagementDomain,
     @NotBlank String p3AdministrationManagementDomain,
@@ -24,6 +27,9 @@ public record X400MessageRequest(
 
     String p3CommonNameRecipient,
     @NotBlank String p3OrganizationUnitRecipient,
+    String p3OrganizationUnit2Recipient,
+    String p3OrganizationUnit3Recipient,
+    String p3OrganizationUnit4Recipient,
     @NotBlank String p3OrganizationNameRecipient,
     @NotBlank String p3PrivateManagementDomainRecipient,
     @NotBlank String p3AdministrationManagementDomainRecipient,

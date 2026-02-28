@@ -1,20 +1,22 @@
 package it.amhs.compliance;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import it.amhs.domain.AMHSChannel;
 import it.amhs.domain.AMHSProfile;
+import it.amhs.service.ORAddress;
 
 @Component
 public class AMHSComplianceValidator {
 
     private static final Pattern ICAO_8_CHAR = Pattern.compile("^[A-Z0-9]{8}$");
-    private static final Pattern COUNTRY_CODE = Pattern.compile("^[A-Z]{2}$");
+    private static final Set<String> ISO_COUNTRIES = Set.of(Locale.getISOCountries());
 
     public void validate(String from, String to, String body, AMHSProfile profile) {
         if (!StringUtils.hasText(body) || body.length() > 100_000) {
@@ -52,73 +54,59 @@ public class AMHSComplianceValidator {
             throw new IllegalArgumentException("AMHS " + fieldName + " address is mandatory");
         }
 
-        String normalized = address.trim().toUpperCase();
+        String normalized = address.trim().toUpperCase(Locale.ROOT);
 
         if (ICAO_8_CHAR.matcher(normalized).matches()) {
             return;
         }
 
-        Map<String, String> orAttributes = parseOrAddress(normalized);
+        ORAddress orAddress = ORAddress.parse(normalized);
 
-        String country = orAttributes.get("C");
-        String admd = orAttributes.get("ADMD");
-        String prmd = orAttributes.get("PRMD");
-        String organization = orAttributes.get("O");
-        String ou1 = orAttributes.get("OU1");
+        String country = normalized(orAddress.get("C"));
+        String admd = normalized(orAddress.get("ADMD"));
+        String prmd = normalized(orAddress.get("PRMD"));
+        String organization = normalized(orAddress.get("O"));
 
-        if (!COUNTRY_CODE.matcher(defaultString(country)).matches()) {
-            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must include valid C (2-letter country code)");
+        if (!ISO_COUNTRIES.contains(country)) {
+            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must include a valid ISO country code");
         }
-        if (!"ICAO".equalsIgnoreCase(defaultString(admd))) {
+        if (!"ICAO".equals(admd)) {
             throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must include ADMD/A=ICAO");
         }
         if (!StringUtils.hasText(prmd)) {
             throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must include PRMD/P");
         }
-        if (!"AFTN".equalsIgnoreCase(defaultString(organization))) {
-            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must include O=AFTN");
+        if (!StringUtils.hasText(organization)) {
+            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must include O");
         }
-        if (!ICAO_8_CHAR.matcher(defaultString(ou1)).matches()) {
-            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must include OU1 with a valid 8-character ICAO address");
+
+        if (orAddress.organizationalUnits().isEmpty()) {
+            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must include at least OU1");
         }
+
+        boolean hasIcao = orAddress.organizationalUnits().stream()
+            .map(this::normalized)
+            .anyMatch(unit -> ICAO_8_CHAR.matcher(unit).matches());
+        if (!hasIcao) {
+            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must contain an 8-character ICAO unit in OU1-OU4");
+        }
+
+        ensureOrderedOu(orAddress, fieldName);
     }
 
-    private Map<String, String> parseOrAddress(String address) {
-        Map<String, String> values = new HashMap<>();
+    private void ensureOrderedOu(ORAddress orAddress, String fieldName) {
+        Set<String> presentKeys = Set.of("OU1", "OU2", "OU3", "OU4").stream()
+            .filter(key -> StringUtils.hasText(orAddress.get(key)))
+            .collect(Collectors.toSet());
 
-        String[] tokens = address.split("/");
-        for (String token : tokens) {
-            if (!StringUtils.hasText(token) || !token.contains("=")) {
-                continue;
+        for (int i = 2; i <= 4; i++) {
+            if (presentKeys.contains("OU" + i) && !presentKeys.contains("OU" + (i - 1))) {
+                throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must not skip OU levels");
             }
-
-            String[] keyValue = token.split("=", 2);
-            String key = normalizeKey(keyValue[0]);
-            String value = keyValue[1].trim();
-
-            if (StringUtils.hasText(key) && StringUtils.hasText(value)) {
-                values.put(key, value);
-            }
         }
-
-        return values;
     }
 
-    private String normalizeKey(String rawKey) {
-        if (!StringUtils.hasText(rawKey)) {
-            return null;
-        }
-
-        String key = rawKey.trim().toUpperCase();
-        return switch (key) {
-            case "A" -> "ADMD";
-            case "P" -> "PRMD";
-            case "OU" -> "OU1";
-            default -> key;
-        };
-    }
-
-    private String defaultString(String value) {
-        return value == null ? "" : value.trim();
+    private String normalized(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 }

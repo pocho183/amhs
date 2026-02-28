@@ -28,7 +28,10 @@ public class X400MessageService {
             request.p3OrganizationName(),
             request.p3PrivateManagementDomain(),
             request.p3AdministrationManagementDomain(),
-            request.p3CountryName()
+            request.p3CountryName(),
+            request.p3OrganizationUnit2(),
+            request.p3OrganizationUnit3(),
+            request.p3OrganizationUnit4()
         );
 
         String recipientOrAddress = addressBuilder.buildOrAddress(
@@ -37,7 +40,10 @@ public class X400MessageService {
             request.p3OrganizationNameRecipient(),
             request.p3PrivateManagementDomainRecipient(),
             request.p3AdministrationManagementDomainRecipient(),
-            request.p3CountryNameRecipient()
+            request.p3CountryNameRecipient(),
+            request.p3OrganizationUnit2Recipient(),
+            request.p3OrganizationUnit3Recipient(),
+            request.p3OrganizationUnit4Recipient()
         );
 
         String presentationAddress = addressBuilder.buildPresentationAddress(

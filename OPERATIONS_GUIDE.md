@@ -158,3 +158,17 @@ WHERE name = 'ATFM';
 - `rfc1006.tls.need-client-auth=true` in ambienti operativi.
 - Policy canali (`expected_cn` / `expected_ou`) allineate ai certificati autorizzati.
 - Audit DB su messaggi e controlli periodici di retention.
+
+## Stato di conformità ICAO/X.400 (trasparenza)
+
+Questa base di codice **non è** uno stack AMHS X.400 completo. In particolare:
+
+- non implementa ASN.1 BER P1/P3 end-to-end (MTA association, transfer envelope, PDU X.411 complete);
+- non implementa ancora relay MTA remoto con sessioni P1 bilaterali e retry su peer esterni;
+- non sostituisce una piattaforma AMHS certificata Doc 9880/9705.
+
+Miglioramenti introdotti in questa versione:
+
+- O/R address gestito come modello strutturato (normalizzazione attributi + ordering canonico);
+- supporto OU multipli (OU1..OU4) con validazione sequenziale;
+- validazione codice paese ISO e controllo presenza ICAO designator su uno dei livelli OU.
