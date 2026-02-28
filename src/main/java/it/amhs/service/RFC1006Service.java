@@ -29,7 +29,9 @@ import javax.net.ssl.SSLSocket;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import it.amhs.domain.AMHSMessage;
 import it.amhs.domain.AMHSPriority;
@@ -53,18 +55,24 @@ public class RFC1006Service {
     private final MTAService mtaService;
     private final P1BerMessageParser p1BerMessageParser;
     private final P1AssociationProtocol p1AssociationProtocol;
+    private final String localMtaName;
+    private final String localRoutingDomain;
     private final ThreadPoolExecutor priorityExecutor;
 
     public RFC1006Service(
         AMHSMessageRepository amhsMessagesRepository,
         MTAService mtaService,
         P1BerMessageParser p1BerMessageParser,
-        P1AssociationProtocol p1AssociationProtocol
+        P1AssociationProtocol p1AssociationProtocol,
+        @Value("${amhs.mta.local-name:LOCAL-MTA}") String localMtaName,
+        @Value("${amhs.mta.routing-domain:LOCAL}") String localRoutingDomain
     ) {
         this.amhsMessagesRepository = amhsMessagesRepository;
         this.mtaService = mtaService;
         this.p1BerMessageParser = p1BerMessageParser;
         this.p1AssociationProtocol = p1AssociationProtocol;
+        this.localMtaName = localMtaName;
+        this.localRoutingDomain = localRoutingDomain;
         this.priorityExecutor = new ThreadPoolExecutor(
             1,
             1,
@@ -222,7 +230,12 @@ public class RFC1006Service {
                 berMessage.filingTime(),
                 berMessage.transferEnvelope().mtsIdentifier().flatMap(P1BerMessageParser.MTSIdentifier::localIdentifier).orElse(null),
                 berMessage.transferEnvelope().contentTypeOid().orElse(null),
-                berMessage.transferEnvelope().traceInformation().map(t -> String.join(">", t.hops())).orElse(null),
+                appendTraceHop(
+                    berMessage.transferEnvelope().traceInformation().map(t -> String.join(">", t.hops())).orElse(null),
+                    Instant.now(),
+                    localMtaName,
+                    localRoutingDomain
+                ),
                 berMessage.transferEnvelope().perRecipientFields().isEmpty()
                     ? null
                     : berMessage.transferEnvelope().perRecipientFields().stream()
@@ -292,7 +305,12 @@ public class RFC1006Service {
                 berMessage.filingTime(),
                 berMessage.transferEnvelope().mtsIdentifier().flatMap(P1BerMessageParser.MTSIdentifier::localIdentifier).orElse(null),
                 berMessage.transferEnvelope().contentTypeOid().orElse(null),
-                berMessage.transferEnvelope().traceInformation().map(t -> String.join(">", t.hops())).orElse(null),
+                appendTraceHop(
+                    berMessage.transferEnvelope().traceInformation().map(t -> String.join(">", t.hops())).orElse(null),
+                    Instant.now(),
+                    localMtaName,
+                    localRoutingDomain
+                ),
                 berMessage.transferEnvelope().perRecipientFields().isEmpty()
                     ? null
                     : berMessage.transferEnvelope().perRecipientFields().stream()
@@ -348,6 +366,17 @@ public class RFC1006Service {
             null,
             System.nanoTime()
         );
+    }
+
+    static String appendTraceHop(String existingTrace, Instant arrivalInstant, String localMtaName, String routingDomain) {
+        String arrival = arrivalInstant == null ? Instant.now().toString() : arrivalInstant.toString();
+        String mta = StringUtils.hasText(localMtaName) ? localMtaName.trim() : "LOCAL-MTA";
+        String domain = StringUtils.hasText(routingDomain) ? routingDomain.trim() : "LOCAL";
+        String hop = mta + "@" + domain + "[" + arrival + "]";
+        if (!StringUtils.hasText(existingTrace)) {
+            return hop;
+        }
+        return existingTrace.trim() + ">" + hop;
     }
 
     private void handleRetrieve(String command, OutputStream out) throws Exception {
