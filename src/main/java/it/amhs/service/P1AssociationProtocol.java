@@ -13,6 +13,46 @@ import it.amhs.asn1.BerTlv;
 public class P1AssociationProtocol {
 
     private static final String ICAO_AMHS_P1_ABSTRACT_SYNTAX = "2.6.0.1.6.1";
+    private static final int DEFAULT_PROTOCOL_VERSION = 1;
+
+    public byte[] encodeBind(
+        Optional<String> callingMta,
+        Optional<String> calledMta,
+        Optional<String> authenticationParameters,
+        Optional<String> securityParameters
+    ) {
+        byte[] oidValue = new byte[] { 0x56, 0x00, 0x01, 0x06, 0x01 };
+        byte[] oidTlv = BerCodec.encode(new BerTlv(0, false, 6, 0, oidValue.length, oidValue));
+        byte[] protocolVersion = BerCodec.encode(new BerTlv(2, false, 3, 0, 1, new byte[] {(byte) DEFAULT_PROTOCOL_VERSION}));
+        byte[] mtsApdu = BerCodec.encode(new BerTlv(2, true, 6, 0, 0, new byte[0]));
+        byte[] presentationContext = BerCodec.encode(new BerTlv(2, true, 7, 0, oidTlv.length, oidTlv));
+
+        byte[] payload = concat(
+            callingMta
+                .map(v -> BerCodec.encode(new BerTlv(2, false, 0, 0, v.getBytes(StandardCharsets.US_ASCII).length, v.getBytes(StandardCharsets.US_ASCII))))
+                .orElse(new byte[0]),
+            calledMta
+                .map(v -> BerCodec.encode(new BerTlv(2, false, 1, 0, v.getBytes(StandardCharsets.US_ASCII).length, v.getBytes(StandardCharsets.US_ASCII))))
+                .orElse(new byte[0]),
+            BerCodec.encode(new BerTlv(2, true, 2, 0, oidTlv.length, oidTlv)),
+            protocolVersion,
+            authenticationParameters
+                .map(v -> {
+                    byte[] bytes = v.getBytes(StandardCharsets.UTF_8);
+                    return BerCodec.encode(new BerTlv(2, false, 4, 0, bytes.length, bytes));
+                })
+                .orElse(new byte[0]),
+            securityParameters
+                .map(v -> {
+                    byte[] bytes = v.getBytes(StandardCharsets.UTF_8);
+                    return BerCodec.encode(new BerTlv(2, false, 5, 0, bytes.length, bytes));
+                })
+                .orElse(new byte[0]),
+            mtsApdu,
+            presentationContext
+        );
+        return BerCodec.encode(new BerTlv(2, true, 0, 0, payload.length, payload));
+    }
 
     public Pdu decode(byte[] payload) {
         BerTlv pdu = BerCodec.decodeSingle(payload);
@@ -67,12 +107,37 @@ public class P1AssociationProtocol {
         String abstractSyntax = BerCodec.findOptional(fields, 2, 2)
             .map(this::decodeOid)
             .orElseThrow(() -> new IllegalArgumentException("P1 bind does not include abstract syntax"));
+        int protocolVersion = BerCodec.findOptional(fields, 2, 3)
+            .map(this::decodeProtocolVersion)
+            .orElseThrow(() -> new IllegalArgumentException("P1 bind does not include protocol version"));
+        Optional<String> authentication = BerCodec.findOptional(fields, 2, 4)
+            .map(value -> new String(value.value(), StandardCharsets.UTF_8));
+        Optional<String> security = BerCodec.findOptional(fields, 2, 5)
+            .map(value -> new String(value.value(), StandardCharsets.UTF_8));
+        boolean mtsApduPresent = BerCodec.findOptional(fields, 2, 6).isPresent();
+        boolean presentationContextPresent = BerCodec.findOptional(fields, 2, 7).isPresent();
 
         if (!ICAO_AMHS_P1_ABSTRACT_SYNTAX.equals(abstractSyntax)) {
             throw new IllegalArgumentException("Unsupported P1 abstract syntax OID " + abstractSyntax);
         }
+        if (protocolVersion != DEFAULT_PROTOCOL_VERSION) {
+            throw new IllegalArgumentException("Unsupported P1 protocol version " + protocolVersion);
+        }
+        if (!mtsApduPresent) {
+            throw new IllegalArgumentException("P1 bind does not include MTS APDU container");
+        }
+        if (!presentationContextPresent) {
+            throw new IllegalArgumentException("P1 bind does not include presentation context");
+        }
 
-        return new BindPdu(calling, called, abstractSyntax);
+        return new BindPdu(calling, called, abstractSyntax, protocolVersion, authentication, security, mtsApduPresent, presentationContextPresent);
+    }
+
+    private int decodeProtocolVersion(BerTlv version) {
+        if (version.value().length != 1) {
+            throw new IllegalArgumentException("P1 bind protocol version must be one octet");
+        }
+        return version.value()[0] & 0xFF;
     }
 
     private AbortPdu decodeAbort(byte[] payload) {
@@ -134,7 +199,16 @@ public class P1AssociationProtocol {
     public sealed interface Pdu permits BindPdu, TransferPdu, ReleasePdu, AbortPdu, ErrorPdu {
     }
 
-    public record BindPdu(Optional<String> callingMta, Optional<String> calledMta, String abstractSyntaxOid) implements Pdu {
+    public record BindPdu(
+        Optional<String> callingMta,
+        Optional<String> calledMta,
+        String abstractSyntaxOid,
+        int protocolVersion,
+        Optional<String> authenticationParameters,
+        Optional<String> securityParameters,
+        boolean mtsApduPresent,
+        boolean presentationContextPresent
+    ) implements Pdu {
     }
 
     public record TransferPdu(byte[] messagePayload) implements Pdu {
