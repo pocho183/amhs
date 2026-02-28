@@ -51,11 +51,13 @@ public class RFC1006Service {
 
     private final AMHSMessageRepository amhsMessagesRepository;
     private final MTAService mtaService;
+    private final P1BerMessageParser p1BerMessageParser;
     private final ThreadPoolExecutor priorityExecutor;
 
-    public RFC1006Service(AMHSMessageRepository amhsMessagesRepository, MTAService mtaService) {
+    public RFC1006Service(AMHSMessageRepository amhsMessagesRepository, MTAService mtaService, P1BerMessageParser p1BerMessageParser) {
         this.amhsMessagesRepository = amhsMessagesRepository;
         this.mtaService = mtaService;
+        this.p1BerMessageParser = p1BerMessageParser;
         this.priorityExecutor = new ThreadPoolExecutor(
             1,
             1,
@@ -100,7 +102,7 @@ public class RFC1006Service {
                     continue;
                 }
 
-                IncomingMessage incoming = parseIncomingMessage(message, identity);
+                IncomingMessage incoming = parseIncomingMessage(payload, message, identity);
                 try {
                     storeWithStrictPriority(incoming);
                     String ack = "Message-ID: " + incoming.messageId + "\n"
@@ -155,7 +157,25 @@ public class RFC1006Service {
         }
     }
 
-    private IncomingMessage parseIncomingMessage(String message, CertificateIdentity identity) {
+    private IncomingMessage parseIncomingMessage(byte[] rawPayload, String message, CertificateIdentity identity) {
+        if (rawPayload.length > 0 && (rawPayload[0] & 0xFF) == 0x30) {
+            P1BerMessageParser.ParsedP1Message berMessage = p1BerMessageParser.parse(rawPayload);
+            return new IncomingMessage(
+                berMessage.messageId() == null ? UUID.randomUUID().toString() : berMessage.messageId(),
+                berMessage.from(),
+                berMessage.to(),
+                berMessage.body(),
+                berMessage.profile(),
+                berMessage.priority(),
+                berMessage.subject(),
+                AMHSChannelService.DEFAULT_CHANNEL_NAME,
+                identity.cn(),
+                identity.ou(),
+                berMessage.filingTime(),
+                System.nanoTime()
+            );
+        }
+
         Map<String, String> headers = new HashMap<>();
         String body = "";
 

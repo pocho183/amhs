@@ -164,6 +164,7 @@ public class MTAService {
             complianceValidator.validate(from, to, body, profile);
             AMHSChannel channel = channelService.requireEnabledChannel(channelName);
             complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
+            complianceValidator.validateOrAddressBinding(from, certificateCn, certificateOu);
             message.setChannelName(channel.getName());
 
             stateMachine.transition(message, AMHSMessageState.TRANSFERRED);

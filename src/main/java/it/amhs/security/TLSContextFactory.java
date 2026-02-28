@@ -2,6 +2,11 @@ package it.amhs.security;
 
 import java.io.InputStream;
 import java.security.KeyStore;
+import javax.net.ssl.CertPathTrustManagerParameters;
+import java.security.cert.PKIXBuilderParameters;
+import java.security.cert.PKIXRevocationChecker;
+import java.security.cert.X509CertSelector;
+import java.util.Set;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -21,23 +26,44 @@ public class TLSContextFactory {
         this.resourceLoader = resourceLoader;
     }
 
-    public SSLContext create(String keyStorePath, String keyStorePassword, String trustStorePath, String trustStorePassword) {
-    	try {
-	    	KeyStore keyStore = loadStore(keyStorePath, keyStorePassword, "PKCS12");
-	        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-	        kmf.init(keyStore, keyStorePassword.toCharArray());
-	
-	        TrustManagerFactory tmf = null;
-	        if (StringUtils.hasText(trustStorePath)) {
-	            KeyStore trustStore = loadStore(trustStorePath, trustStorePassword, "JKS");
-	            tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-	            tmf.init(trustStore);
-	        }
-	
-	        SSLContext ctx = SSLContext.getInstance("TLS");
-	        ctx.init(kmf.getKeyManagers(), tmf == null ? null : tmf.getTrustManagers(), null);
-	        return ctx;
-    	} catch (Exception e) {
+    public SSLContext create(
+        String keyStorePath,
+        String keyStorePassword,
+        String trustStorePath,
+        String trustStorePassword,
+        boolean revocationEnabled,
+        Set<String> requiredPolicyOids
+    ) {
+        try {
+            KeyStore keyStore = loadStore(keyStorePath, keyStorePassword, "PKCS12");
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(keyStore, keyStorePassword.toCharArray());
+
+            TrustManagerFactory tmf = null;
+            if (StringUtils.hasText(trustStorePath)) {
+                KeyStore trustStore = loadStore(trustStorePath, trustStorePassword, "JKS");
+                tmf = TrustManagerFactory.getInstance("PKIX");
+                PKIXBuilderParameters parameters = new PKIXBuilderParameters(trustStore, new X509CertSelector());
+                parameters.setRevocationEnabled(revocationEnabled);
+
+                if (requiredPolicyOids != null && !requiredPolicyOids.isEmpty()) {
+                    parameters.setExplicitPolicyRequired(true);
+                    parameters.setInitialPolicies(requiredPolicyOids);
+                }
+
+                if (revocationEnabled) {
+                    PKIXRevocationChecker checker = (PKIXRevocationChecker) java.security.cert.CertPathValidator.getInstance("PKIX").getRevocationChecker();
+                    checker.setOptions(Set.of(PKIXRevocationChecker.Option.PREFER_CRLS));
+                    parameters.addCertPathChecker(checker);
+                }
+
+                tmf.init(new CertPathTrustManagerParameters(parameters));
+            }
+
+            SSLContext ctx = SSLContext.getInstance("TLS");
+            ctx.init(kmf.getKeyManagers(), tmf == null ? null : tmf.getTrustManagers(), null);
+            return ctx;
+        } catch (Exception e) {
             throw new RuntimeException("Failed to initialize TLS context", e);
         }
     }
@@ -50,5 +76,4 @@ public class TLSContextFactory {
             return keyStore;
         }
     }
-
 }
