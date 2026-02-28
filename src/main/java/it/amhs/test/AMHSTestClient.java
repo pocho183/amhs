@@ -1,60 +1,166 @@
 package it.amhs.test;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
 import java.io.FileInputStream;
+import java.io.EOFException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.KeyStore;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * AMHS RFC1006/TLS test client aligned with this AMHS server implementation.
  */
 public class AMHSTestClient {
 
+    private static final Logger logger = LoggerFactory.getLogger(AMHSTestClient.class);
+
     private static final String DEFAULT_HOST = "localhost";
     private static final int DEFAULT_PORT = 102;
     private static final String DEFAULT_TRUSTSTORE_PATH = "src/main/resources/certs/client-truststore.jks";
     private static final String DEFAULT_TRUSTSTORE_PASSWORD = "changeit";
     private static final String DEFAULT_CHANNEL = "ATFM";
+    private static final int DEFAULT_TIMEOUT_MS = 10_000;
+    private static final byte TPKT_VERSION = 0x03;
+    private static final byte TPKT_RESERVED = 0x00;
+    private static final byte[] COTP_DATA_HEADER = new byte[] {0x02, (byte) 0xF0, (byte) 0x80};
 
     public static void main(String[] args) {
         ClientOptions options = ClientOptions.fromArgs(args);
 
-        try (SSLSocket socket = createSocket(options)) {
-            OutputStream out = socket.getOutputStream();
-            InputStream in = socket.getInputStream();
-
-            if (options.retrieveAll) {
-                sendAndPrint(out, in, "RETRIEVE ALL");
-                return;
-            }
-            if (options.retrieveMessageId != null) {
-                sendAndPrint(out, in, "RETRIEVE " + options.retrieveMessageId);
+        try {
+            if (options.negativeSuite) {
+                runNegativeSuite(options);
                 return;
             }
 
-            for (int i = 1; i <= options.count; i++) {
-                String messageId = options.messagePrefix + "-" + Instant.now().toEpochMilli() + "-" + i;
-                String payload = buildMessagePayload(options, messageId, i);
-                sendAndPrint(out, in, payload);
+            try (SSLSocket socket = createSocket(options)) {
+                OutputStream out = socket.getOutputStream();
+                InputStream in = socket.getInputStream();
+
+                if (options.retrieveAll) {
+                    sendAndPrint(out, in, "RETRIEVE ALL");
+                    return;
+                }
+                if (options.retrieveMessageId != null) {
+                    sendAndPrint(out, in, "RETRIEVE " + options.retrieveMessageId);
+                    return;
+                }
+
+                for (int i = 1; i <= options.count; i++) {
+                    String messageId = options.messagePrefix + "-" + Instant.now().toEpochMilli() + "-" + i;
+                    String payload = buildMessagePayload(options, messageId, i);
+                    sendAndPrint(out, in, payload);
+                }
+            }
+
+            if (options.concurrency > 1) {
+                runConcurrentHappyPath(options);
             }
         } catch (Exception e) {
-            System.err.println("AMHS test client failed: " + e.getMessage());
-            e.printStackTrace(System.err);
+            logger.error("AMHS test client failed: {}", e.getMessage(), e);
             System.exit(1);
         }
     }
 
+    private static void runNegativeSuite(ClientOptions options) throws InterruptedException {
+        logger.info("Running negative test suite (invalid profile, corrupted frame, oversized message)");
+
+        List<Runnable> tests = List.of(
+            () -> runSingleNegativeCase(options, "invalid-profile", buildNegativePayload(options, "ZZZ", "NEG-PROFILE"), false),
+            () -> runSingleNegativeCase(options, "corrupted-length", buildNegativePayload(options, options.profile, "NEG-LENGTH"), true),
+            () -> runSingleNegativeCase(options, "oversized-message", buildOversizedPayload(options), false)
+        );
+
+        for (Runnable test : tests) {
+            test.run();
+        }
+    }
+
+    private static void runSingleNegativeCase(ClientOptions options, String caseName, String payload, boolean corruptLength) {
+        try (SSLSocket socket = createSocket(options)) {
+            OutputStream out = socket.getOutputStream();
+            InputStream in = socket.getInputStream();
+            sendWithOptionalCorruptLength(out, payload, corruptLength);
+            byte[] response = readRFC1006Payload(in);
+            logger.info("Negative case '{}' response:\n{}", caseName, new String(response, StandardCharsets.UTF_8));
+        } catch (Exception ex) {
+            logger.info("Negative case '{}' failed as expected: {}", caseName, ex.getMessage());
+        }
+    }
+
+    private static void runConcurrentHappyPath(ClientOptions options) throws InterruptedException {
+        logger.info("Running concurrency test with {} clients", options.concurrency);
+        CountDownLatch latch = new CountDownLatch(options.concurrency);
+        List<Thread> workers = new ArrayList<>();
+
+        for (int i = 0; i < options.concurrency; i++) {
+            final int idx = i + 1;
+            Thread t = new Thread(() -> {
+                try (SSLSocket socket = createSocket(options)) {
+                    String messageId = options.messagePrefix + "-C" + idx + "-" + Instant.now().toEpochMilli();
+                    sendAndPrint(socket.getOutputStream(), socket.getInputStream(), buildMessagePayload(options, messageId, idx));
+                } catch (Exception ex) {
+                    logger.warn("Concurrency worker {} failed: {}", idx, ex.getMessage());
+                } finally {
+                    latch.countDown();
+                }
+            }, "amhs-test-worker-" + idx);
+            workers.add(t);
+            t.start();
+        }
+
+        latch.await();
+        logger.info("Concurrency test completed");
+    }
+
+    private static String buildNegativePayload(ClientOptions options, String profile, String messagePrefix) {
+        String messageId = messagePrefix + "-" + Instant.now().toEpochMilli();
+        return "Message-ID: " + messageId + "\n" +
+            "From: " + options.from + "\n" +
+            "To: " + options.to + "\n" +
+            "Profile: " + profile + "\n" +
+            "Priority: " + options.priority + "\n" +
+            "Channel: " + options.channel + "\n" +
+            "Filing-Time: " + Instant.now() + "\n" +
+            "Subject: NEGATIVE TEST\n" +
+            "Body: Negative test payload\n";
+    }
+
+    private static String buildOversizedPayload(ClientOptions options) {
+        String messageId = "NEG-OVERSIZED-" + Instant.now().toEpochMilli();
+        return "Message-ID: " + messageId + "\n" +
+            "From: " + options.from + "\n" +
+            "To: " + options.to + "\n" +
+            "Profile: " + options.profile + "\n" +
+            "Priority: " + options.priority + "\n" +
+            "Channel: " + options.channel + "\n" +
+            "Filing-Time: " + Instant.now() + "\n" +
+            "Subject: NEGATIVE TEST\n" +
+            "Body: " + "X".repeat(70_000) + "\n";
+    }
+
     private static SSLSocket createSocket(ClientOptions options) throws Exception {
+        validateTrustStore(options);
+        warnOnDefaultSecrets(options);
+
         TrustManagerFactory tmf = buildTrustManagers(options);
         KeyManagerFactory kmf = buildKeyManagers(options);
 
@@ -62,11 +168,26 @@ public class AMHSTestClient {
         context.init(kmf == null ? null : kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 
         SSLSocketFactory factory = context.getSocketFactory();
-        SSLSocket socket = (SSLSocket) factory.createSocket(options.host, options.port);
+        SSLSocket socket = (SSLSocket) factory.createSocket();
+        socket.connect(new InetSocketAddress(options.host, options.port), options.connectTimeoutMs);
+        socket.setSoTimeout(options.readTimeoutMs);
         socket.setEnabledProtocols(new String[] { "TLSv1.3", "TLSv1.2" });
         socket.startHandshake();
-        System.out.printf("Connected to %s:%d (channel=%s)%n", options.host, options.port, options.channel);
+        logger.info("Connected to {}:{} (channel={})", options.host, options.port, options.channel);
         return socket;
+    }
+
+    private static void validateTrustStore(ClientOptions options) {
+        Path trustStorePath = Path.of(options.trustStorePath);
+        if (!Files.exists(trustStorePath)) {
+            throw new IllegalArgumentException("Truststore not found at: " + trustStorePath);
+        }
+    }
+
+    private static void warnOnDefaultSecrets(ClientOptions options) {
+        if (DEFAULT_TRUSTSTORE_PASSWORD.equals(options.trustStorePassword)) {
+            logger.warn("Using default truststore password '{}'. Override with --truststore-password or AMHS_TRUSTSTORE_PASSWORD.", DEFAULT_TRUSTSTORE_PASSWORD);
+        }
     }
 
     private static TrustManagerFactory buildTrustManagers(ClientOptions options) throws Exception {
@@ -115,22 +236,51 @@ public class AMHSTestClient {
     }
 
     private static void sendAndPrint(OutputStream out, InputStream in, String payload) throws Exception {
+        sendWithOptionalCorruptLength(out, payload, false);
+        byte[] responseBytes = readRFC1006Payload(in);
+
+        logger.info("--- REQUEST ---\n{}", payload);
+        logger.info("--- RESPONSE ---\n{}", new String(responseBytes, StandardCharsets.UTF_8));
+    }
+
+    private static void sendWithOptionalCorruptLength(OutputStream out, String payload, boolean corruptLength) throws Exception {
         byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
-        ByteBuffer packet = ByteBuffer.allocate(2 + payloadBytes.length);
-        packet.putShort((short) payloadBytes.length);
-        packet.put(payloadBytes);
+        int tpktLength = 4 + COTP_DATA_HEADER.length + payloadBytes.length;
+        if (corruptLength) {
+            tpktLength -= 1;
+        }
+        ByteBuffer packet = ByteBuffer.allocate(tpktLength);
+        packet.put(TPKT_VERSION);
+        packet.put(TPKT_RESERVED);
+        packet.putShort((short) tpktLength);
+        packet.put(COTP_DATA_HEADER);
+        if (corruptLength) {
+            packet.put(payloadBytes, 0, payloadBytes.length - 1);
+        } else {
+            packet.put(payloadBytes);
+        }
 
         out.write(packet.array());
         out.flush();
+    }
 
-        byte[] lenBytes = readFully(in, 2);
-        int responseLength = ByteBuffer.wrap(lenBytes).getShort() & 0xFFFF;
-        byte[] responseBytes = readFully(in, responseLength);
+    private static byte[] readRFC1006Payload(InputStream in) throws Exception {
+        byte[] tpkt = readFully(in, 4);
+        if (tpkt[0] != TPKT_VERSION || tpkt[1] != TPKT_RESERVED) {
+            throw new IllegalArgumentException("Unexpected TPKT header");
+        }
 
-        System.out.println("--- REQUEST ---");
-        System.out.println(payload);
-        System.out.println("--- RESPONSE ---");
-        System.out.println(new String(responseBytes, StandardCharsets.UTF_8));
+        int tpktLength = ((tpkt[2] & 0xFF) << 8) | (tpkt[3] & 0xFF);
+        if (tpktLength < 7) {
+            throw new IllegalArgumentException("Invalid TPKT length: " + tpktLength);
+        }
+
+        byte[] cotp = readFully(in, 3);
+        if (cotp[0] != COTP_DATA_HEADER[0] || cotp[1] != COTP_DATA_HEADER[1] || cotp[2] != COTP_DATA_HEADER[2]) {
+            throw new IllegalArgumentException("Unexpected COTP data header in response");
+        }
+
+        return readFully(in, tpktLength - 7);
     }
 
     private static byte[] readFully(InputStream in, int length) throws Exception {
@@ -139,7 +289,7 @@ public class AMHSTestClient {
         while (offset < length) {
             int read = in.read(data, offset, length - offset);
             if (read == -1) {
-                throw new IllegalStateException("Connection closed while reading response");
+                throw new EOFException("Connection closed while reading response");
             }
             offset += read;
         }
@@ -164,6 +314,10 @@ public class AMHSTestClient {
         private final String messagePrefix;
         private final boolean retrieveAll;
         private final String retrieveMessageId;
+        private final int connectTimeoutMs;
+        private final int readTimeoutMs;
+        private final boolean negativeSuite;
+        private final int concurrency;
 
         private ClientOptions(
             String host,
@@ -182,7 +336,11 @@ public class AMHSTestClient {
             int count,
             String messagePrefix,
             boolean retrieveAll,
-            String retrieveMessageId
+            String retrieveMessageId,
+            int connectTimeoutMs,
+            int readTimeoutMs,
+            boolean negativeSuite,
+            int concurrency
         ) {
             this.host = host;
             this.port = port;
@@ -201,6 +359,10 @@ public class AMHSTestClient {
             this.messagePrefix = messagePrefix;
             this.retrieveAll = retrieveAll;
             this.retrieveMessageId = retrieveMessageId;
+            this.connectTimeoutMs = connectTimeoutMs;
+            this.readTimeoutMs = readTimeoutMs;
+            this.negativeSuite = negativeSuite;
+            this.concurrency = concurrency;
         }
 
         private static ClientOptions fromArgs(String[] args) {
@@ -240,6 +402,10 @@ public class AMHSTestClient {
 
             boolean retrieveAll = values.containsKey("retrieve-all");
             String retrieveMessageId = values.get("retrieve");
+            int connectTimeoutMs = parseInt(values.get("connect-timeout-ms"), parseInt(envOrDefault("AMHS_CONNECT_TIMEOUT_MS", String.valueOf(DEFAULT_TIMEOUT_MS)), DEFAULT_TIMEOUT_MS));
+            int readTimeoutMs = parseInt(values.get("read-timeout-ms"), parseInt(envOrDefault("AMHS_READ_TIMEOUT_MS", String.valueOf(DEFAULT_TIMEOUT_MS)), DEFAULT_TIMEOUT_MS));
+            boolean negativeSuite = values.containsKey("negative-suite");
+            int concurrency = parseInt(values.get("concurrency"), parseInt(envOrDefault("AMHS_CONCURRENCY", "1"), 1));
 
             if (values.containsKey("from-or")) {
                 from = values.get("from-or");
@@ -265,7 +431,11 @@ public class AMHSTestClient {
                 count,
                 messagePrefix,
                 retrieveAll,
-                retrieveMessageId
+                retrieveMessageId,
+                connectTimeoutMs,
+                readTimeoutMs,
+                negativeSuite,
+                concurrency
             );
         }
 
@@ -278,7 +448,7 @@ public class AMHSTestClient {
                 }
 
                 String key = arg.substring(2);
-                if ("retrieve-all".equals(key) || "help".equals(key)) {
+                if ("retrieve-all".equals(key) || "help".equals(key) || "negative-suite".equals(key)) {
                     values.put(key, "true");
                     continue;
                 }
@@ -323,6 +493,10 @@ public class AMHSTestClient {
                 "  --body <template>                  Variables: {seq}, {channel}, {messageId}\n" +
                 "  --count <n>                        Default: 1\n" +
                 "  --message-prefix <prefix>          Default: MSG\n" +
+                "  --connect-timeout-ms <ms>          Default: " + DEFAULT_TIMEOUT_MS + "\n" +
+                "  --read-timeout-ms <ms>             Default: " + DEFAULT_TIMEOUT_MS + "\n" +
+                "  --concurrency <n>                  Default: 1 (parallel happy-path clients)\n" +
+                "  --negative-suite                   Run invalid/corrupted/oversized tests\n" +
                 "  --retrieve-all                     Send RETRIEVE ALL command\n" +
                 "  --retrieve <messageId>             Send RETRIEVE <messageId> command\n" +
                 "  --help\n");

@@ -2,6 +2,7 @@ package it.amhs.service;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.EOFException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
@@ -38,6 +39,9 @@ import it.amhs.repository.AMHSMessageRepository;
 public class RFC1006Service {
 
     private static final Logger logger = LoggerFactory.getLogger(RFC1006Service.class);
+    private static final byte TPKT_VERSION = 0x03;
+    private static final byte TPKT_RESERVED = 0x00;
+    private static final byte[] COTP_DATA_HEADER = new byte[] { 0x02, (byte) 0xF0, (byte) 0x80 };
 
     private final AMHSMessageRepository amhsMessagesRepository;
     private final MTAService mtaService;
@@ -60,21 +64,9 @@ public class RFC1006Service {
             CertificateIdentity identity = extractCertificateIdentity(socket);
 
             while (true) {
-                byte[] lenBytes = new byte[2];
-                int read = in.read(lenBytes);
-                if (read != 2) {
+                byte[] payload = readFramedPayload(in);
+                if (payload == null) {
                     break;
-                }
-
-                int length = ByteBuffer.wrap(lenBytes).getShort() & 0xFFFF;
-                byte[] payload = new byte[length];
-                int totalRead = 0;
-                while (totalRead < length) {
-                    int r = in.read(payload, totalRead, length - totalRead);
-                    if (r == -1) {
-                        break;
-                    }
-                    totalRead += r;
                 }
 
                 String message = new String(payload, StandardCharsets.UTF_8).trim();
@@ -287,10 +279,61 @@ public class RFC1006Service {
         return new CertificateIdentity(cn, ou);
     }
 
+    private byte[] readFramedPayload(InputStream in) throws Exception {
+        int first = in.read();
+        if (first == -1) {
+            return null;
+        }
+
+        int second = in.read();
+        if (second == -1) {
+            throw new EOFException("Connection closed while reading frame header");
+        }
+
+        if (first == TPKT_VERSION && second == TPKT_RESERVED) {
+            int lenHi = in.read();
+            int lenLo = in.read();
+            if (lenHi == -1 || lenLo == -1) {
+                throw new EOFException("Connection closed while reading TPKT length");
+            }
+            int tpktLength = ((lenHi & 0xFF) << 8) | (lenLo & 0xFF);
+            if (tpktLength < 7) {
+                throw new IllegalArgumentException("Invalid TPKT frame length: " + tpktLength);
+            }
+
+            byte[] cotp = readFully(in, 3);
+            if (cotp[0] != COTP_DATA_HEADER[0] || cotp[1] != COTP_DATA_HEADER[1] || cotp[2] != COTP_DATA_HEADER[2]) {
+                throw new IllegalArgumentException("Unsupported COTP header in RFC1006 payload");
+            }
+
+            return readFully(in, tpktLength - 7);
+        }
+
+        int legacyLength = ((first & 0xFF) << 8) | (second & 0xFF);
+        return readFully(in, legacyLength);
+    }
+
+    private byte[] readFully(InputStream in, int length) throws Exception {
+        byte[] data = new byte[length];
+        int offset = 0;
+        while (offset < length) {
+            int read = in.read(data, offset, length - offset);
+            if (read == -1) {
+                throw new EOFException("Connection closed while reading payload");
+            }
+            offset += read;
+        }
+        return data;
+    }
+
     private void sendRFC1006(OutputStream out, String message) throws Exception {
         byte[] msgBytes = message.getBytes(StandardCharsets.UTF_8);
-        ByteBuffer bb = ByteBuffer.allocate(2 + msgBytes.length);
-        bb.putShort((short) msgBytes.length);
+        int tpktLength = 4 + COTP_DATA_HEADER.length + msgBytes.length;
+        ByteBuffer bb = ByteBuffer.allocate(tpktLength);
+        bb.put(TPKT_VERSION);
+        bb.put(TPKT_RESERVED);
+        bb.putShort((short) tpktLength);
+        bb.put(COTP_DATA_HEADER);
         bb.put(msgBytes);
         out.write(bb.array());
         out.flush();
