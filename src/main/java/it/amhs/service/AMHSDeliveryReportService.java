@@ -3,6 +3,7 @@ package it.amhs.service;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -47,6 +48,24 @@ public class AMHSDeliveryReportService {
             null
         );
         deliveryReportRepository.save(report);
+    }
+
+
+    public void handleTransferOutcome(AMHSMessage message, OutboundP1Client.RelayTransferOutcome outcome) {
+        if (outcome.accepted()) {
+            return;
+        }
+
+        AMHSDeliveryStatus status = AMHSDeliveryStatus.FAILED;
+        String reason = outcome.diagnostic() == null || outcome.diagnostic().isBlank() ? "transfer-rejected" : outcome.diagnostic();
+        createNonDeliveryReport(message, reason, "X411:31", status);
+    }
+
+    public Optional<AMHSMessage> resolveByMtsIdentifier(String mtsIdentifier) {
+        if (mtsIdentifier == null || mtsIdentifier.isBlank()) {
+            return Optional.empty();
+        }
+        return messageRepository.findByMtsIdentifier(mtsIdentifier.trim());
     }
 
     public void createNonDeliveryReport(AMHSMessage message, String reason, String diagnosticCode, AMHSDeliveryStatus status) {

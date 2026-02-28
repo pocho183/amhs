@@ -230,8 +230,9 @@ public class P1BerMessageParser {
 
     private AMHSProfile parseProfile(int profileValue) {
         return switch (profileValue) {
-            case 0 -> AMHSProfile.P3;
-            case 1 -> AMHSProfile.P7;
+            case 0 -> AMHSProfile.P1;
+            case 1 -> AMHSProfile.P3;
+            case 2 -> AMHSProfile.P7;
             default -> throw new IllegalArgumentException("Unsupported BER profile value: " + profileValue);
         };
     }

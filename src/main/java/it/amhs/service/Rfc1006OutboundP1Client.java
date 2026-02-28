@@ -3,8 +3,12 @@ package it.amhs.service;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.TimeZone;
 
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -33,7 +37,7 @@ public class Rfc1006OutboundP1Client implements OutboundP1Client {
     private static final byte COTP_TPDU_SIZE_65531 = 0x0A;
 
     @Override
-    public void relay(String endpoint, AMHSMessage message) {
+    public RelayTransferOutcome relay(String endpoint, AMHSMessage message) {
         String[] hostPort = endpoint.split(":", 2);
         String host = hostPort[0];
         int port = Integer.parseInt(hostPort.length > 1 ? hostPort[1] : "102");
@@ -49,17 +53,41 @@ public class Rfc1006OutboundP1Client implements OutboundP1Client {
             }
 
             sendDataFrame(out, encodeBind(message));
-            readFrame(in);
+            P1AssociationProtocol.Pdu bindResult = p1AssociationProtocol.decode(readFrame(in).payload());
+            if (!(bindResult instanceof P1AssociationProtocol.BindResultPdu bind) || !bind.accepted()) {
+                throw new IllegalStateException("P1 bind rejected by peer");
+            }
 
             byte[] payload = encodeMessage(message);
             byte[] transfer = BerCodec.encode(new BerTlv(2, true, 1, 0, payload.length, payload));
             sendDataFrame(out, transfer);
-            readFrame(in);
+            P1AssociationProtocol.Pdu transferResult = p1AssociationProtocol.decode(readFrame(in).payload());
+            RelayTransferOutcome outcome = mapTransferOutcome(message, transferResult);
 
             sendDataFrame(out, BerCodec.encode(new BerTlv(2, true, 2, 0, 0, new byte[0])));
+            readFrame(in);
+            return outcome;
         } catch (Exception ex) {
             throw new IllegalStateException("Outbound relay failure to endpoint " + endpoint, ex);
         }
+    }
+
+    private RelayTransferOutcome mapTransferOutcome(AMHSMessage message, P1AssociationProtocol.Pdu pdu) {
+        if (!(pdu instanceof P1AssociationProtocol.TransferResultPdu transferResult)) {
+            throw new IllegalStateException("Expected P1 transfer-result but received " + pdu.getClass().getSimpleName());
+        }
+
+        LinkedHashMap<String, RelayTransferOutcome.RecipientOutcome> recipients = new LinkedHashMap<>();
+        for (P1AssociationProtocol.RecipientTransferResult recipient : transferResult.recipientResults()) {
+            recipients.put(recipient.recipient(), new RelayTransferOutcome.RecipientOutcome(
+                recipient.status(),
+                recipient.diagnostic().orElse(null)
+            ));
+        }
+
+        String mtsIdentifier = transferResult.mtsIdentifier()
+            .orElseGet(() -> Optional.ofNullable(message.getMtsIdentifier()).orElse(message.getMessageId()));
+        return new RelayTransferOutcome(transferResult.accepted(), mtsIdentifier, transferResult.diagnostic(), recipients);
     }
 
     private byte[] encodeBind(AMHSMessage message) {
@@ -84,7 +112,99 @@ public class Rfc1006OutboundP1Client implements OutboundP1Client {
     }
 
     private byte[] encodeMessage(AMHSMessage message) {
-        return message.getBody().getBytes(StandardCharsets.UTF_8);
+        byte[] from = contextIa5(0, message.getSender());
+        byte[] to = contextIa5(1, message.getRecipient());
+        byte[] body = contextUtf8(2, message.getBody());
+        byte[] profile = contextEnumerated(3, message.getProfile() == null ? 0 : switch (message.getProfile()) {
+            case P1 -> 0;
+            case P3 -> 1;
+            case P7 -> 2;
+        });
+        byte[] priority = contextEnumerated(4, message.getPriority() == null ? 3 : switch (message.getPriority()) {
+            case SS -> 0;
+            case DD -> 1;
+            case FF -> 2;
+            case GG -> 3;
+            case KK -> 4;
+        });
+        byte[] subject = optionalContextUtf8(5, message.getSubject());
+        byte[] messageId = optionalContextIa5(6, message.getMessageId());
+        byte[] filingTime = optionalGeneralizedTime(8, message.getFilingTime());
+
+        byte[] envelope = transferEnvelope(message);
+        byte[] seqValue = concat(from, to, body, profile, priority, subject, messageId, filingTime, envelope);
+        return BerCodec.encode(new BerTlv(0, true, 16, 0, seqValue.length, seqValue));
+    }
+
+    private byte[] transferEnvelope(AMHSMessage message) {
+        byte[] mtsIdentifierValue = concat(
+            optionalContextIa5(0, Optional.ofNullable(message.getMtsIdentifier()).orElse(message.getMessageId())),
+            optionalGeneralizedTime(1, message.getFilingTime())
+        );
+        byte[] mtsIdentifier = BerCodec.encode(new BerTlv(2, true, 0, 0, mtsIdentifierValue.length, mtsIdentifierValue));
+
+        byte[] recipientEntryValue = optionalContextIa5(0, message.getRecipient());
+        byte[] recipientEntry = BerCodec.encode(new BerTlv(2, true, 0, 0, recipientEntryValue.length, recipientEntryValue));
+        byte[] perRecipientFields = BerCodec.encode(new BerTlv(2, true, 1, 0, recipientEntry.length, recipientEntry));
+
+        byte[] contentType = optionalContextIa5(3, message.getTransferContentTypeOid());
+        byte[] originator = optionalContextIa5(4, message.getSender());
+        byte[] envelopeValue = concat(mtsIdentifier, perRecipientFields, contentType, originator);
+        return BerCodec.encode(new BerTlv(2, true, 9, 0, envelopeValue.length, envelopeValue));
+    }
+
+    private byte[] contextIa5(int tag, String value) {
+        byte[] bytes = value == null ? new byte[0] : value.getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+    private byte[] optionalContextIa5(int tag, String value) {
+        if (value == null || value.isBlank()) {
+            return new byte[0];
+        }
+        byte[] bytes = value.trim().getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+    private byte[] contextUtf8(int tag, String value) {
+        byte[] bytes = value == null ? new byte[0] : value.getBytes(StandardCharsets.UTF_8);
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+    private byte[] optionalContextUtf8(int tag, String value) {
+        if (value == null || value.isBlank()) {
+            return new byte[0];
+        }
+        byte[] bytes = value.trim().getBytes(StandardCharsets.UTF_8);
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+    private byte[] contextEnumerated(int tag, int value) {
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, 1, new byte[] {(byte) value}));
+    }
+
+    private byte[] optionalGeneralizedTime(int tag, java.util.Date value) {
+        if (value == null) {
+            return new byte[0];
+        }
+        SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss'Z'", Locale.ROOT);
+        format.setTimeZone(TimeZone.getTimeZone("UTC"));
+        byte[] bytes = format.format(value).getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+    private byte[] concat(byte[]... chunks) {
+        int len = 0;
+        for (byte[] chunk : chunks) {
+            len += chunk.length;
+        }
+        byte[] out = new byte[len];
+        int offset = 0;
+        for (byte[] chunk : chunks) {
+            System.arraycopy(chunk, 0, out, offset, chunk.length);
+            offset += chunk.length;
+        }
+        return out;
     }
 
     private void sendFrame(OutputStream out, byte[] cotpTpdu) throws Exception {

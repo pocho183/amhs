@@ -245,7 +245,11 @@ public class RFC1006Service {
             );
 
             storeWithStrictPriority(incoming);
-            sendRFC1006(out, p1AssociationProtocol.encodeBindResult(true, "transfer-accepted:" + incoming.messageId));
+            sendRFC1006(out, p1AssociationProtocol.encodeTransferResult(
+                true,
+                incoming.mtsIdentifier != null ? incoming.mtsIdentifier : incoming.messageId,
+                List.of(new P1AssociationProtocol.RecipientTransferResult(incoming.to, 0, java.util.Optional.of("delivered")))
+            ));
         }
     }
 

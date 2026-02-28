@@ -110,6 +110,22 @@ class P1AssociationProtocolTest {
         assertTrue(bind.presentationContextPresent());
     }
 
+
+    @Test
+    void shouldEncodeAndDecodeTransferResult() {
+        byte[] transferResult = protocol.encodeTransferResult(
+            true,
+            "MTS-123",
+            java.util.List.of(new P1AssociationProtocol.RecipientTransferResult("/C=IT/ADMD=ICAO/PRMD=ENAV/O=ATC/CN=OPS", 0, java.util.Optional.of("delivered")))
+        );
+
+        P1AssociationProtocol.TransferResultPdu decoded = assertInstanceOf(P1AssociationProtocol.TransferResultPdu.class, protocol.decode(transferResult));
+        assertTrue(decoded.accepted());
+        assertEquals("MTS-123", decoded.mtsIdentifier().orElseThrow());
+        assertEquals(1, decoded.recipientResults().size());
+        assertEquals(0, decoded.recipientResults().get(0).status());
+    }
+
     private static byte[] contextPrimitive(int tag, String value) {
         byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
         return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
