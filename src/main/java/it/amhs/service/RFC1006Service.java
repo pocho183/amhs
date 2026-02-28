@@ -3,10 +3,22 @@ package it.amhs.service;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.Principal;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import javax.naming.ldap.LdapName;
 import javax.naming.ldap.Rdn;
@@ -24,15 +36,23 @@ import it.amhs.repository.AMHSMessageRepository;
 
 @Service
 public class RFC1006Service {
-	
-	private static final Logger logger = LoggerFactory.getLogger(RFC1006Service.class);
+
+    private static final Logger logger = LoggerFactory.getLogger(RFC1006Service.class);
 
     private final AMHSMessageRepository amhsMessagesRepository;
     private final MTAService mtaService;
+    private final ThreadPoolExecutor priorityExecutor;
 
     public RFC1006Service(AMHSMessageRepository amhsMessagesRepository, MTAService mtaService) {
         this.amhsMessagesRepository = amhsMessagesRepository;
         this.mtaService = mtaService;
+        this.priorityExecutor = new ThreadPoolExecutor(
+            1,
+            1,
+            0L,
+            TimeUnit.MILLISECONDS,
+            new PriorityBlockingQueue<>()
+        );
     }
 
     public void handleClient(SSLSocket socket) {
@@ -42,83 +62,128 @@ public class RFC1006Service {
             while (true) {
                 byte[] lenBytes = new byte[2];
                 int read = in.read(lenBytes);
-                if (read != 2) break;
+                if (read != 2) {
+                    break;
+                }
 
                 int length = ByteBuffer.wrap(lenBytes).getShort() & 0xFFFF;
                 byte[] payload = new byte[length];
                 int totalRead = 0;
                 while (totalRead < length) {
                     int r = in.read(payload, totalRead, length - totalRead);
-                    if (r == -1) break;
+                    if (r == -1) {
+                        break;
+                    }
                     totalRead += r;
                 }
 
-                String message = new String(payload, "UTF-8").trim();
+                String message = new String(payload, StandardCharsets.UTF_8).trim();
 
                 if (message.startsWith("RETRIEVE")) {
                     handleRetrieve(message, out);
                     continue;
                 }
 
-                Map<String, String> headers = new HashMap<>();
-                String body = "";
-
-                // 1. Split by comma or newline depending on your client's format
-                // TODO : Utilizzare un formato standard, modificare questa parte
-                String[] parts = message.split(",|\\n"); 
-
-                for (String part : parts) {
-                    if (part.contains(":")) {
-                        String[] kv = part.split(":", 2);
-                        String key = kv[0].trim();
-                        String value = kv[1].trim();
-                        
-                        if (key.equalsIgnoreCase("Body")) {
-                            body = value; // Capture the body if it's labeled "Body:"
-                        } else {
-                            headers.put(key, value);
-                        }
-                    }
-                }
-
-                String messageId = headers.getOrDefault("Message-ID", java.util.UUID.randomUUID().toString());
-                String from = headers.getOrDefault("From", "UNKNOWN");
-                String to = headers.getOrDefault("To", "UNKNOWN");
-                String profileHeader = headers.getOrDefault("Profile", "P3");
-                String priorityHeader = headers.getOrDefault("Priority", "GG");
-                String subject = headers.getOrDefault("Subject", "");
-                String channel = headers.getOrDefault("Channel", AMHSChannelService.DEFAULT_CHANNEL_NAME);
-
-                AMHSProfile profile = parseProfile(profileHeader);
-                AMHSPriority priority = parsePriority(priorityHeader);
-
+                IncomingMessage incoming = parseIncomingMessage(message, identity);
                 try {
-                    mtaService.storeMessage(
-                        from,
-                        to,
-                        body,
-                        messageId,
-                        profile,
-                        priority,
-                        subject,
-                        channel,
-                        identity.cn(),
-                        identity.ou()
-                    );
-                    String ack = "Message-ID: " + messageId + "\n" + "From: " + to + "\n" + "To: " + from + "\n" + "Status: RECEIVED\n";
+                    storeWithStrictPriority(incoming);
+                    String ack = "Message-ID: " + incoming.messageId + "\n"
+                        + "From: " + incoming.to + "\n"
+                        + "To: " + incoming.from + "\n"
+                        + "Status: RECEIVED\n";
                     sendRFC1006(out, ack);
                 } catch (IllegalArgumentException ex) {
                     logger.warn("AMHS message rejected: {}", ex.getMessage());
-                    String nack = "Message-ID: " + messageId + "\n" + "Status: REJECTED\n" + "Error: " + ex.getMessage() + "\n";
+                    String nack = "Message-ID: " + incoming.messageId + "\n"
+                        + "Status: REJECTED\n"
+                        + "Error: " + ex.getMessage() + "\n";
                     sendRFC1006(out, nack);
                 }
             }
         } catch (Exception e) {
-        	logger.error("RFC1006 handling error", e);
+            logger.error("RFC1006 handling error", e);
         } finally {
-            try { socket.close(); } catch (Exception ignored) {}
+            try {
+                socket.close();
+            } catch (Exception ignored) {
+            }
         }
     }
+
+    private void storeWithStrictPriority(IncomingMessage incoming) {
+        PriorityFutureTask task = new PriorityFutureTask(incoming, () -> mtaService.storeMessage(
+            incoming.from,
+            incoming.to,
+            incoming.body,
+            incoming.messageId,
+            incoming.profile,
+            incoming.priority,
+            incoming.subject,
+            incoming.channel,
+            incoming.certificateCn,
+            incoming.certificateOu,
+            incoming.filingTime
+        ));
+        priorityExecutor.execute(task);
+        try {
+            task.get();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("AMHS message interrupted while waiting for priority queue", ex);
+        } catch (ExecutionException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof IllegalArgumentException iae) {
+                throw iae;
+            }
+            throw new IllegalStateException("Failed to process AMHS message", cause);
+        }
+    }
+
+    private IncomingMessage parseIncomingMessage(String message, CertificateIdentity identity) {
+        Map<String, String> headers = new HashMap<>();
+        String body = "";
+
+        String[] parts = message.split(",|\\n");
+        for (String part : parts) {
+            if (!part.contains(":")) {
+                continue;
+            }
+            String[] kv = part.split(":", 2);
+            String key = kv[0].trim();
+            String value = kv[1].trim();
+
+            if (key.equalsIgnoreCase("Body")) {
+                body = value;
+            } else {
+                headers.put(key, value);
+            }
+        }
+
+        String messageId = headers.getOrDefault("Message-ID", UUID.randomUUID().toString());
+        String from = headers.getOrDefault("From", "UNKNOWN");
+        String to = headers.getOrDefault("To", "UNKNOWN");
+        AMHSProfile profile = parseProfile(headers.getOrDefault("Profile", "P3"));
+        AMHSPriority priority = parsePriority(headers.getOrDefault("Priority", "GG"));
+        String subject = headers.getOrDefault("Subject", "");
+        String channel = headers.getOrDefault("Channel", AMHSChannelService.DEFAULT_CHANNEL_NAME);
+        Date filingTime = parseFilingTime(headers.get("Filing-Time"));
+
+        return new IncomingMessage(
+            messageId,
+            from,
+            to,
+            body,
+            profile,
+            priority,
+            subject,
+            channel,
+            identity.cn(),
+            identity.ou(),
+            filingTime,
+            System.nanoTime()
+        );
+    }
+
     private void handleRetrieve(String command, OutputStream out) throws Exception {
         String response;
         if (command.equalsIgnoreCase("RETRIEVE ALL")) {
@@ -126,14 +191,29 @@ public class RFC1006Service {
             if (allMsgs.isEmpty()) {
                 response = "No messages.\n";
             } else {
-                response = allMsgs.stream().map(m -> String.format("ID: %s | From: %s | Channel: %s | Body: %s",
-                    m.getMessageId(), m.getSender(), m.getChannelName(), m.getBody())).collect(java.util.stream.Collectors.joining("\n---\n")) + "\n";
+                response = allMsgs.stream().map(m -> String.format(
+                    "ID: %s | From: %s | Channel: %s | Priority: %s | Filing-Time: %s | Body: %s",
+                    m.getMessageId(),
+                    m.getSender(),
+                    m.getChannelName(),
+                    m.getPriority(),
+                    m.getFilingTime(),
+                    m.getBody()
+                )).collect(java.util.stream.Collectors.joining("\n---\n")) + "\n";
             }
         } else if (command.toUpperCase().startsWith("RETRIEVE ")) {
             String messageId = command.substring("RETRIEVE ".length()).trim();
             response = amhsMessagesRepository.findByMessageId(messageId)
-                .map(m -> String.format("From: %s\nTo: %s\nChannel: %s\nProfile: %s\nPriority: %s\nBody: %s\n",
-                    m.getSender(), m.getRecipient(), m.getChannelName(), m.getProfile(), m.getPriority(), m.getBody()))
+                .map(m -> String.format(
+                    "From: %s\nTo: %s\nChannel: %s\nProfile: %s\nPriority: %s\nFiling-Time: %s\nBody: %s\n",
+                    m.getSender(),
+                    m.getRecipient(),
+                    m.getChannelName(),
+                    m.getProfile(),
+                    m.getPriority(),
+                    m.getFilingTime(),
+                    m.getBody()
+                ))
                 .orElse("Message-ID " + messageId + " not found.\n");
         } else {
             response = "Unknown command.\n";
@@ -156,6 +236,26 @@ public class RFC1006Service {
         } catch (Exception ex) {
             logger.warn("Unsupported priority '{}', defaulting to GG", value);
             return AMHSPriority.GG;
+        }
+    }
+
+    private Date parseFilingTime(String filingTimeHeader) {
+        if (filingTimeHeader == null || filingTimeHeader.isBlank()) {
+            return Date.from(Instant.now());
+        }
+
+        try {
+            return Date.from(Instant.parse(filingTimeHeader.trim()));
+        } catch (Exception ignored) {
+        }
+
+        try {
+            SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss");
+            format.setTimeZone(TimeZone.getTimeZone("UTC"));
+            return format.parse(filingTimeHeader.trim());
+        } catch (ParseException ex) {
+            logger.warn("Invalid Filing-Time '{}', defaulting to now", filingTimeHeader);
+            return Date.from(Instant.now());
         }
     }
 
@@ -188,7 +288,7 @@ public class RFC1006Service {
     }
 
     private void sendRFC1006(OutputStream out, String message) throws Exception {
-        byte[] msgBytes = message.getBytes("UTF-8");
+        byte[] msgBytes = message.getBytes(StandardCharsets.UTF_8);
         ByteBuffer bb = ByteBuffer.allocate(2 + msgBytes.length);
         bb.putShort((short) msgBytes.length);
         bb.put(msgBytes);
@@ -197,5 +297,54 @@ public class RFC1006Service {
     }
 
     private record CertificateIdentity(String cn, String ou) {
+    }
+
+    private record IncomingMessage(
+        String messageId,
+        String from,
+        String to,
+        String body,
+        AMHSProfile profile,
+        AMHSPriority priority,
+        String subject,
+        String channel,
+        String certificateCn,
+        String certificateOu,
+        Date filingTime,
+        long sequence
+    ) {
+    }
+
+    private static final class PriorityFutureTask extends FutureTask<AMHSMessage> implements Comparable<PriorityFutureTask> {
+
+        private final IncomingMessage incoming;
+
+        private PriorityFutureTask(IncomingMessage incoming, java.util.concurrent.Callable<AMHSMessage> callable) {
+            super(callable);
+            this.incoming = incoming;
+        }
+
+        @Override
+        public int compareTo(PriorityFutureTask other) {
+            int byPriority = Integer.compare(priorityWeight(this.incoming.priority), priorityWeight(other.incoming.priority));
+            if (byPriority != 0) {
+                return byPriority;
+            }
+            int byFilingTime = this.incoming.filingTime.compareTo(other.incoming.filingTime);
+            if (byFilingTime != 0) {
+                return byFilingTime;
+            }
+            return Long.compare(this.incoming.sequence, other.incoming.sequence);
+        }
+
+        private static int priorityWeight(AMHSPriority priority) {
+            return switch (priority) {
+                case SS -> 0;
+                case DD -> 1;
+                case FF -> 2;
+                case GG -> 3;
+                case KK -> 4;
+            };
+        }
     }
 }

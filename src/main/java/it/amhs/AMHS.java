@@ -8,11 +8,13 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import it.amhs.network.RFC1006Server;
 import it.amhs.security.TLSContextFactory;
 
 @SpringBootApplication
+@EnableScheduling
 public class AMHS {
 
     @Value("${rfc1006.server.port}")
