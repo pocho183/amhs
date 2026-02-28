@@ -52,12 +52,19 @@ public class RFC1006Service {
     private final AMHSMessageRepository amhsMessagesRepository;
     private final MTAService mtaService;
     private final P1BerMessageParser p1BerMessageParser;
+    private final P1AssociationProtocol p1AssociationProtocol;
     private final ThreadPoolExecutor priorityExecutor;
 
-    public RFC1006Service(AMHSMessageRepository amhsMessagesRepository, MTAService mtaService, P1BerMessageParser p1BerMessageParser) {
+    public RFC1006Service(
+        AMHSMessageRepository amhsMessagesRepository,
+        MTAService mtaService,
+        P1BerMessageParser p1BerMessageParser,
+        P1AssociationProtocol p1AssociationProtocol
+    ) {
         this.amhsMessagesRepository = amhsMessagesRepository;
         this.mtaService = mtaService;
         this.p1BerMessageParser = p1BerMessageParser;
+        this.p1AssociationProtocol = p1AssociationProtocol;
         this.priorityExecutor = new ThreadPoolExecutor(
             1,
             1,
@@ -71,6 +78,7 @@ public class RFC1006Service {
         try (InputStream in = socket.getInputStream(); OutputStream out = socket.getOutputStream()) {
             CertificateIdentity identity = extractCertificateIdentity(socket);
             ByteArrayOutputStream segmentedPayload = new ByteArrayOutputStream();
+            P1AssociationState associationState = new P1AssociationState(false);
 
             while (true) {
                 COTPFrame frame = readFramedPayload(in);
@@ -97,8 +105,23 @@ public class RFC1006Service {
 
                 String message = new String(payload, StandardCharsets.UTF_8).trim();
 
+                if (isLikelyP1AssociationPdu(payload)) {
+                    handleP1AssociationPdu(payload, out, associationState, identity);
+                    if (!associationState.active()) {
+                        break;
+                    }
+                    continue;
+                }
+
                 if (message.startsWith("RETRIEVE")) {
                     handleRetrieve(message, out);
+                    continue;
+                }
+
+                if (payload.length > 0 && (payload[0] & 0xFF) == 0x30) {
+                    String diagnostic = "Raw BER message without P1 association is rejected; send P1 Bind and Transfer PDUs";
+                    logger.warn(diagnostic);
+                    sendRFC1006(out, diagnostic + "\n");
                     continue;
                 }
 
@@ -125,6 +148,91 @@ public class RFC1006Service {
                 socket.close();
             } catch (Exception ignored) {
             }
+        }
+    }
+
+    private boolean isLikelyP1AssociationPdu(byte[] payload) {
+        if (payload.length == 0) {
+            return false;
+        }
+        int first = payload[0] & 0xFF;
+        return first >= 0xA0 && first <= 0xAF;
+    }
+
+    private void handleP1AssociationPdu(
+        byte[] payload,
+        OutputStream out,
+        P1AssociationState associationState,
+        CertificateIdentity identity
+    ) throws Exception {
+        P1AssociationProtocol.Pdu pdu;
+        try {
+            pdu = p1AssociationProtocol.decode(payload);
+        } catch (IllegalArgumentException ex) {
+            logger.warn("Invalid P1 association PDU: {}", ex.getMessage());
+            sendRFC1006(out, p1AssociationProtocol.encodeError("invalid-pdu", ex.getMessage()));
+            return;
+        }
+
+        if (pdu instanceof P1AssociationProtocol.BindPdu bindPdu) {
+            associationState.bound = true;
+            associationState.active = true;
+            logger.info("Accepted P1 bind for abstract syntax {}", bindPdu.abstractSyntaxOid());
+            sendRFC1006(out, p1AssociationProtocol.encodeBindResult(true, "bind-accepted"));
+            return;
+        }
+
+        if (pdu instanceof P1AssociationProtocol.ReleasePdu) {
+            associationState.bound = false;
+            associationState.active = false;
+            sendRFC1006(out, p1AssociationProtocol.encodeReleaseResult());
+            return;
+        }
+
+        if (pdu instanceof P1AssociationProtocol.AbortPdu abortPdu) {
+            associationState.bound = false;
+            associationState.active = false;
+            logger.warn("P1 association aborted by peer: {}", abortPdu.diagnostic());
+            return;
+        }
+
+        if (pdu instanceof P1AssociationProtocol.ErrorPdu errorPdu) {
+            logger.warn("Peer reported P1 error {}: {}", errorPdu.code(), errorPdu.diagnostic());
+            return;
+        }
+
+        if (pdu instanceof P1AssociationProtocol.TransferPdu transferPdu) {
+            if (!associationState.bound()) {
+                sendRFC1006(out, p1AssociationProtocol.encodeError("association", "P1 transfer received before successful bind"));
+                return;
+            }
+
+            P1BerMessageParser.ParsedP1Message berMessage = p1BerMessageParser.parse(transferPdu.messagePayload());
+            IncomingMessage incoming = new IncomingMessage(
+                berMessage.messageId() == null ? UUID.randomUUID().toString() : berMessage.messageId(),
+                berMessage.from(),
+                berMessage.to(),
+                berMessage.body(),
+                berMessage.profile(),
+                berMessage.priority(),
+                berMessage.subject(),
+                AMHSChannelService.DEFAULT_CHANNEL_NAME,
+                identity.cn(),
+                identity.ou(),
+                berMessage.filingTime(),
+                berMessage.transferEnvelope().mtsIdentifier().flatMap(P1BerMessageParser.MTSIdentifier::localIdentifier).orElse(null),
+                berMessage.transferEnvelope().contentTypeOid().orElse(null),
+                berMessage.transferEnvelope().traceInformation().map(t -> String.join(">", t.hops())).orElse(null),
+                berMessage.transferEnvelope().perRecipientFields().isEmpty()
+                    ? null
+                    : berMessage.transferEnvelope().perRecipientFields().stream()
+                        .map(p -> p.recipient() + p.responsibility().map(r -> "(" + r + ")").orElse(""))
+                        .collect(java.util.stream.Collectors.joining(",")),
+                System.nanoTime()
+            );
+
+            storeWithStrictPriority(incoming);
+            sendRFC1006(out, p1AssociationProtocol.encodeBindResult(true, "transfer-accepted:" + incoming.messageId));
         }
     }
 
@@ -419,6 +527,10 @@ public class RFC1006Service {
 
     private void sendRFC1006(OutputStream out, String message) throws Exception {
         byte[] msgBytes = message.getBytes(StandardCharsets.UTF_8);
+        sendRFC1006(out, msgBytes);
+    }
+
+    private void sendRFC1006(OutputStream out, byte[] msgBytes) throws Exception {
         int offset = 0;
 
         while (offset < msgBytes.length || msgBytes.length == 0) {
@@ -475,6 +587,24 @@ public class RFC1006Service {
     }
 
     private record CertificateIdentity(String cn, String ou) {
+    }
+
+    private static final class P1AssociationState {
+        private boolean bound;
+        private boolean active;
+
+        private P1AssociationState(boolean bound) {
+            this.bound = bound;
+            this.active = true;
+        }
+
+        private boolean bound() {
+            return bound;
+        }
+
+        private boolean active() {
+            return active;
+        }
     }
 
     private record COTPFrame(byte type, boolean endOfTSDU, byte[] payload) {
