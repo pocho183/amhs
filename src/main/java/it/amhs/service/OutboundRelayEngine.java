@@ -24,6 +24,7 @@ public class OutboundRelayEngine {
     private final AMHSMessageRepository messageRepository;
     private final RelayRoutingService routingService;
     private final OutboundP1Client outboundP1Client;
+    private final AMHSDeliveryReportService deliveryReportService;
     private final String localMtaName;
     private final String localRoutingDomain;
     private final boolean relayEnabled;
@@ -33,6 +34,7 @@ public class OutboundRelayEngine {
         AMHSMessageRepository messageRepository,
         RelayRoutingService routingService,
         OutboundP1Client outboundP1Client,
+        AMHSDeliveryReportService deliveryReportService,
         @Value("${amhs.mta.local-name:LOCAL-MTA}") String localMtaName,
         @Value("${amhs.mta.routing-domain:LOCAL}") String localRoutingDomain,
         @Value("${amhs.relay.enabled:false}") boolean relayEnabled,
@@ -41,6 +43,7 @@ public class OutboundRelayEngine {
         this.messageRepository = messageRepository;
         this.routingService = routingService;
         this.outboundP1Client = outboundP1Client;
+        this.deliveryReportService = deliveryReportService;
         this.localMtaName = localMtaName;
         this.localRoutingDomain = localRoutingDomain;
         this.relayEnabled = relayEnabled;
@@ -80,11 +83,24 @@ public class OutboundRelayEngine {
         }
 
         try {
-            outboundP1Client.relay(nextHop.endpoint(), message);
+            OutboundP1Client.RelayTransferOutcome transferOutcome = outboundP1Client.relay(nextHop.endpoint(), message);
+            message.setMtsIdentifier(transferOutcome.mtsIdentifier());
+            message.setPerRecipientFields(transferOutcome.recipientOutcomes().isEmpty()
+                ? null
+                : transferOutcome.recipientOutcomes().entrySet().stream()
+                    .map(entry -> entry.getKey() + "(" + entry.getValue().status() + ")")
+                    .collect(java.util.stream.Collectors.joining(","))
+            );
             message.setTransferTrace(RFC1006Service.appendTraceHop(existingTrace, Instant.now(), localMtaName, localRoutingDomain));
-            message.setLifecycleState(AMHSMessageState.TRANSFERRED);
-            message.setLastRelayError(null);
+            message.setLastRelayError(transferOutcome.accepted() ? null : transferOutcome.diagnostic());
             message.setNextRetryAt(null);
+            if (transferOutcome.accepted()) {
+                message.setLifecycleState(AMHSMessageState.TRANSFERRED);
+            } else {
+                message.setLifecycleState(AMHSMessageState.FAILED);
+                message.setDeadLetterReason("transfer-rejected");
+                deliveryReportService.handleTransferOutcome(message, transferOutcome);
+            }
             messageRepository.save(message);
         } catch (RuntimeException ex) {
             int attempt = message.getRelayAttemptCount() + 1;
