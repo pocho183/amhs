@@ -13,6 +13,8 @@ import org.springframework.util.StringUtils;
 import it.amhs.compliance.AMHSComplianceValidator;
 import it.amhs.domain.AMHSChannel;
 import it.amhs.domain.AMHSMessage;
+import it.amhs.domain.AMHSDeliveryStatus;
+import it.amhs.domain.AMHSMessageState;
 import it.amhs.domain.AMHSPriority;
 import it.amhs.domain.AMHSProfile;
 import it.amhs.repository.AMHSMessageRepository;
@@ -25,17 +27,23 @@ public class MTAService {
     private final AMHSMessageRepository amhsMessagesRepository;
     private final AMHSComplianceValidator complianceValidator;
     private final AMHSChannelService channelService;
+    private final AMHSMessageStateMachine stateMachine;
+    private final AMHSDeliveryReportService deliveryReportService;
     private final boolean databaseEnabled;
 
     public MTAService(
         AMHSMessageRepository amhsMessagesRepository,
         AMHSComplianceValidator complianceValidator,
         AMHSChannelService channelService,
+        AMHSMessageStateMachine stateMachine,
+        AMHSDeliveryReportService deliveryReportService,
         @Value("${amhs.database.enabled:true}") boolean databaseEnabled
     ) {
         this.amhsMessagesRepository = amhsMessagesRepository;
         this.complianceValidator = complianceValidator;
         this.channelService = channelService;
+        this.stateMachine = stateMachine;
+        this.deliveryReportService = deliveryReportService;
         this.databaseEnabled = databaseEnabled;
     }
 
@@ -58,11 +66,7 @@ public class MTAService {
             return message;
         }
 
-        complianceValidator.validate(from, to, body, profile);
-        AMHSChannel channel = channelService.requireEnabledChannel(channelName);
-        complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
-        message.setChannelName(channel.getName());
-        return amhsMessagesRepository.save(message);
+        return validatePersistAndReport(message, from, to, body, profile, channelName, certificateCn, certificateOu);
     }
 
     public AMHSMessage storeX400Message(
@@ -97,11 +101,7 @@ public class MTAService {
             return message;
         }
 
-        complianceValidator.validate(from, to, body, profile);
-        AMHSChannel channel = channelService.requireEnabledChannel(channelName);
-        complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
-        message.setChannelName(channel.getName());
-        return amhsMessagesRepository.save(message);
+        return validatePersistAndReport(message, from, to, body, profile, channelName, certificateCn, certificateOu);
     }
 
     public List<AMHSMessage> findAll() {
@@ -146,7 +146,46 @@ public class MTAService {
         message.setCertificateCn(normalize(certificateCn));
         message.setCertificateOu(normalize(certificateOu));
         message.setFilingTime(filingTime == null ? new Date() : filingTime);
+        stateMachine.initialize(message);
         return message;
+    }
+
+    private AMHSMessage validatePersistAndReport(
+        AMHSMessage message,
+        String from,
+        String to,
+        String body,
+        AMHSProfile profile,
+        String channelName,
+        String certificateCn,
+        String certificateOu
+    ) {
+        try {
+            complianceValidator.validate(from, to, body, profile);
+            AMHSChannel channel = channelService.requireEnabledChannel(channelName);
+            complianceValidator.validateCertificateIdentity(channel, certificateCn, certificateOu);
+            message.setChannelName(channel.getName());
+
+            stateMachine.transition(message, AMHSMessageState.TRANSFERRED);
+            deliveryReportService.setReportExpiration(message);
+
+            AMHSMessage saved = amhsMessagesRepository.save(message);
+            stateMachine.transition(saved, AMHSMessageState.DELIVERED);
+            AMHSMessage delivered = amhsMessagesRepository.save(saved);
+
+            deliveryReportService.createDeliveryReport(delivered);
+            stateMachine.transition(delivered, AMHSMessageState.REPORTED);
+            return amhsMessagesRepository.save(delivered);
+        } catch (RuntimeException ex) {
+            if (message.getLifecycleState() != AMHSMessageState.REPORTED) {
+                stateMachine.transition(message, AMHSMessageState.FAILED);
+                AMHSMessage failed = amhsMessagesRepository.save(message);
+                deliveryReportService.createNonDeliveryReport(failed, "validation-or-routing-failure", "X411:31", AMHSDeliveryStatus.FAILED);
+                stateMachine.transition(failed, AMHSMessageState.REPORTED);
+                amhsMessagesRepository.save(failed);
+            }
+            throw ex;
+        }
     }
 
     private void logReceivedMessage(AMHSMessage message) {

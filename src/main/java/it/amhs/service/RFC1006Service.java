@@ -208,11 +208,12 @@ public class RFC1006Service {
                 response = "No messages.\n";
             } else {
                 response = allMsgs.stream().map(m -> String.format(
-                    "ID: %s | From: %s | Channel: %s | Priority: %s | Filing-Time: %s | Body: %s",
+                    "ID: %s | From: %s | Channel: %s | Priority: %s | State: %s | Filing-Time: %s | Body: %s",
                     m.getMessageId(),
                     m.getSender(),
                     m.getChannelName(),
                     m.getPriority(),
+                    m.getLifecycleState(),
                     m.getFilingTime(),
                     m.getBody()
                 )).collect(java.util.stream.Collectors.joining("\n---\n")) + "\n";
@@ -221,12 +222,13 @@ public class RFC1006Service {
             String messageId = command.substring("RETRIEVE ".length()).trim();
             response = amhsMessagesRepository.findByMessageId(messageId)
                 .map(m -> String.format(
-                    "From: %s\nTo: %s\nChannel: %s\nProfile: %s\nPriority: %s\nFiling-Time: %s\nBody: %s\n",
+                    "From: %s\nTo: %s\nChannel: %s\nProfile: %s\nPriority: %s\nState: %s\nFiling-Time: %s\nBody: %s\n",
                     m.getSender(),
                     m.getRecipient(),
                     m.getChannelName(),
                     m.getProfile(),
                     m.getPriority(),
+                    m.getLifecycleState(),
                     m.getFilingTime(),
                     m.getBody()
                 ))
