@@ -66,6 +66,9 @@ public class P1AssociationProtocol {
             case 2 -> new ReleasePdu();
             case 3 -> decodeAbort(pdu.value());
             case 4 -> decodeError(pdu.value());
+            case 10 -> decodeBindResult(pdu.value());
+            case 11 -> new ReleaseResultPdu();
+            case 12 -> decodeTransferResult(pdu.value());
             default -> throw new IllegalArgumentException("Unsupported P1 association PDU tag [" + pdu.tagNumber() + "]");
         };
     }
@@ -81,6 +84,17 @@ public class P1AssociationProtocol {
 
     public byte[] encodeReleaseResult() {
         return BerCodec.encode(new BerTlv(2, true, 11, 0, 0, new byte[0]));
+    }
+
+    public byte[] encodeTransferResult(boolean accepted, String mtsIdentifier, List<RecipientTransferResult> recipientResults) {
+        byte[] diagnosticBytes = (accepted ? "accepted" : "rejected").getBytes(StandardCharsets.UTF_8);
+        byte[] payload = concat(
+            BerCodec.encode(new BerTlv(2, false, 0, 0, 1, new byte[] {(byte) (accepted ? 1 : 0)})),
+            BerCodec.encode(new BerTlv(2, false, 1, 0, diagnosticBytes.length, diagnosticBytes)),
+            encodeOptionalIa5(2, mtsIdentifier),
+            encodeRecipientResults(recipientResults)
+        );
+        return BerCodec.encode(new BerTlv(2, true, 12, 0, payload.length, payload));
     }
 
     public byte[] encodeAbort(String diagnostic) {
@@ -131,6 +145,112 @@ public class P1AssociationProtocol {
         }
 
         return new BindPdu(calling, called, abstractSyntax, protocolVersion, authentication, security, mtsApduPresent, presentationContextPresent);
+    }
+
+
+    private BindResultPdu decodeBindResult(byte[] payload) {
+        List<BerTlv> fields = BerCodec.decodeAll(payload);
+        boolean accepted = BerCodec.findOptional(fields, 2, 0)
+            .map(this::decodeBooleanFlag)
+            .orElse(false);
+        String diagnostic = BerCodec.findOptional(fields, 2, 1)
+            .map(value -> new String(value.value(), StandardCharsets.UTF_8))
+            .orElse("");
+        return new BindResultPdu(accepted, diagnostic);
+    }
+
+    private TransferResultPdu decodeTransferResult(byte[] payload) {
+        List<BerTlv> fields = BerCodec.decodeAll(payload);
+        boolean accepted = BerCodec.findOptional(fields, 2, 0)
+            .map(this::decodeBooleanFlag)
+            .orElse(false);
+        String diagnostic = BerCodec.findOptional(fields, 2, 1)
+            .map(value -> new String(value.value(), StandardCharsets.UTF_8))
+            .orElse("");
+        Optional<String> mtsIdentifier = BerCodec.findOptional(fields, 2, 2)
+            .map(value -> new String(value.value(), StandardCharsets.US_ASCII));
+        List<RecipientTransferResult> recipientResults = BerCodec.findOptional(fields, 2, 3)
+            .filter(BerTlv::constructed)
+            .map(this::decodeRecipientTransferResults)
+            .orElse(List.of());
+        return new TransferResultPdu(accepted, diagnostic, mtsIdentifier, recipientResults);
+    }
+
+    private List<RecipientTransferResult> decodeRecipientTransferResults(BerTlv recipients) {
+        return BerCodec.decodeAll(recipients.value()).stream()
+            .filter(BerTlv::constructed)
+            .map(this::decodeRecipientTransferResult)
+            .toList();
+    }
+
+    private RecipientTransferResult decodeRecipientTransferResult(BerTlv recipient) {
+        List<BerTlv> fields = BerCodec.decodeAll(recipient.value());
+        String address = BerCodec.findOptional(fields, 2, 0)
+            .map(value -> new String(value.value(), StandardCharsets.US_ASCII))
+            .orElse("UNKNOWN");
+        int status = BerCodec.findOptional(fields, 2, 1)
+            .map(this::decodeInteger)
+            .orElse(0);
+        Optional<String> diagnostic = BerCodec.findOptional(fields, 2, 2)
+            .map(value -> new String(value.value(), StandardCharsets.UTF_8));
+        return new RecipientTransferResult(address, status, diagnostic);
+    }
+
+    private byte[] encodeRecipientResults(List<RecipientTransferResult> recipientResults) {
+        if (recipientResults == null || recipientResults.isEmpty()) {
+            return new byte[0];
+        }
+        byte[] encoded = concat(recipientResults.stream()
+            .map(this::encodeRecipientResult)
+            .toArray(byte[][]::new));
+        return BerCodec.encode(new BerTlv(2, true, 3, 0, encoded.length, encoded));
+    }
+
+    private byte[] encodeRecipientResult(RecipientTransferResult recipientResult) {
+        byte[] payload = concat(
+            encodeOptionalIa5(0, recipientResult.recipient()),
+            encodeInteger(1, recipientResult.status()),
+            recipientResult.diagnostic()
+                .map(value -> {
+                    byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+                    return BerCodec.encode(new BerTlv(2, false, 2, 0, bytes.length, bytes));
+                })
+                .orElse(new byte[0])
+        );
+        return BerCodec.encode(new BerTlv(2, true, 0, 0, payload.length, payload));
+    }
+
+    private byte[] encodeOptionalIa5(int tag, String value) {
+        if (value == null || value.isBlank()) {
+            return new byte[0];
+        }
+        byte[] bytes = value.trim().getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+    private byte[] encodeInteger(int tag, int value) {
+        if (value < 0 || value > 255) {
+            throw new IllegalArgumentException("P1 integer field is currently limited to 0..255");
+        }
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, 1, new byte[] {(byte) value}));
+    }
+
+    private int decodeInteger(BerTlv value) {
+        if (value.value().length == 0 || value.value().length > 4) {
+            throw new IllegalArgumentException("P1 integer field must be between 1 and 4 octets");
+        }
+        int number = 0;
+        for (byte b : value.value()) {
+            number = (number << 8) | (b & 0xFF);
+        }
+        return number;
+    }
+
+    private boolean decodeBooleanFlag(BerTlv value) {
+        if (value.value().length != 1) {
+            throw new IllegalArgumentException("P1 boolean-like status field must be one octet");
+        }
+        return (value.value()[0] & 0xFF) != 0;
     }
 
     private int decodeProtocolVersion(BerTlv version) {
@@ -196,7 +316,7 @@ public class P1AssociationProtocol {
         return out;
     }
 
-    public sealed interface Pdu permits BindPdu, TransferPdu, ReleasePdu, AbortPdu, ErrorPdu {
+    public sealed interface Pdu permits BindPdu, TransferPdu, ReleasePdu, AbortPdu, ErrorPdu, BindResultPdu, ReleaseResultPdu, TransferResultPdu {
     }
 
     public record BindPdu(
@@ -222,4 +342,22 @@ public class P1AssociationProtocol {
 
     public record ErrorPdu(String code, String diagnostic) implements Pdu {
     }
+
+    public record BindResultPdu(boolean accepted, String diagnostic) implements Pdu {
+    }
+
+    public record ReleaseResultPdu() implements Pdu {
+    }
+
+    public record TransferResultPdu(
+        boolean accepted,
+        String diagnostic,
+        Optional<String> mtsIdentifier,
+        List<RecipientTransferResult> recipientResults
+    ) implements Pdu {
+    }
+
+    public record RecipientTransferResult(String recipient, int status, Optional<String> diagnostic) {
+    }
 }
+

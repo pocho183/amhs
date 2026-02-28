@@ -16,6 +16,8 @@ public interface AMHSMessageRepository extends JpaRepository<AMHSMessage, Long> 
 
 	Optional<AMHSMessage> findByMessageId(String messageId);
 
+	Optional<AMHSMessage> findByMtsIdentifier(String mtsIdentifier);
+
 	List<AMHSMessage> findByChannelNameIgnoreCase(String channelName);
 
 	List<AMHSMessage> findByProfile(AMHSProfile profile);
