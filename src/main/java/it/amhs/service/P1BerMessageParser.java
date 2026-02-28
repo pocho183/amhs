@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -17,6 +18,8 @@ import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
 import it.amhs.domain.AMHSPriority;
 import it.amhs.domain.AMHSProfile;
+import it.amhs.service.ExtensibilityContainers.ExtensionContainer;
+import it.amhs.service.ExtensibilityContainers.SecurityParameters;
 
 @Component
 public class P1BerMessageParser {
@@ -31,45 +34,87 @@ public class P1BerMessageParser {
 
         TransferEnvelope transferEnvelope = parseTransferEnvelope(fields);
 
-        String from = transferEnvelope.originator().orElseGet(() -> requiredIa5(fields, 0, "from"));
+        String from = transferEnvelope.originator()
+            .map(this::mapOriginator)
+            .orElseGet(() -> requiredIa5(fields, 0, "from"));
         String to = transferEnvelope.primaryRecipient().orElseGet(() -> requiredIa5(fields, 1, "to"));
         String body = requiredUtf8(fields, 2, "body");
         AMHSProfile profile = parseProfile(optionalEnumerated(fields, 3).orElse(0));
         AMHSPriority priority = parsePriority(optionalEnumerated(fields, 4).orElse(3));
         String subject = optionalUtf8(fields, 5).orElse("");
-        String messageId = transferEnvelope.mtsIdentifier().flatMap(MTSIdentifier::localIdentifier).orElseGet(() -> optionalIa5(fields, 6).orElse(null));
-        Date filingTime = transferEnvelope.mtsIdentifier().flatMap(MTSIdentifier::filingTime).orElseGet(() -> parseFilingTime(fields));
+        String messageId = transferEnvelope.mtsIdentifier().flatMap(MTSIdentifier::localIdentifier)
+            .orElseGet(() -> optionalIa5(fields, 6).orElse(null));
+        Date filingTime = transferEnvelope.mtsIdentifier().flatMap(MTSIdentifier::filingTime)
+            .orElseGet(() -> parseFilingTime(fields));
 
         return new ParsedP1Message(from, to, body, profile, priority, subject, messageId, filingTime, transferEnvelope);
+    }
+
+
+    private String mapOriginator(String originator) {
+        try {
+            return ORNameMapper.fromLegacyIa5(originator).orAddress().toCanonicalString();
+        } catch (IllegalArgumentException ex) {
+            return originator;
+        }
     }
 
     private TransferEnvelope parseTransferEnvelope(List<BerTlv> fields) {
         Optional<BerTlv> envelopeTlv = BerCodec.findOptional(fields, 2, 9).filter(BerTlv::constructed);
         if (envelopeTlv.isEmpty()) {
-            return new TransferEnvelope(Optional.empty(), List.of(), Optional.empty(), Optional.empty(), Optional.empty());
+            return new TransferEnvelope(Optional.empty(), List.of(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), List.of());
         }
 
         List<BerTlv> envelopeFields = BerCodec.decodeAll(envelopeTlv.get().value());
-        Optional<MTSIdentifier> mtsIdentifier = BerCodec.findOptional(envelopeFields, 2, 0)
+        Optional<MTSIdentifier> mtsIdentifier = BerCodec.findOptional(envelopeFields, 2, X411TagMap.ENVELOPE_MTS_IDENTIFIER)
             .filter(BerTlv::constructed)
             .map(this::parseMtsIdentifier);
 
-        List<PerRecipientFields> perRecipientFields = BerCodec.findOptional(envelopeFields, 2, 1)
+        List<PerRecipientFields> perRecipientFields = BerCodec.findOptional(envelopeFields, 2, X411TagMap.ENVELOPE_PER_RECIPIENT)
             .filter(BerTlv::constructed)
             .map(this::parsePerRecipientFields)
             .orElse(List.of());
 
-        Optional<TraceInformation> traceInformation = BerCodec.findOptional(envelopeFields, 2, 2)
+        Optional<TraceInformation> traceInformation = BerCodec.findOptional(envelopeFields, 2, X411TagMap.ENVELOPE_TRACE)
             .filter(BerTlv::constructed)
             .map(this::parseTraceInformation);
 
-        Optional<String> contentTypeOid = BerCodec.findOptional(envelopeFields, 2, 3)
+        Optional<String> contentTypeOid = BerCodec.findOptional(envelopeFields, 2, X411TagMap.ENVELOPE_CONTENT_TYPE)
             .map(this::parseContentTypeOid);
 
-        Optional<String> originator = BerCodec.findOptional(envelopeFields, 2, 4)
+        Optional<String> originator = BerCodec.findOptional(envelopeFields, 2, X411TagMap.ENVELOPE_ORIGINATOR)
             .map(value -> new String(value.value(), StandardCharsets.US_ASCII));
 
-        return new TransferEnvelope(mtsIdentifier, perRecipientFields, traceInformation, contentTypeOid, originator);
+        Optional<SecurityParameters> securityParameters = BerCodec.findOptional(envelopeFields, 2, X411TagMap.ENVELOPE_SECURITY_PARAMETERS)
+            .filter(BerTlv::constructed)
+            .map(this::parseSecurityParameters);
+
+        List<ExtensibilityContainers.UnknownExtension> unknownExtensions = parseUnknownEnvelopeExtensions(envelopeFields);
+        return new TransferEnvelope(mtsIdentifier, perRecipientFields, traceInformation, contentTypeOid, originator, securityParameters, unknownExtensions);
+    }
+
+    private List<ExtensibilityContainers.UnknownExtension> parseUnknownEnvelopeExtensions(List<BerTlv> envelopeFields) {
+        ExtensionContainer container = new ExtensionContainer();
+        for (BerTlv tlv : envelopeFields) {
+            if (tlv.tagClass() != 2) {
+                continue;
+            }
+            int tag = tlv.tagNumber();
+            if (tag > X411TagMap.ENVELOPE_EXTENSIONS) {
+                container.add(tlv);
+            }
+        }
+        return container.unknownExtensions();
+    }
+
+    private SecurityParameters parseSecurityParameters(BerTlv securityTlv) {
+        List<BerTlv> fields = BerCodec.decodeAll(securityTlv.value());
+        String label = BerCodec.findOptional(fields, 2, 0).map(v -> new String(v.value(), StandardCharsets.UTF_8)).orElse("UNCLASSIFIED");
+        String token = BerCodec.findOptional(fields, 2, 1).map(v -> new String(v.value(), StandardCharsets.US_ASCII)).orElse("NONE");
+        String oid = BerCodec.findOptional(fields, 2, 2).map(v -> new String(v.value(), StandardCharsets.US_ASCII)).orElse("1.2.840.113549.1.1.1");
+        SecurityParameters parameters = new SecurityParameters(label, token, oid);
+        parameters.validate();
+        return parameters;
     }
 
     private MTSIdentifier parseMtsIdentifier(BerTlv mtsIdentifierTlv) {
@@ -91,9 +136,23 @@ public class P1BerMessageParser {
                     .orElse("UNKNOWN");
                 Optional<Integer> responsibility = BerCodec.findOptional(fields, 2, 1)
                     .map(this::parseIntegerValue);
-                return new PerRecipientFields(recipient, responsibility);
+                Optional<Integer> deliveryFlags = BerCodec.findOptional(fields, 2, 2)
+                    .map(this::parseIntegerValue);
+                List<String> extensionIds = BerCodec.findOptional(fields, 2, 3)
+                    .filter(BerTlv::constructed)
+                    .map(this::parseStringList)
+                    .orElse(List.of());
+                return new PerRecipientFields(recipient, responsibility, deliveryFlags, extensionIds);
             })
             .collect(Collectors.toList());
+    }
+
+    private List<String> parseStringList(BerTlv listTlv) {
+        List<String> values = new ArrayList<>();
+        for (BerTlv item : BerCodec.decodeAll(listTlv.value())) {
+            values.add(new String(item.value(), StandardCharsets.UTF_8));
+        }
+        return values;
     }
 
     private TraceInformation parseTraceInformation(BerTlv traceTlv) {
@@ -266,7 +325,9 @@ public class P1BerMessageParser {
         List<PerRecipientFields> perRecipientFields,
         Optional<TraceInformation> traceInformation,
         Optional<String> contentTypeOid,
-        Optional<String> originator
+        Optional<String> originator,
+        Optional<SecurityParameters> securityParameters,
+        List<ExtensibilityContainers.UnknownExtension> unknownExtensions
     ) {
 
         public Optional<String> primaryRecipient() {
@@ -280,7 +341,7 @@ public class P1BerMessageParser {
     public record MTSIdentifier(Optional<String> localIdentifier, Optional<Date> filingTime) {
     }
 
-    public record PerRecipientFields(String recipient, Optional<Integer> responsibility) {
+    public record PerRecipientFields(String recipient, Optional<Integer> responsibility, Optional<Integer> deliveryFlags, List<String> extensionIds) {
     }
 
     public record TraceInformation(List<String> hops) {

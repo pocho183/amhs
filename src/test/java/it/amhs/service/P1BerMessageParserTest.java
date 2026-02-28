@@ -105,6 +105,39 @@ class P1BerMessageParserTest {
         assertEquals("MTA1", parsed.transferEnvelope().traceInformation().orElseThrow().hops().get(0));
     }
 
+
+    private static byte[] contextUtf8(int tag, String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+
+
+    @Test
+    void shouldParseEnvelopeSecurityParametersAndUnknownExtensions() {
+        byte[] security = sequence(
+            contextUtf8(0, "SECRET"),
+            contextPrimitive(1, "TOKEN-1"),
+            contextPrimitive(2, "1.2.3.4")
+        );
+
+        byte[] envelope = sequence(
+            contextConstructed(5, security),
+            contextPrimitive(10, "opaque")
+        );
+
+        byte[] payloadContent = concat(
+            contextPrimitive(0, "LIRRZQZX"),
+            contextPrimitive(1, "LIIRYAYX"),
+            contextUtf8(2, "Hello"),
+            contextConstructed(9, envelope)
+        );
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, payloadContent.length, payloadContent));
+
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+        assertEquals("SECRET", parsed.transferEnvelope().securityParameters().orElseThrow().securityLabel());
+        assertEquals(1, parsed.transferEnvelope().unknownExtensions().size());
+    }
     private static byte[] contextPrimitive(int tag, String value) {
         byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
         return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
