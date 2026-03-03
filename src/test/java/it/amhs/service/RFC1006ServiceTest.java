@@ -75,15 +75,75 @@ class RFC1006ServiceTest {
             RFC1006Service.ICAO_AMHS_P1_OID,
             Optional.of("LIMMZQZX"),
             Optional.of("DEST"),
+            Optional.of(new AcseModels.ApTitle("1.3.27.1")),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.27.2")),
             Optional.empty(),
             Optional.empty(),
+            Optional.of("bind-info".getBytes()),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID)
+        );
+
+        service.validateAarqForAmhsP1(aarq, "LIMMZQZX", null);
+    }
+
+    @Test
+    void shouldRejectAarqWithoutUserInformation() {
+        AcseModels.AARQApdu aarq = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("LIMMZQZX"),
+            Optional.of("DEST"),
+            Optional.of(new AcseModels.ApTitle("1.3.27.1")),
             Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.27.2")),
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
             List.of(RFC1006Service.ICAO_AMHS_P1_OID)
         );
 
-        service.validateAarqForAmhsP1(aarq, "LIMMZQZX", null);
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> service.validateAarqForAmhsP1(aarq, "LIMMZQZX", null));
+        assertTrue(ex.getMessage().contains("user-information"));
+    }
+
+    @Test
+    void shouldRejectAeQualifierWithoutApTitle() {
+        AcseModels.AARQApdu aarq = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("LIMMZQZX"),
+            Optional.of("DEST"),
+            Optional.empty(),
+            Optional.of(new AcseModels.AeQualifier(4)),
+            Optional.of(new AcseModels.ApTitle("1.3.27.2")),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of("bind-info".getBytes()),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID)
+        );
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> service.validateAarqForAmhsP1(aarq, "LIMMZQZX", null));
+        assertTrue(ex.getMessage().contains("AE-title/AE-qualifier requires AP-title"));
+    }
+
+    @Test
+    void shouldRejectDuplicatePresentationContexts() {
+        AcseModels.AARQApdu aarq = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("LIMMZQZX"),
+            Optional.of("DEST"),
+            Optional.of(new AcseModels.ApTitle("1.3.27.1")),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.27.2")),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of("bind-info".getBytes()),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID, RFC1006Service.ICAO_AMHS_P1_OID)
+        );
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> service.validateAarqForAmhsP1(aarq, "LIMMZQZX", null));
+        assertTrue(ex.getMessage().contains("must not contain duplicates"));
     }
 }

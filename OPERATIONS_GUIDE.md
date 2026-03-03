@@ -201,3 +201,20 @@ amhs.relay.scan-delay-ms=5000
 - Retry con backoff esponenziale (2^n secondi).
 - Dopo `max-attempts`, il messaggio va in dead-letter (`FAILED` + `deadLetterReason`).
 - Rilevazione loop basata su trace hop locale (`MTA@DOMAIN[timestamp]`).
+
+---
+
+## 8) Pacchetto documentale per readiness ICAO (nuovo)
+
+Per ridurre il gap "Formal Conformance Documentation" sono stati aggiunti documenti baseline:
+
+- `docs/icao/PICS.md` — dichiarazione funzionalità implementate (Y/P/N) per trasporto, ACSE, P1, sicurezza, routing.
+- `docs/icao/PIXIT.md` — parametri specifici d'implementazione utili al laboratorio di test.
+- `docs/icao/CONFORMANCE_TEST_MATRIX.md` — matrice dominio→evidenza→gap per chiudere la preparazione pre-certificazione.
+
+Uso consigliato:
+
+1. Congelare una release candidata.
+2. Compilare la matrice con ID test, esito e artefatti (log/pcap).
+3. Allegare PICS+PIXIT al report di interoperabilità verso nodo AMHS certificato.
+
