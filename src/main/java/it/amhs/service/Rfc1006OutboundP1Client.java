@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.TimeZone;
@@ -108,9 +109,16 @@ public class Rfc1006OutboundP1Client implements OutboundP1Client {
 
     private byte[] encodeAcseBind(AMHSMessage message) {
         return acseAssociationProtocol.encode(new AcseModels.AARQApdu(
-            "2.6.0.1.6.1",
+            RFC1006Service.ICAO_AMHS_P1_OID,
             Optional.ofNullable(message.getSender()).map(String::trim).filter(s -> !s.isEmpty()),
-            Optional.ofNullable(message.getRecipient()).map(String::trim).filter(s -> !s.isEmpty())
+            Optional.ofNullable(message.getRecipient()).map(String::trim).filter(s -> !s.isEmpty()),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID)
         ));
     }
 
