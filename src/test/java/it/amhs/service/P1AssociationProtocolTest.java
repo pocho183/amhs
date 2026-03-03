@@ -73,6 +73,27 @@ class P1AssociationProtocolTest {
         assertThrows(IllegalArgumentException.class, () -> protocol.decode(pdu));
     }
 
+
+    @Test
+    void shouldRejectBindWithUnknownContextFieldTag() {
+        byte[] bindPayload = concat(
+            contextConstructed(2, BerCodec.encode(new BerTlv(0, false, 6, 0, 5, new byte[] {
+                0x56, 0x00, 0x01, 0x06, 0x01
+            }))),
+            BerCodec.encode(new BerTlv(2, false, 3, 0, 1, new byte[] { 0x01 })),
+            BerCodec.encode(new BerTlv(2, true, 6, 0, 0, new byte[0])),
+            contextConstructed(7, BerCodec.encode(new BerTlv(0, false, 6, 0, 5, new byte[] {
+                0x56, 0x00, 0x01, 0x06, 0x01
+            }))),
+            contextPrimitive(99, "unexpected")
+        );
+
+        byte[] pdu = BerCodec.encode(new BerTlv(2, true, 0, 0, bindPayload.length, bindPayload));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> protocol.decode(pdu));
+        assertTrue(ex.getMessage().contains("Unsupported P1 bind field tag"));
+    }
+
     @Test
     void shouldEncodeErrorPdu() {
         byte[] error = protocol.encodeError("association", "bind required");

@@ -4,6 +4,8 @@ import java.util.Set;
 
 public final class X411TagMap {
 
+    // Context tags aligned with X.411-style MTA APDU envelope used by this stack.
+    // Traceability baseline is documented in docs/icao/X411_MODULE_TRACEABILITY.md.
     public static final int APDU_BIND = 0;
     public static final int APDU_TRANSFER = 1;
     public static final int APDU_RELEASE = 2;
@@ -41,6 +43,27 @@ public final class X411TagMap {
         APDU_TRANSFER_RESULT
     );
 
+
+    private static final Set<Integer> BIND_FIELD_TAGS = Set.of(
+        BIND_CALLING_MTA,
+        BIND_CALLED_MTA,
+        BIND_ABSTRACT_SYNTAX,
+        BIND_PROTOCOL_VERSION,
+        BIND_AUTHENTICATION,
+        BIND_SECURITY,
+        BIND_MTS_APDU,
+        BIND_PRESENTATION_CONTEXT
+    );
+
+    private static final Set<Integer> ENVELOPE_BASE_TAGS = Set.of(
+        ENVELOPE_MTS_IDENTIFIER,
+        ENVELOPE_PER_RECIPIENT,
+        ENVELOPE_TRACE,
+        ENVELOPE_CONTENT_TYPE,
+        ENVELOPE_ORIGINATOR,
+        ENVELOPE_SECURITY_PARAMETERS,
+        ENVELOPE_EXTENSIONS
+    );
     private X411TagMap() {
     }
 
@@ -49,4 +72,17 @@ public final class X411TagMap {
             throw new IllegalArgumentException("Unsupported X.411 association APDU tag [" + tagNumber + "]");
         }
     }
+
+    public static boolean isKnownBindFieldTag(int tagNumber) {
+        return BIND_FIELD_TAGS.contains(tagNumber);
+    }
+
+    public static boolean isKnownEnvelopeFieldTag(int tagNumber) {
+        return ENVELOPE_BASE_TAGS.contains(tagNumber);
+    }
+
+    public static boolean isExtensionEnvelopeFieldTag(int tagNumber) {
+        return tagNumber > ENVELOPE_EXTENSIONS;
+    }
+
 }

@@ -1,6 +1,7 @@
 package it.amhs.service;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +38,7 @@ public final class ORNameMapper {
 
         for (BerTlv field : fields) {
             if (field.tagClass() == 2 && field.tagNumber() == 0) {
-                directoryName = Optional.of(decodeString(field));
+                directoryName = Optional.of(decodeDirectoryName(field));
             } else if (field.tagClass() == 2 && field.tagNumber() == 1 && field.constructed()) {
                 decodeStructuredAddress(field, attributes);
             } else if (field.tagClass() == 2 && field.tagNumber() == 1) {
@@ -49,6 +50,29 @@ public final class ORNameMapper {
             throw new IllegalArgumentException("Structured ORName missing O/R address");
         }
         return new ORName(directoryName, ORAddress.of(attributes));
+    }
+
+
+    private static String decodeDirectoryName(BerTlv field) {
+        if (!field.constructed()) {
+            return decodeString(field);
+        }
+        List<String> values = new ArrayList<>();
+        collectDirectoryValues(BerCodec.decodeAll(field.value()), values);
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("DirectoryName does not contain decodable attributes");
+        }
+        return String.join(",", values);
+    }
+
+    private static void collectDirectoryValues(List<BerTlv> nodes, List<String> values) {
+        for (BerTlv node : nodes) {
+            if (node.constructed()) {
+                collectDirectoryValues(BerCodec.decodeAll(node.value()), values);
+                continue;
+            }
+            values.add(decodeString(node));
+        }
     }
 
     private static void decodeStructuredAddress(BerTlv field, Map<String, String> attributes) {
@@ -90,9 +114,30 @@ public final class ORNameMapper {
     }
 
     private static String decodeString(BerTlv tlv) {
-        if (tlv.tagClass() == 0 && tlv.tagNumber() == 20) {
-            return new String(tlv.value(), StandardCharsets.ISO_8859_1);
+        if (tlv.constructed()) {
+            List<BerTlv> nested = BerCodec.decodeAll(tlv.value());
+            if (nested.size() == 1) {
+                return decodeString(nested.get(0));
+            }
         }
-        return new String(tlv.value(), StandardCharsets.UTF_8);
+
+        if (tlv.tagClass() != 0) {
+            return new String(tlv.value(), StandardCharsets.UTF_8);
+        }
+
+        return switch (tlv.tagNumber()) {
+            case 12 -> new String(tlv.value(), StandardCharsets.UTF_8); // UTF8String
+            case 19, 22, 25 -> new String(tlv.value(), StandardCharsets.US_ASCII); // Printable/IA5/Graphic
+            case 20 -> new String(tlv.value(), StandardCharsets.ISO_8859_1); // TeletexString approximation
+            case 30 -> decodeBmpString(tlv.value());
+            default -> new String(tlv.value(), StandardCharsets.UTF_8);
+        };
+    }
+
+    private static String decodeBmpString(byte[] value) {
+        if ((value.length & 1) != 0) {
+            throw new IllegalArgumentException("Invalid BMPString length");
+        }
+        return new String(value, StandardCharsets.UTF_16BE);
     }
 }
