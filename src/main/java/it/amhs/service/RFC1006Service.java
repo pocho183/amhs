@@ -57,6 +57,7 @@ public class RFC1006Service {
     private static final int MAX_DT_USER_DATA_PER_FRAME = 16_384;
     static final String ICAO_AMHS_P1_OID = "2.6.0.1.6.1";
     static final int RFC1006_CLASS_0 = 0;
+    static final int RFC1006_CLASS_0_LEGACY_OPTIONS = 0x0A;
 
     private final AMHSMessageRepository amhsMessagesRepository;
     private final MTAService mtaService;
@@ -341,6 +342,10 @@ public class RFC1006Service {
     }
 
     void validateClassNegotiation(int tpduClass) {
+        if (tpduClass == RFC1006_CLASS_0_LEGACY_OPTIONS) {
+            logger.debug("Accepting legacy COTP class/options value 0x0A for class 0 interoperability");
+            return;
+        }
         if (tpduClass != RFC1006_CLASS_0) {
             throw new IllegalArgumentException("Unsupported COTP class negotiation " + tpduClass + "; only class 0 is supported");
         }
