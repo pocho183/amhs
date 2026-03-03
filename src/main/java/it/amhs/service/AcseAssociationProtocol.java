@@ -2,6 +2,7 @@ package it.amhs.service;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -60,8 +61,13 @@ public class AcseAssociationProtocol {
         byte[] payload = concat(
             encodeBitString(0, 0x80),
             encodeOid(1, aarq.applicationContextName()),
-            aarq.calledAeTitle().map(v -> encodeGraphicString(3, v)).orElse(new byte[0]),
-            aarq.callingAeTitle().map(v -> encodeGraphicString(7, v)).orElse(new byte[0])
+            aarq.calledApTitle().map(v -> encodeOid(2, v.objectIdentifier())).orElse(new byte[0]),
+            aarq.calledAeQualifier().map(v -> encodeSmallInteger(3, v.value())).orElseGet(() -> aarq.calledAeTitle().map(v -> encodeGraphicString(3, v)).orElse(new byte[0])),
+            aarq.callingApTitle().map(v -> encodeOid(6, v.objectIdentifier())).orElse(new byte[0]),
+            aarq.callingAeQualifier().map(v -> encodeSmallInteger(7, v.value())).orElseGet(() -> aarq.callingAeTitle().map(v -> encodeGraphicString(7, v)).orElse(new byte[0])),
+            aarq.authenticationValue().map(v -> encodeOctetString(12, v)).orElse(new byte[0]),
+            aarq.presentationContextOids().isEmpty() ? new byte[0] : encodePresentationContexts(29, aarq.presentationContextOids()),
+            aarq.userInformation().map(v -> encodeUserInformation(30, v)).orElse(new byte[0])
         );
         return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, AARQ_TAG, 0, payload.length, payload));
     }
@@ -71,18 +77,62 @@ public class AcseAssociationProtocol {
         String appCtx = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 1)
             .map(this::decodeOid)
             .orElseThrow(() -> new IllegalArgumentException("AARQ is missing application-context-name [1]"));
-        Optional<String> calledAe = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 3)
-            .map(this::decodeGraphicString);
-        Optional<String> callingAe = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 7)
-            .map(this::decodeGraphicString);
-        return new AcseModels.AARQApdu(appCtx, callingAe, calledAe);
+
+        Optional<String> calledAe = Optional.empty();
+        Optional<AcseModels.AeQualifier> calledQualifier = Optional.empty();
+        Optional<BerTlv> calledField = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 3);
+        if (calledField.isPresent()) {
+            if (isWrappedUniversalTag(calledField.get(), 25)) {
+                calledAe = Optional.of(decodeGraphicString(calledField.get()));
+            } else {
+                calledQualifier = Optional.of(new AcseModels.AeQualifier(decodeSmallInteger(calledField.get())));
+            }
+        }
+
+        Optional<String> callingAe = Optional.empty();
+        Optional<AcseModels.AeQualifier> callingQualifier = Optional.empty();
+        Optional<BerTlv> callingField = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 7);
+        if (callingField.isPresent()) {
+            if (isWrappedUniversalTag(callingField.get(), 25)) {
+                callingAe = Optional.of(decodeGraphicString(callingField.get()));
+            } else {
+                callingQualifier = Optional.of(new AcseModels.AeQualifier(decodeSmallInteger(callingField.get())));
+            }
+        }
+
+        Optional<AcseModels.ApTitle> calledApTitle = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 2)
+            .map(v -> new AcseModels.ApTitle(decodeOid(v)));
+        Optional<AcseModels.ApTitle> callingApTitle = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 6)
+            .map(v -> new AcseModels.ApTitle(decodeOid(v)));
+        Optional<byte[]> authValue = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 12)
+            .map(this::decodeOctetString);
+        Optional<byte[]> userInformation = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 30)
+            .map(this::decodeUserInformation);
+        List<String> presentationContexts = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 29)
+            .map(this::decodePresentationContexts)
+            .orElse(List.of());
+
+        return new AcseModels.AARQApdu(
+            appCtx,
+            callingAe,
+            calledAe,
+            callingApTitle,
+            callingQualifier,
+            calledApTitle,
+            calledQualifier,
+            authValue,
+            userInformation,
+            presentationContexts
+        );
     }
 
     private byte[] encodeAare(AcseModels.AAREApdu aare) {
         int result = aare.accepted() ? 0 : 1;
         byte[] payload = concat(
             encodeResult(2, result),
-            aare.diagnostic().map(v -> encodeGraphicString(3, v)).orElse(new byte[0])
+            aare.resultSourceDiagnostic().map(this::encodeResultSourceDiagnostic).orElseGet(() -> aare.diagnostic().map(v -> encodeGraphicString(10, v)).orElse(new byte[0])),
+            aare.presentationContextOids().isEmpty() ? new byte[0] : encodePresentationContexts(29, aare.presentationContextOids()),
+            aare.userInformation().map(v -> encodeUserInformation(30, v)).orElse(new byte[0])
         );
         return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, AARE_TAG, 0, payload.length, payload));
     }
@@ -92,9 +142,22 @@ public class AcseAssociationProtocol {
         int result = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 2)
             .map(this::decodeSmallInteger)
             .orElseThrow(() -> new IllegalArgumentException("AARE is missing result [2]"));
-        Optional<String> diagnostic = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 3)
+
+        Optional<AcseModels.ResultSourceDiagnostic> rsd = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 3)
+            .map(this::decodeResultSourceDiagnostic);
+        Optional<String> diagnostic = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 10)
             .map(this::decodeGraphicString);
-        return new AcseModels.AAREApdu(result == 0, diagnostic);
+        if (diagnostic.isEmpty() && rsd.isPresent()) {
+            diagnostic = Optional.of("source=" + rsd.get().source() + ",diag=" + rsd.get().diagnostic());
+        }
+
+        Optional<byte[]> userInfo = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 30)
+            .map(this::decodeUserInformation);
+        List<String> presentationContexts = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 29)
+            .map(this::decodePresentationContexts)
+            .orElse(List.of());
+
+        return new AcseModels.AAREApdu(result == 0, diagnostic, rsd, userInfo, presentationContexts);
     }
 
     private byte[] encodeRlrq(AcseModels.RLRQApdu rlrq) {
@@ -177,11 +240,106 @@ public class AcseAssociationProtocol {
         return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, false, tagNumber, 0, 1, new byte[] {(byte) value}));
     }
 
+    private byte[] encodeSmallInteger(int tagNumber, int value) {
+        if (value < 0 || value > 255) {
+            throw new IllegalArgumentException("ACSE integer/ENUMERATED field must fit in one octet");
+        }
+        return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, false, tagNumber, 0, 1, new byte[] {(byte) value}));
+    }
+
     private int decodeSmallInteger(BerTlv encoded) {
         if (encoded.value().length != 1) {
             throw new IllegalArgumentException("ACSE integer/ENUMERATED field must be one octet");
         }
         return encoded.value()[0] & 0xFF;
+    }
+
+    private byte[] encodeOctetString(int tagNumber, byte[] value) {
+        byte[] octetString = BerCodec.encode(new BerTlv(0, false, 4, 0, value.length, value));
+        return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, tagNumber, 0, octetString.length, octetString));
+    }
+
+    private byte[] decodeOctetString(BerTlv wrapped) {
+        BerTlv octets = BerCodec.decodeSingle(wrapped.value());
+        if (!octets.isUniversal() || octets.tagNumber() != 4) {
+            throw new IllegalArgumentException("ACSE expected OCTET STRING inside field [" + wrapped.tagNumber() + "]");
+        }
+        return octets.value();
+    }
+
+    private byte[] encodePresentationContexts(int tagNumber, List<String> contextOids) {
+        List<byte[]> entries = new ArrayList<>();
+        for (String oid : contextOids) {
+            byte[] encodedOid = BerCodec.encode(new BerTlv(0, false, 6, 0, encodeOidValue(oid).length, encodeOidValue(oid)));
+            entries.add(BerCodec.encode(new BerTlv(0, true, 16, 0, encodedOid.length, encodedOid)));
+        }
+        byte[] sequence = concat(entries.toArray(new byte[0][]));
+        byte[] wrappedSeq = BerCodec.encode(new BerTlv(0, true, 16, 0, sequence.length, sequence));
+        return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, tagNumber, 0, wrappedSeq.length, wrappedSeq));
+    }
+
+    private List<String> decodePresentationContexts(BerTlv wrapped) {
+        BerTlv seq = BerCodec.decodeSingle(wrapped.value());
+        if (!seq.isUniversal() || seq.tagNumber() != 16) {
+            throw new IllegalArgumentException("ACSE expected SEQUENCE for presentation contexts");
+        }
+        List<String> oids = new ArrayList<>();
+        for (BerTlv item : BerCodec.decodeAll(seq.value())) {
+            if (!item.isUniversal() || item.tagNumber() != 16) {
+                continue;
+            }
+            BerTlv oidTlv = BerCodec.decodeSingle(item.value());
+            if (oidTlv.isUniversal() && oidTlv.tagNumber() == 6) {
+                oids.add(decodeOidValue(oidTlv.value()));
+            }
+        }
+        return List.copyOf(oids);
+    }
+
+    private byte[] encodeUserInformation(int tagNumber, byte[] associationInformation) {
+        byte[] encodedAssociation = BerCodec.encode(new BerTlv(0, false, 4, 0, associationInformation.length, associationInformation));
+        byte[] external = BerCodec.encode(new BerTlv(0, true, 8, 0, encodedAssociation.length, encodedAssociation));
+        byte[] sequence = BerCodec.encode(new BerTlv(0, true, 16, 0, external.length, external));
+        return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, tagNumber, 0, sequence.length, sequence));
+    }
+
+    private byte[] decodeUserInformation(BerTlv wrapped) {
+        BerTlv sequence = BerCodec.decodeSingle(wrapped.value());
+        if (!sequence.isUniversal() || sequence.tagNumber() != 16) {
+            throw new IllegalArgumentException("ACSE expected SEQUENCE in user-information");
+        }
+        List<BerTlv> elements = BerCodec.decodeAll(sequence.value());
+        if (elements.isEmpty()) {
+            return new byte[0];
+        }
+        BerTlv external = elements.get(0);
+        if (!external.isUniversal() || external.tagNumber() != 8) {
+            throw new IllegalArgumentException("ACSE expected EXTERNAL in user-information");
+        }
+        BerTlv associationInfo = BerCodec.decodeSingle(external.value());
+        if (!associationInfo.isUniversal() || associationInfo.tagNumber() != 4) {
+            throw new IllegalArgumentException("ACSE expected OCTET STRING as association information");
+        }
+        return associationInfo.value();
+    }
+
+    private byte[] encodeResultSourceDiagnostic(AcseModels.ResultSourceDiagnostic rsd) {
+        byte[] source = encodeSmallInteger(0, rsd.source());
+        byte[] diagnostic = encodeSmallInteger(1, rsd.diagnostic());
+        byte[] payload = concat(source, diagnostic);
+        return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, 3, 0, payload.length, payload));
+    }
+
+    private AcseModels.ResultSourceDiagnostic decodeResultSourceDiagnostic(BerTlv wrapped) {
+        List<BerTlv> fields = BerCodec.decodeAll(wrapped.value());
+        int source = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 0).map(this::decodeSmallInteger).orElse(0);
+        int diagnostic = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 1).map(this::decodeSmallInteger).orElse(0);
+        return new AcseModels.ResultSourceDiagnostic(source, diagnostic);
+    }
+
+    private boolean isWrappedUniversalTag(BerTlv wrapped, int universalTag) {
+        BerTlv inner = BerCodec.decodeSingle(wrapped.value());
+        return inner.isUniversal() && inner.tagNumber() == universalTag;
     }
 
     private byte[] encodeOidValue(String oid) {
