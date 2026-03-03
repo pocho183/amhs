@@ -35,10 +35,10 @@ Legend:
 | T-06 | Idle timeout / frame size guard | Y | Idle and max-frame controls enforced. |
 | A-01 | ACSE AARQ decoding and checks | Y | Application context and identity checks. |
 | A-02 | ACSE AARE structured response | Y | Result + diagnostic container emitted. |
-| A-03 | Presentation context negotiation | Y | Enforced non-empty AMHS P1 context, duplicate rejection, and strict SEQUENCE/OID decoding. |
-| A-04 | ACSE user-information semantics | Y | User-information is mandatory for AMHS association, non-empty, and size-bounded. |
-| A-05 | AP-title / AE-qualifier structures | Y | Calling/called AP-title and AE-title/AE-qualifier structural pairing rules are enforced. |
-| A-06 | Authentication-value semantics | Y | Presence policy, non-empty validation, and expected-value verification are enforced. |
+| A-03 | Presentation context negotiation | P | Basic negotiation; strict profile coverage incomplete. |
+| A-04 | ACSE user-information semantics | P | Parsed/encoded, limited semantic enforcement. |
+| A-05 | AP-title / AE-qualifier structures | P | Formal containers present, profile completeness pending. |
+| A-06 | Authentication-value semantics | P | Field support present, policy semantics limited. |
 | P1-01 | BER parsing for P1-like envelope | Y | Structured BER/TLV support in parser. |
 | P1-02 | Envelope/content separation | Y | Envelope and content are separated. |
 | P1-03 | Per-recipient handling | Y | Per-recipient routing state supported. |
@@ -75,3 +75,4 @@ Legend:
 - Transport and parser tests under `src/test/java/it/amhs/service/`.
 - BER codec tests under `src/test/java/it/amhs/asn1/`.
 - Compliance and address validation tests under `src/test/java/it/amhs/compliance/` and `src/test/java/it/amhs/service/ORAddressTest.java`.
+
