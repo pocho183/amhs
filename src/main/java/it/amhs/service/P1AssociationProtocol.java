@@ -115,6 +115,11 @@ public class P1AssociationProtocol {
 
     private BindPdu decodeBind(byte[] payload) {
         List<BerTlv> fields = BerCodec.decodeAll(payload);
+        for (BerTlv field : fields) {
+            if (field.tagClass() == 2 && !X411TagMap.isKnownBindFieldTag(field.tagNumber())) {
+                throw new IllegalArgumentException("Unsupported P1 bind field tag [" + field.tagNumber() + "]");
+            }
+        }
         Optional<String> calling = BerCodec.findOptional(fields, 2, X411TagMap.BIND_CALLING_MTA)
             .map(value -> new String(value.value(), StandardCharsets.US_ASCII));
         Optional<String> called = BerCodec.findOptional(fields, 2, X411TagMap.BIND_CALLED_MTA)

@@ -286,12 +286,20 @@ public class AcseAssociationProtocol {
         List<String> oids = new ArrayList<>();
         for (BerTlv item : BerCodec.decodeAll(seq.value())) {
             if (!item.isUniversal() || item.tagNumber() != 16) {
-                continue;
+                throw new IllegalArgumentException("ACSE presentation context list item must be a SEQUENCE");
             }
-            BerTlv oidTlv = BerCodec.decodeSingle(item.value());
-            if (oidTlv.isUniversal() && oidTlv.tagNumber() == 6) {
-                oids.add(decodeOidValue(oidTlv.value()));
+            List<BerTlv> contextFields = BerCodec.decodeAll(item.value());
+            if (contextFields.size() != 1) {
+                throw new IllegalArgumentException("ACSE presentation context item must contain exactly one abstract syntax OID");
             }
+            BerTlv oidTlv = contextFields.get(0);
+            if (!oidTlv.isUniversal() || oidTlv.tagNumber() != 6) {
+                throw new IllegalArgumentException("ACSE presentation context item must contain OBJECT IDENTIFIER");
+            }
+            oids.add(decodeOidValue(oidTlv.value()));
+        }
+        if (oids.isEmpty()) {
+            throw new IllegalArgumentException("ACSE presentation context list cannot be empty");
         }
         return List.copyOf(oids);
     }

@@ -108,9 +108,14 @@ public class P1BerMessageParser {
                 continue;
             }
             int tag = tlv.tagNumber();
-            if (tag > X411TagMap.ENVELOPE_EXTENSIONS) {
-                container.add(tlv);
+            if (X411TagMap.isKnownEnvelopeFieldTag(tag)) {
+                continue;
             }
+            if (X411TagMap.isExtensionEnvelopeFieldTag(tag)) {
+                container.add(tlv);
+                continue;
+            }
+            throw new IllegalArgumentException("Unsupported X.411 envelope field tag [" + tag + "]");
         }
         return container.unknownExtensions();
     }
