@@ -16,6 +16,7 @@ import it.amhs.service.ORAddress;
 public class AMHSComplianceValidator {
 
     private static final Pattern ICAO_8_CHAR = Pattern.compile("^[A-Z0-9]{8}$");
+    private static final Pattern NUMERIC_COUNTRY = Pattern.compile("^\\d{3}$");
     private static final Set<String> ISO_COUNTRIES = Set.of(Locale.getISOCountries());
 
     public void validate(String from, String to, String body, AMHSProfile profile) {
@@ -81,7 +82,7 @@ public class AMHSComplianceValidator {
         String prmd = normalized(orAddress.get("PRMD"));
         String organization = normalized(orAddress.get("O"));
 
-        if (!ISO_COUNTRIES.contains(country)) {
+        if (!ISO_COUNTRIES.contains(country) && !NUMERIC_COUNTRY.matcher(country).matches()) {
             throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must include a valid ISO country code");
         }
         if (!"ICAO".equals(admd)) {

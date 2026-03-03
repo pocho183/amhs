@@ -138,9 +138,46 @@ class P1BerMessageParserTest {
         assertEquals("SECRET", parsed.transferEnvelope().securityParameters().orElseThrow().securityLabel());
         assertEquals(1, parsed.transferEnvelope().unknownExtensions().size());
     }
+
+    @Test
+    void shouldParseStructuredOrNameWithT61AndExtensionAttributes() {
+        byte[] orAddress = sequence(
+            contextPrimitive(0, "380"),
+            contextPrimitive(1, " "),
+            contextPrimitive(2, "ROMA"),
+            contextPrimitive(3, "ENAV"),
+            contextT61(4, "LIRRZQZX"),
+            contextPrimitive(22, "OPS-EXT")
+        );
+        byte[] originatorOrName = sequence(
+            contextPrimitive(0, "CN=OPS,OU=ATC,O=ENAV,C=IT"),
+            contextConstructed(1, orAddress)
+        );
+
+        byte[] envelope = sequence(
+            contextConstructed(4, originatorOrName),
+            contextConstructed(1, sequence(sequence(contextPrimitive(0, "LIIRYAYX"))))
+        );
+        byte[] payloadContent = concat(
+            contextUtf8(2, "Hello"),
+            contextConstructed(9, envelope)
+        );
+
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, payloadContent.length, payloadContent));
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+
+        assertEquals("/C=380/ADMD= /PRMD=ROMA/O=ENAV/OU1=LIRRZQZX/EXT-CTX-22=OPS-EXT", parsed.from());
+    }
+
     private static byte[] contextPrimitive(int tag, String value) {
         byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
         return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+    private static byte[] contextT61(int tag, String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.ISO_8859_1);
+        byte[] t61 = BerCodec.encode(new BerTlv(0, false, 20, 0, bytes.length, bytes));
+        return BerCodec.encode(new BerTlv(2, true, tag, 0, t61.length, t61));
     }
 
     private static byte[] contextEnumerated(int tag, int value) {
