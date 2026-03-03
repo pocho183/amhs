@@ -55,6 +55,7 @@ public class RFC1006Service {
     private final MTAService mtaService;
     private final P1BerMessageParser p1BerMessageParser;
     private final P1AssociationProtocol p1AssociationProtocol;
+    private final AcseAssociationProtocol acseAssociationProtocol;
     private final String localMtaName;
     private final String localRoutingDomain;
     private final ThreadPoolExecutor priorityExecutor;
@@ -64,6 +65,7 @@ public class RFC1006Service {
         MTAService mtaService,
         P1BerMessageParser p1BerMessageParser,
         P1AssociationProtocol p1AssociationProtocol,
+        AcseAssociationProtocol acseAssociationProtocol,
         @Value("${amhs.mta.local-name:LOCAL-MTA}") String localMtaName,
         @Value("${amhs.mta.routing-domain:LOCAL}") String localRoutingDomain
     ) {
@@ -71,6 +73,7 @@ public class RFC1006Service {
         this.mtaService = mtaService;
         this.p1BerMessageParser = p1BerMessageParser;
         this.p1AssociationProtocol = p1AssociationProtocol;
+        this.acseAssociationProtocol = acseAssociationProtocol;
         this.localMtaName = localMtaName;
         this.localRoutingDomain = localRoutingDomain;
         this.priorityExecutor = new ThreadPoolExecutor(
@@ -169,7 +172,7 @@ public class RFC1006Service {
             return false;
         }
         int first = payload[0] & 0xFF;
-        return first >= 0xA0 && first <= 0xAF;
+        return (first >= 0xA0 && first <= 0xAF) || (first >= 0x60 && first <= 0x64);
     }
 
     private void handleP1AssociationPdu(
@@ -178,6 +181,11 @@ public class RFC1006Service {
         P1AssociationState associationState,
         CertificateIdentity identity
     ) throws Exception {
+        if ((payload[0] & 0xFF) >= 0x60 && (payload[0] & 0xFF) <= 0x64) {
+            handleAcseAssociationPdu(payload, out, associationState);
+            return;
+        }
+
         P1AssociationProtocol.Pdu pdu;
         try {
             pdu = p1AssociationProtocol.decode(payload);
@@ -256,6 +264,41 @@ public class RFC1006Service {
                 List.of(new P1AssociationProtocol.RecipientTransferResult(incoming.to, 0, java.util.Optional.of("delivered")))
             ));
         }
+    }
+
+    private void handleAcseAssociationPdu(byte[] payload, OutputStream out, P1AssociationState associationState) throws Exception {
+        AcseModels.AcseApdu apdu;
+        try {
+            apdu = acseAssociationProtocol.decode(payload);
+        } catch (IllegalArgumentException ex) {
+            logger.warn("Invalid ACSE association APDU: {}", ex.getMessage());
+            sendRFC1006(out, p1AssociationProtocol.encodeError("invalid-acse-pdu", ex.getMessage()));
+            return;
+        }
+
+        if (apdu instanceof AcseModels.AARQApdu aarq) {
+            associationState.bound = true;
+            associationState.active = true;
+            logger.info("Accepted ACSE AARQ for application context {}", aarq.applicationContextName());
+            sendRFC1006(out, acseAssociationProtocol.encode(new AcseModels.AAREApdu(true, java.util.Optional.of("accepted"))));
+            return;
+        }
+
+        if (apdu instanceof AcseModels.RLRQApdu) {
+            associationState.bound = false;
+            associationState.active = false;
+            sendRFC1006(out, acseAssociationProtocol.encode(new AcseModels.RLREApdu(true)));
+            return;
+        }
+
+        if (apdu instanceof AcseModels.ABRTApdu abrt) {
+            associationState.bound = false;
+            associationState.active = false;
+            logger.warn("ACSE association aborted by peer: {}", abrt.diagnostic().orElse(""));
+            return;
+        }
+
+        logger.info("Received ACSE {} while waiting for P1 transfer PDUs", apdu.getClass().getSimpleName());
     }
 
     private void storeWithStrictPriority(IncomingMessage incoming) {

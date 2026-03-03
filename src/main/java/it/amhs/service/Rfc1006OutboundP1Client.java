@@ -23,9 +23,11 @@ import it.amhs.domain.AMHSMessage;
 public class Rfc1006OutboundP1Client implements OutboundP1Client {
 
     private final P1AssociationProtocol p1AssociationProtocol;
+    private final AcseAssociationProtocol acseAssociationProtocol;
 
-    public Rfc1006OutboundP1Client(P1AssociationProtocol p1AssociationProtocol) {
+    public Rfc1006OutboundP1Client(P1AssociationProtocol p1AssociationProtocol, AcseAssociationProtocol acseAssociationProtocol) {
         this.p1AssociationProtocol = p1AssociationProtocol;
+        this.acseAssociationProtocol = acseAssociationProtocol;
     }
 
     private static final byte TPKT_VERSION = 0x03;
@@ -52,10 +54,19 @@ public class Rfc1006OutboundP1Client implements OutboundP1Client {
                 throw new IllegalStateException("Expected COTP CC after CR, got TPDU type 0x" + Integer.toHexString(connectResponse.type & 0xFF));
             }
 
-            sendDataFrame(out, encodeBind(message));
-            P1AssociationProtocol.Pdu bindResult = p1AssociationProtocol.decode(readFrame(in).payload());
-            if (!(bindResult instanceof P1AssociationProtocol.BindResultPdu bind) || !bind.accepted()) {
-                throw new IllegalStateException("P1 bind rejected by peer");
+            sendDataFrame(out, encodeAcseBind(message));
+            byte[] associationResponse = readFrame(in).payload();
+            boolean boundWithAcse = isAcseApplicationTag(associationResponse);
+            if (boundWithAcse) {
+                AcseModels.AcseApdu bindResult = acseAssociationProtocol.decode(associationResponse);
+                if (!(bindResult instanceof AcseModels.AAREApdu aare) || !aare.accepted()) {
+                    throw new IllegalStateException("ACSE bind rejected by peer");
+                }
+            } else {
+                P1AssociationProtocol.Pdu bindResult = p1AssociationProtocol.decode(associationResponse);
+                if (!(bindResult instanceof P1AssociationProtocol.BindResultPdu bind) || !bind.accepted()) {
+                    throw new IllegalStateException("P1 bind rejected by peer");
+                }
             }
 
             byte[] payload = encodeMessage(message);
@@ -64,8 +75,13 @@ public class Rfc1006OutboundP1Client implements OutboundP1Client {
             P1AssociationProtocol.Pdu transferResult = p1AssociationProtocol.decode(readFrame(in).payload());
             RelayTransferOutcome outcome = mapTransferOutcome(message, transferResult);
 
-            sendDataFrame(out, BerCodec.encode(new BerTlv(2, true, 2, 0, 0, new byte[0])));
-            readFrame(in);
+            if (boundWithAcse) {
+                sendDataFrame(out, acseAssociationProtocol.encode(new AcseModels.RLRQApdu(Optional.of("normal"))));
+                acseAssociationProtocol.decode(readFrame(in).payload());
+            } else {
+                sendDataFrame(out, BerCodec.encode(new BerTlv(2, true, 2, 0, 0, new byte[0])));
+                readFrame(in);
+            }
             return outcome;
         } catch (Exception ex) {
             throw new IllegalStateException("Outbound relay failure to endpoint " + endpoint, ex);
@@ -90,13 +106,20 @@ public class Rfc1006OutboundP1Client implements OutboundP1Client {
         return new RelayTransferOutcome(transferResult.accepted(), mtsIdentifier, transferResult.diagnostic(), recipients);
     }
 
-    private byte[] encodeBind(AMHSMessage message) {
-        return p1AssociationProtocol.encodeBind(
+    private byte[] encodeAcseBind(AMHSMessage message) {
+        return acseAssociationProtocol.encode(new AcseModels.AARQApdu(
+            "2.6.0.1.6.1",
             Optional.ofNullable(message.getSender()).map(String::trim).filter(s -> !s.isEmpty()),
-            Optional.ofNullable(message.getRecipient()).map(String::trim).filter(s -> !s.isEmpty()),
-            Optional.empty(),
-            Optional.empty()
-        );
+            Optional.ofNullable(message.getRecipient()).map(String::trim).filter(s -> !s.isEmpty())
+        ));
+    }
+
+    private boolean isAcseApplicationTag(byte[] payload) {
+        if (payload.length == 0) {
+            return false;
+        }
+        int tag = payload[0] & 0xFF;
+        return tag >= 0x60 && tag <= 0x64;
     }
 
     private byte[] buildConnectionRequestTpdu() {
