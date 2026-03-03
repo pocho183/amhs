@@ -7,6 +7,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -35,8 +36,30 @@ public class AMHS {
     public static void main(String[] args) {
     	SpringApplication app = new SpringApplication(AMHS.class);
     	app.setBanner((environment, sourceClass, out) -> { out.println("✈️ ✈️ ✈️  AMHS SERVER ️✈️ ✈️ ✈️️"); });
+        app.addInitializers(ctx -> configureDatabaseMode(ctx.getEnvironment()));
         app.setWebApplicationType(WebApplicationType.NONE);
         app.run(args);
+    }
+
+    private static void configureDatabaseMode(ConfigurableEnvironment environment) {
+        boolean databaseEnabled = environment.getProperty("amhs.database.enabled", Boolean.class, true);
+        if (databaseEnabled) {
+            return;
+        }
+
+        java.util.Map<String, Object> overrides = new java.util.HashMap<>();
+        overrides.put(
+            "spring.autoconfigure.exclude",
+            "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration"
+        );
+        overrides.put("spring.datasource.hikari.initializationFailTimeout", "-1");
+        overrides.put("spring.datasource.hikari.minimumIdle", "0");
+        overrides.put("spring.jpa.hibernate.ddl-auto", "none");
+        overrides.put("spring.jpa.properties.hibernate.boot.allow_jdbc_metadata_access", "false");
+        overrides.put("spring.task.scheduling.enabled", "false");
+        environment.getPropertySources().addFirst(new org.springframework.core.env.MapPropertySource("amhsNoDbOverrides", overrides));
     }
     
     @Bean
