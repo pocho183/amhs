@@ -173,6 +173,18 @@ Miglioramenti introdotti in questa versione:
 - supporto OU multipli (OU1..OU4) con validazione sequenziale;
 - validazione codice paese ISO e controllo presenza ICAO designator su uno dei livelli OU.
 
+### ACSE X.227: stato implementazione
+
+La codifica/decodifica ACSE include ora anche i blocchi principali che prima erano assenti:
+
+- negoziazione dei context di Presentation (lista OID);
+- campo `User-information` ACSE;
+- elemento `authentication-value`;
+- strutture formali `AP-title` / `AE-qualifier`;
+- contenitore `EXTERNAL` con `association information`;
+- `result-source-diagnostic` strutturato in AARE.
+
+Nota: restano possibili differenze di interoperabilità con stack X.227 rigorosi su varianti opzionali/semantiche avanzate non necessarie al profilo operativo corrente.
 
 ### Routing relay outbound (nuovo)
 

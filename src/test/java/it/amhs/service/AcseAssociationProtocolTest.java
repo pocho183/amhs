@@ -2,8 +2,11 @@ package it.amhs.service;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -24,6 +27,35 @@ class AcseAssociationProtocolTest {
     }
 
     @Test
+    void shouldEncodeAndDecodeExtendedAarqFields() {
+        byte[] auth = "secret".getBytes(StandardCharsets.US_ASCII);
+        byte[] assocInfo = "p-context".getBytes(StandardCharsets.US_ASCII);
+        AcseModels.AARQApdu aarq = new AcseModels.AARQApdu(
+            "2.6.0.1.6.1",
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.2.840.113549")),
+            Optional.of(new AcseModels.AeQualifier(4)),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1")),
+            Optional.of(new AcseModels.AeQualifier(2)),
+            Optional.of(auth),
+            Optional.of(assocInfo),
+            List.of("2.1.1", "2.1.2")
+        );
+
+        AcseModels.AARQApdu decoded = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(protocol.encode(aarq)));
+
+        assertEquals(aarq.applicationContextName(), decoded.applicationContextName());
+        assertEquals(aarq.callingApTitle(), decoded.callingApTitle());
+        assertEquals(aarq.calledApTitle(), decoded.calledApTitle());
+        assertEquals(aarq.callingAeQualifier(), decoded.callingAeQualifier());
+        assertEquals(aarq.calledAeQualifier(), decoded.calledAeQualifier());
+        assertEquals(aarq.presentationContextOids(), decoded.presentationContextOids());
+        assertArrayEquals(auth, decoded.authenticationValue().orElseThrow());
+        assertArrayEquals(assocInfo, decoded.userInformation().orElseThrow());
+    }
+
+    @Test
     void shouldEncodeAndDecodeAareApdu() {
         AcseModels.AAREApdu aare = new AcseModels.AAREApdu(true, Optional.of("accepted"));
 
@@ -32,6 +64,25 @@ class AcseAssociationProtocolTest {
 
         assertEquals(0x61, encoded[0] & 0xFF, "AARE must use [APPLICATION 1]");
         assertEquals(aare, decoded);
+    }
+
+    @Test
+    void shouldEncodeAndDecodeResultSourceDiagnosticAndUserInformation() {
+        byte[] userInfo = "assoc-info".getBytes(StandardCharsets.US_ASCII);
+        AcseModels.AAREApdu aare = new AcseModels.AAREApdu(
+            false,
+            Optional.empty(),
+            Optional.of(new AcseModels.ResultSourceDiagnostic(2, 1)),
+            Optional.of(userInfo),
+            List.of("1.0.9506.2.1")
+        );
+
+        AcseModels.AAREApdu decoded = assertInstanceOf(AcseModels.AAREApdu.class, protocol.decode(protocol.encode(aare)));
+
+        assertEquals(aare.accepted(), decoded.accepted());
+        assertEquals(aare.resultSourceDiagnostic(), decoded.resultSourceDiagnostic());
+        assertEquals(aare.presentationContextOids(), decoded.presentationContextOids());
+        assertArrayEquals(userInfo, decoded.userInformation().orElseThrow());
     }
 
     @Test

@@ -1,5 +1,6 @@
 package it.amhs.service;
 
+import java.util.List;
 import java.util.Optional;
 
 public final class AcseModels {
@@ -10,10 +11,52 @@ public final class AcseModels {
     public sealed interface AcseApdu permits AARQApdu, AAREApdu, ABRTApdu, RLRQApdu, RLREApdu {
     }
 
-    public record AARQApdu(String applicationContextName, Optional<String> callingAeTitle, Optional<String> calledAeTitle) implements AcseApdu {
+    public record ApTitle(String objectIdentifier) {
     }
 
-    public record AAREApdu(boolean accepted, Optional<String> diagnostic) implements AcseApdu {
+    public record AeQualifier(int value) {
+    }
+
+    public record ResultSourceDiagnostic(int source, int diagnostic) {
+    }
+
+    public record AARQApdu(
+        String applicationContextName,
+        Optional<String> callingAeTitle,
+        Optional<String> calledAeTitle,
+        Optional<ApTitle> callingApTitle,
+        Optional<AeQualifier> callingAeQualifier,
+        Optional<ApTitle> calledApTitle,
+        Optional<AeQualifier> calledAeQualifier,
+        Optional<byte[]> authenticationValue,
+        Optional<byte[]> userInformation,
+        List<String> presentationContextOids
+    ) implements AcseApdu {
+        public AARQApdu(String applicationContextName, Optional<String> callingAeTitle, Optional<String> calledAeTitle) {
+            this(applicationContextName, callingAeTitle, calledAeTitle,
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), List.of());
+        }
+
+        public AARQApdu {
+            presentationContextOids = List.copyOf(presentationContextOids);
+        }
+    }
+
+    public record AAREApdu(
+        boolean accepted,
+        Optional<String> diagnostic,
+        Optional<ResultSourceDiagnostic> resultSourceDiagnostic,
+        Optional<byte[]> userInformation,
+        List<String> presentationContextOids
+    ) implements AcseApdu {
+        public AAREApdu(boolean accepted, Optional<String> diagnostic) {
+            this(accepted, diagnostic, Optional.empty(), Optional.empty(), List.of());
+        }
+
+        public AAREApdu {
+            presentationContextOids = List.copyOf(presentationContextOids);
+        }
     }
 
     public record ABRTApdu(String source, Optional<String> diagnostic) implements AcseApdu {
