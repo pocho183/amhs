@@ -3,6 +3,7 @@ package it.amhs.service;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.EOFException;
+import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
@@ -47,9 +48,15 @@ public class RFC1006Service {
     private static final byte[] COTP_DATA_HEADER = new byte[] { 0x02, (byte) 0xF0, (byte) 0x80 };
     private static final byte COTP_PDU_CR = (byte) 0xE0;
     private static final byte COTP_PDU_CC = (byte) 0xD0;
+    private static final byte COTP_PDU_DR = (byte) 0x80;
+    private static final byte COTP_PDU_DC = (byte) 0xC0;
+    private static final byte COTP_PDU_ER = 0x70;
+    private static final byte COTP_PDU_ED = 0x10;
     private static final byte COTP_PDU_DT = (byte) 0xF0;
     private static final int MAX_TPKT_LENGTH = 65_535;
     private static final int MAX_DT_USER_DATA_PER_FRAME = 16_384;
+    static final String ICAO_AMHS_P1_OID = "2.6.0.1.6.1";
+    static final int RFC1006_CLASS_0 = 0;
 
     private final AMHSMessageRepository amhsMessagesRepository;
     private final MTAService mtaService;
@@ -59,6 +66,9 @@ public class RFC1006Service {
     private final String localMtaName;
     private final String localRoutingDomain;
     private final ThreadPoolExecutor priorityExecutor;
+    private final int idleTimeoutMillis;
+    private final boolean requireAcseAuthentication;
+    private final String expectedAcseAuthenticationValue;
 
     public RFC1006Service(
         AMHSMessageRepository amhsMessagesRepository,
@@ -67,7 +77,10 @@ public class RFC1006Service {
         P1AssociationProtocol p1AssociationProtocol,
         AcseAssociationProtocol acseAssociationProtocol,
         @Value("${amhs.mta.local-name:LOCAL-MTA}") String localMtaName,
-        @Value("${amhs.mta.routing-domain:LOCAL}") String localRoutingDomain
+        @Value("${amhs.mta.routing-domain:LOCAL}") String localRoutingDomain,
+        @Value("${rfc1006.idle-timeout-ms:300000}") int idleTimeoutMillis,
+        @Value("${amhs.acse.require-authentication-value:false}") boolean requireAcseAuthentication,
+        @Value("${amhs.acse.expected-authentication-value:}") String expectedAcseAuthenticationValue
     ) {
         this.amhsMessagesRepository = amhsMessagesRepository;
         this.mtaService = mtaService;
@@ -76,6 +89,9 @@ public class RFC1006Service {
         this.acseAssociationProtocol = acseAssociationProtocol;
         this.localMtaName = localMtaName;
         this.localRoutingDomain = localRoutingDomain;
+        this.idleTimeoutMillis = idleTimeoutMillis;
+        this.requireAcseAuthentication = requireAcseAuthentication;
+        this.expectedAcseAuthenticationValue = expectedAcseAuthenticationValue == null ? "" : expectedAcseAuthenticationValue;
         this.priorityExecutor = new ThreadPoolExecutor(
             1,
             1,
@@ -87,6 +103,7 @@ public class RFC1006Service {
 
     public void handleClient(SSLSocket socket) {
         try (InputStream in = socket.getInputStream(); OutputStream out = socket.getOutputStream()) {
+            socket.setSoTimeout(idleTimeoutMillis);
             CertificateIdentity identity = extractCertificateIdentity(socket);
             ByteArrayOutputStream segmentedPayload = new ByteArrayOutputStream();
             P1AssociationState associationState = new P1AssociationState(false, MAX_DT_USER_DATA_PER_FRAME);
@@ -99,8 +116,27 @@ public class RFC1006Service {
 
                 if (frame.type == COTP_PDU_CR) {
                     CotpConnectionTpdu request = CotpConnectionTpdu.parse(frame.payload);
+                    validateClassNegotiation(request.tpduClass());
                     associationState.negotiatedMaxUserData = Math.min(MAX_DT_USER_DATA_PER_FRAME, request.negotiatedMaxUserData());
                     sendConnectionConfirm(out, request);
+                    continue;
+                }
+
+                if (frame.type == COTP_PDU_DR) {
+                    logger.info("Peer requested RFC1006 disconnect");
+                    sendDisconnectConfirm(out);
+                    break;
+                }
+
+                if (frame.type == COTP_PDU_ER) {
+                    logger.warn("Received COTP ER TPDU; closing association");
+                    associationState.active = false;
+                    break;
+                }
+
+                if (frame.type == COTP_PDU_ED) {
+                    logger.warn("Expedited data TPDU is not supported in this profile");
+                    sendErrorTpdu(out, (byte) 0x01);
                     continue;
                 }
 
@@ -157,6 +193,8 @@ public class RFC1006Service {
                     sendRFC1006(out, nack);
                 }
             }
+        } catch (SocketTimeoutException timeout) {
+            logger.info("RFC1006 idle timeout reached, closing client session after {} ms", idleTimeoutMillis);
         } catch (Exception e) {
             logger.error("RFC1006 handling error", e);
         } finally {
@@ -182,7 +220,7 @@ public class RFC1006Service {
         CertificateIdentity identity
     ) throws Exception {
         if ((payload[0] & 0xFF) >= 0x60 && (payload[0] & 0xFF) <= 0x64) {
-            handleAcseAssociationPdu(payload, out, associationState);
+            handleAcseAssociationPdu(payload, out, associationState, identity);
             return;
         }
 
@@ -266,7 +304,7 @@ public class RFC1006Service {
         }
     }
 
-    private void handleAcseAssociationPdu(byte[] payload, OutputStream out, P1AssociationState associationState) throws Exception {
+    private void handleAcseAssociationPdu(byte[] payload, OutputStream out, P1AssociationState associationState, CertificateIdentity identity) throws Exception {
         AcseModels.AcseApdu apdu;
         try {
             apdu = acseAssociationProtocol.decode(payload);
@@ -277,6 +315,7 @@ public class RFC1006Service {
         }
 
         if (apdu instanceof AcseModels.AARQApdu aarq) {
+            validateAarqForAmhsP1(aarq, identity.cn(), identity.ou());
             associationState.bound = true;
             associationState.active = true;
             logger.info("Accepted ACSE AARQ for application context {}", aarq.applicationContextName());
@@ -299,6 +338,51 @@ public class RFC1006Service {
         }
 
         logger.info("Received ACSE {} while waiting for P1 transfer PDUs", apdu.getClass().getSimpleName());
+    }
+
+    void validateClassNegotiation(int tpduClass) {
+        if (tpduClass != RFC1006_CLASS_0) {
+            throw new IllegalArgumentException("Unsupported COTP class negotiation " + tpduClass + "; only class 0 is supported");
+        }
+    }
+
+    void validateAarqForAmhsP1(AcseModels.AARQApdu aarq, String certificateCn, String certificateOu) {
+        if (!ICAO_AMHS_P1_OID.equals(aarq.applicationContextName())) {
+            throw new IllegalArgumentException("Unsupported ACSE application-context OID " + aarq.applicationContextName());
+        }
+
+        if (StringUtils.hasText(certificateCn) || StringUtils.hasText(certificateOu)) {
+            String callingAe = aarq.callingAeTitle().map(this::normalized).orElse("");
+            if (!StringUtils.hasText(callingAe)) {
+                throw new IllegalArgumentException("ACSE calling AE-title is mandatory when peer certificate identity is present");
+            }
+            String certCn = normalized(certificateCn);
+            String certOu = normalized(certificateOu);
+            if (!callingAe.equals(certCn) && !callingAe.equals(certOu)) {
+                throw new IllegalArgumentException("ACSE calling AE-title is not bound to peer certificate identity");
+            }
+        }
+
+        if (requireAcseAuthentication && aarq.authenticationValue().isEmpty()) {
+            throw new IllegalArgumentException("ACSE authentication-value is mandatory");
+        }
+        if (StringUtils.hasText(expectedAcseAuthenticationValue)) {
+            String suppliedAuth = aarq.authenticationValue().map(v -> new String(v, StandardCharsets.UTF_8)).orElse("");
+            if (!expectedAcseAuthenticationValue.equals(suppliedAuth)) {
+                throw new IllegalArgumentException("ACSE authentication-value verification failed");
+            }
+        }
+
+        if (aarq.presentationContextOids().isEmpty()) {
+            throw new IllegalArgumentException("ACSE presentation-layer negotiation is missing presentation contexts");
+        }
+        if (!aarq.presentationContextOids().contains(ICAO_AMHS_P1_OID)) {
+            throw new IllegalArgumentException("ACSE presentation contexts do not negotiate AMHS P1 abstract syntax");
+        }
+    }
+
+    private String normalized(String value) {
+        return value == null ? "" : value.trim().toUpperCase();
     }
 
     private void storeWithStrictPriority(IncomingMessage incoming) {
@@ -568,8 +652,19 @@ public class RFC1006Service {
             }
             byte type = (byte) (cotpTpdu[1] & (byte) 0xF0);
 
-            if (type == COTP_PDU_CR || type == COTP_PDU_CC) {
+            if (type == COTP_PDU_CR || type == COTP_PDU_CC || type == COTP_PDU_DR || type == COTP_PDU_DC || type == COTP_PDU_ER) {
                 return new COTPFrame(type, true, cotpTpdu);
+            }
+
+            if (type == COTP_PDU_ED) {
+                if (lengthIndicator < 2) {
+                    throw new IllegalArgumentException("Invalid COTP ED header length indicator: " + lengthIndicator);
+                }
+                boolean eot = (cotpTpdu[2] & (byte) 0x80) != 0;
+                int dataOffset = lengthIndicator + 1;
+                byte[] userData = new byte[cotpTpdu.length - dataOffset];
+                System.arraycopy(cotpTpdu, dataOffset, userData, 0, userData.length);
+                return new COTPFrame(type, eot, userData);
             }
 
             if (type == COTP_PDU_DT) {
@@ -636,6 +731,18 @@ public class RFC1006Service {
             requestTpdu.unknownParameters()
         );
         sendTpktFrame(out, confirm.serialize());
+        out.flush();
+    }
+
+    private void sendDisconnectConfirm(OutputStream out) throws Exception {
+        byte[] tpdu = new byte[] {0x06, COTP_PDU_DC, 0x00, 0x00, 0x00, 0x00, 0x00};
+        sendTpktFrame(out, tpdu);
+        out.flush();
+    }
+
+    private void sendErrorTpdu(OutputStream out, byte rejectCause) throws Exception {
+        byte[] tpdu = new byte[] {0x02, COTP_PDU_ER, rejectCause};
+        sendTpktFrame(out, tpdu);
         out.flush();
     }
 
