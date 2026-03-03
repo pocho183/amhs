@@ -8,7 +8,7 @@ This matrix is intended to close the "documentation layer" gap by mapping expect
 |---|---|---|---|
 | RFC1006/COTP | Validate CR/CC, segmentation, DR/ER, limits | `CotpConnectionTpduTest`, `RFC1006ServiceTest` | Add high-volume soak + malformed TPDU corpus results |
 | ACSE (X.227) | Validate AARQ/AARE, context handling, diagnostics | `AcseAssociationProtocolTest`, `AcseModelsTest`, `PresentationContextTest` | Add strict ATN ACSE profile vectors and negative diagnostics matrix |
-| ASN.1/BER | Validate tag/length/value robustness | `BerCodecTest`, `P1BerMessageParserTest` | Expand traceability from tag-map baseline to formal ASN.1 compiler-generated module proof |
+| ASN.1/BER | Validate tag/length/value robustness | `BerCodecTest`, `P1BerMessageParserTest` | Add official X.411 module tag traceability table |
 | P1 handling | Validate envelope/content, recipient and trace behaviors | `P1AssociationProtocolTest`, parser tests | Add interoperability captures against certified MTA |
 | O/R Address | Validate address grammar and policy checks | `ORAddressTest`, `AMHSComplianceValidatorTest` | Expand to full ORName CHOICE and legacy string variants |
 | Security/PKI | Validate identity binding and TLS behavior | `AMHSComplianceValidatorTest`, TLS runtime config | Add CRL/OCSP tests and ATN PKI profile statement |

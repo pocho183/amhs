@@ -35,21 +35,21 @@ Legend:
 | T-06 | Idle timeout / frame size guard | Y | Idle and max-frame controls enforced. |
 | A-01 | ACSE AARQ decoding and checks | Y | Application context and identity checks. |
 | A-02 | ACSE AARE structured response | Y | Result + diagnostic container emitted. |
-| A-03 | Presentation context negotiation | Y | Enforced non-empty AMHS P1 context, duplicate rejection, and strict SEQUENCE/OID decoding. |
-| A-04 | ACSE user-information semantics | Y | User-information is mandatory for AMHS association, non-empty, and size-bounded. |
-| A-05 | AP-title / AE-qualifier structures | Y | Calling/called AP-title and AE-title/AE-qualifier structural pairing rules are enforced. |
-| A-06 | Authentication-value semantics | Y | Presence policy, non-empty validation, and expected-value verification are enforced. |
+| A-03 | Presentation context negotiation | P | Basic negotiation; strict profile coverage incomplete. |
+| A-04 | ACSE user-information semantics | P | Parsed/encoded, limited semantic enforcement. |
+| A-05 | AP-title / AE-qualifier structures | P | Formal containers present, profile completeness pending. |
+| A-06 | Authentication-value semantics | P | Field support present, policy semantics limited. |
 | P1-01 | BER parsing for P1-like envelope | Y | Structured BER/TLV support in parser. |
 | P1-02 | Envelope/content separation | Y | Envelope and content are separated. |
 | P1-03 | Per-recipient handling | Y | Per-recipient routing state supported. |
 | P1-04 | Trace information handling | Y | Trace extraction/injection supported. |
 | P1-05 | Unknown extension preservation | Y | Unknown extension containers retained. |
-| P1-06 | Full X.411 ASN.1 module conformance | P | Tag traceability matrix and runtime tag guardrails implemented; formal ASN.1 compiler-generated proof package still pending. |
+| P1-06 | Full X.411 ASN.1 module conformance | N | Official module-derived encoding proof not yet provided. |
 | OR-01 | Structured O/R Address parsing | Y | Supports keyed O/R attribute model. |
 | OR-02 | OU sequencing validation (OU1..OU4) | Y | Enforces non-skipping OU order. |
 | OR-03 | ISO/Numeric country validation | Y | Country checks for C attribute. |
 | OR-04 | Full ORName CHOICE coverage | P | Simplified support; full grammar pending. |
-| OR-05 | Teletex/DirectoryName compatibility | Y | ORName BER decoding now supports TeletexString/BMPString and constructed DirectoryName extraction. |
+| OR-05 | Teletex/DirectoryName compatibility | N | Not fully implemented. |
 | SEC-01 | TLS transport protection | Y | Server TLS supported; optional client auth. |
 | SEC-02 | Certificate CN/OU channel policy | Y | Channel policy and sender binding checks. |
 | SEC-03 | Full PKI path validation profile | P | Depends on JVM trust/PKIX; ATN profile hardening pending. |
@@ -75,3 +75,4 @@ Legend:
 - Transport and parser tests under `src/test/java/it/amhs/service/`.
 - BER codec tests under `src/test/java/it/amhs/asn1/`.
 - Compliance and address validation tests under `src/test/java/it/amhs/compliance/` and `src/test/java/it/amhs/service/ORAddressTest.java`.
+
