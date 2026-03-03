@@ -44,6 +44,11 @@ class RFC1006ServiceTest {
     }
 
     @Test
+    void shouldAcceptLegacyClass0OptionsValue() {
+        service.validateClassNegotiation(0x0A);
+    }
+
+    @Test
     void shouldRejectNonClass0Negotiation() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.validateClassNegotiation(4));
         assertTrue(ex.getMessage().contains("only class 0"));
