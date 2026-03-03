@@ -16,7 +16,7 @@ import it.amhs.security.TLSContextFactory;
 @SpringBootApplication
 @EnableScheduling
 public class AMHS {
-
+	
     @Value("${rfc1006.server.port}")
     private int serverPort;
     @Value("${tls.keystore.path}")
@@ -34,7 +34,7 @@ public class AMHS {
 
     public static void main(String[] args) {
     	SpringApplication app = new SpringApplication(AMHS.class);
-        app.setBanner((environment, sourceClass, out) -> { out.println("✈️ ✈️ ✈️  AMHS SERVER ️✈️ ✈️ ✈️️"); });
+    	app.setBanner((environment, sourceClass, out) -> { out.println("✈️ ✈️ ✈️  AMHS SERVER ️✈️ ✈️ ✈️️"); });
         app.setWebApplicationType(WebApplicationType.NONE);
         app.run(args);
     }

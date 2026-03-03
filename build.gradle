@@ -21,6 +21,14 @@ allprojects {
 
 }
 
+jar {
+    manifest {
+        attributes(
+            'Main-Class': 'it.amhs.AMHS'
+        )
+    }
+}
+
 dependencies {
 	runtimeOnly fileTree('libs') { include '*.jar' }
 	compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.32'
