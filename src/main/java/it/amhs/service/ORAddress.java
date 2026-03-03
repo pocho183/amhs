@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.springframework.util.StringUtils;
@@ -13,10 +12,10 @@ import org.springframework.util.StringUtils;
 public final class ORAddress {
 
     private static final List<String> CANONICAL_ORDER = List.of("C", "ADMD", "PRMD", "O", "OU1", "OU2", "OU3", "OU4", "CN");
-    private static final Set<String> ALLOWED_ATTRIBUTES = Set.copyOf(CANONICAL_ORDER);
+    private static final Pattern EXTENSION_KEY = Pattern.compile("^(EXT|X)-[A-Z0-9][A-Z0-9-]{0,31}$");
     private static final Pattern PRINTABLE_STRING = Pattern.compile("^[A-Z0-9 '(),\\-.:=?]*$");
     private static final Pattern IA5_STRING = Pattern.compile("^[\\x20-\\x7E]*$");
-    private static final Set<Character> DISALLOWED_VALUE_CHARS = Set.of('/', '+', '"');
+    private static final List<Character> DISALLOWED_VALUE_CHARS = List.of('/', '+', '"');
     private static final Map<String, Integer> MAX_LENGTHS = Map.of(
         "C", 2,
         "ADMD", 16,
@@ -39,16 +38,27 @@ public final class ORAddress {
         Map<String, String> normalized = new LinkedHashMap<>();
         for (String key : CANONICAL_ORDER) {
             String value = attrs.get(key);
-            if (StringUtils.hasText(value)) {
-                normalized.put(key, value.trim());
+            if (hasEffectiveValue(key, value)) {
+                normalized.put(key, normalizedValue(key, value));
             }
         }
         attrs.forEach((key, value) -> {
-            if (!normalized.containsKey(key) && StringUtils.hasText(value)) {
-                normalized.put(key, value.trim());
+            if (!normalized.containsKey(key) && hasEffectiveValue(key, value)) {
+                normalized.put(key, normalizedValue(key, value));
             }
         });
         return new ORAddress(normalized);
+    }
+
+    private static boolean hasEffectiveValue(String key, String value) {
+        return StringUtils.hasText(value) || ("ADMD".equals(key) && " ".equals(value));
+    }
+
+    private static String normalizedValue(String key, String value) {
+        if ("ADMD".equals(key) && " ".equals(value)) {
+            return " ";
+        }
+        return value.trim();
     }
 
     public static ORAddress parse(String address) {
@@ -65,9 +75,9 @@ public final class ORAddress {
 
             String[] keyValue = token.split("=", 2);
             String key = normalizeKey(keyValue[0]);
-            String value = keyValue[1].trim();
+            String value = normalizeValue(key, keyValue[1]);
 
-            if (!StringUtils.hasText(key) || !StringUtils.hasText(value)) {
+            if (!StringUtils.hasText(key) || (!StringUtils.hasText(value) && !("ADMD".equals(key) && " ".equals(value)))) {
                 continue;
             }
             validateAttribute(key, value);
@@ -104,10 +114,30 @@ public final class ORAddress {
 
     public String toCanonicalString() {
         StringBuilder builder = new StringBuilder();
+        for (String key : CANONICAL_ORDER) {
+            if (!attributes.containsKey(key)) {
+                continue;
+            }
+            builder.append('/').append(key).append('=').append(attributes.get(key));
+        }
         for (Map.Entry<String, String> entry : attributes.entrySet()) {
+            if (CANONICAL_ORDER.contains(entry.getKey())) {
+                continue;
+            }
             builder.append('/').append(entry.getKey()).append('=').append(entry.getValue());
         }
         return builder.toString();
+    }
+
+    private static String normalizeValue(String key, String rawValue) {
+        if (rawValue == null) {
+            return "";
+        }
+        String trimmed = rawValue.trim();
+        if ("ADMD".equals(key) && ("\" \"".equals(trimmed) || "\"\"".equals(trimmed))) {
+            return " ";
+        }
+        return trimmed;
     }
 
     private static String normalizeKey(String rawKey) {
@@ -121,14 +151,19 @@ public final class ORAddress {
     }
 
     private static void validateAttribute(String key, String rawValue) {
-        if (!ALLOWED_ATTRIBUTES.contains(key)) {
+        if (!CANONICAL_ORDER.contains(key) && !EXTENSION_KEY.matcher(key).matches()) {
             throw new IllegalArgumentException("Unsupported O/R attribute: " + key);
         }
 
-        String value = rawValue.trim().toUpperCase();
+        String value = rawValue == null ? "" : rawValue;
         Integer maxLength = MAX_LENGTHS.get(key);
-        if (maxLength != null && value.length() > maxLength) {
-            throw new IllegalArgumentException("O/R attribute " + key + " exceeds max length " + maxLength);
+        int effectiveMaxLength = maxLength == null ? 256 : maxLength;
+        if (value.length() > effectiveMaxLength) {
+            throw new IllegalArgumentException("O/R attribute " + key + " exceeds max length " + effectiveMaxLength);
+        }
+
+        if ("C".equals(key) && !value.matches("^[A-Z]{2}$|^\\d{3}$")) {
+            throw new IllegalArgumentException("O/R attribute C must be alpha-2 or numeric-3 country code");
         }
 
         for (char ch : value.toCharArray()) {
@@ -138,7 +173,7 @@ public final class ORAddress {
         }
 
         if (!IA5_STRING.matcher(value).matches()) {
-            throw new IllegalArgumentException("O/R attribute " + key + " must be IA5 compatible");
+            return;
         }
 
         if (!PRINTABLE_STRING.matcher(value).matches()) {

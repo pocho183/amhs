@@ -59,6 +59,14 @@ public class P1BerMessageParser {
         }
     }
 
+    private String mapOriginator(BerTlv originator) {
+        try {
+            return ORNameMapper.fromBer(originator).orAddress().toCanonicalString();
+        } catch (IllegalArgumentException ex) {
+            return new String(originator.value(), StandardCharsets.UTF_8);
+        }
+    }
+
     private TransferEnvelope parseTransferEnvelope(List<BerTlv> fields) {
         Optional<BerTlv> envelopeTlv = BerCodec.findOptional(fields, 2, 9).filter(BerTlv::constructed);
         if (envelopeTlv.isEmpty()) {
@@ -83,7 +91,7 @@ public class P1BerMessageParser {
             .map(this::parseContentTypeOid);
 
         Optional<String> originator = BerCodec.findOptional(envelopeFields, 2, X411TagMap.ENVELOPE_ORIGINATOR)
-            .map(value -> new String(value.value(), StandardCharsets.US_ASCII));
+            .map(this::mapOriginator);
 
         Optional<SecurityParameters> securityParameters = BerCodec.findOptional(envelopeFields, 2, X411TagMap.ENVELOPE_SECURITY_PARAMETERS)
             .filter(BerTlv::constructed)
