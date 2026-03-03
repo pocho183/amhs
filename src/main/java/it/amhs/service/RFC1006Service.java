@@ -11,9 +11,11 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -55,6 +57,7 @@ public class RFC1006Service {
     private static final byte COTP_PDU_DT = (byte) 0xF0;
     private static final int MAX_TPKT_LENGTH = 65_535;
     private static final int MAX_DT_USER_DATA_PER_FRAME = 16_384;
+    private static final int MAX_ACSE_USER_INFORMATION_SIZE = 4_096;
     static final String ICAO_AMHS_P1_OID = "2.6.0.1.6.1";
     static final int RFC1006_CLASS_0 = 0;
 
@@ -351,6 +354,11 @@ public class RFC1006Service {
             throw new IllegalArgumentException("Unsupported ACSE application-context OID " + aarq.applicationContextName());
         }
 
+        validateAarqPresentationContexts(aarq);
+        validateAarqEntityTitles(aarq);
+        validateAarqAuthentication(aarq);
+        validateAarqUserInformation(aarq);
+
         if (StringUtils.hasText(certificateCn) || StringUtils.hasText(certificateOu)) {
             String callingAe = aarq.callingAeTitle().map(this::normalized).orElse("");
             if (!StringUtils.hasText(callingAe)) {
@@ -363,21 +371,65 @@ public class RFC1006Service {
             }
         }
 
-        if (requireAcseAuthentication && aarq.authenticationValue().isEmpty()) {
-            throw new IllegalArgumentException("ACSE authentication-value is mandatory");
-        }
         if (StringUtils.hasText(expectedAcseAuthenticationValue)) {
             String suppliedAuth = aarq.authenticationValue().map(v -> new String(v, StandardCharsets.UTF_8)).orElse("");
             if (!expectedAcseAuthenticationValue.equals(suppliedAuth)) {
                 throw new IllegalArgumentException("ACSE authentication-value verification failed");
             }
         }
+    }
 
+    private void validateAarqPresentationContexts(AcseModels.AARQApdu aarq) {
         if (aarq.presentationContextOids().isEmpty()) {
             throw new IllegalArgumentException("ACSE presentation-layer negotiation is missing presentation contexts");
         }
         if (!aarq.presentationContextOids().contains(ICAO_AMHS_P1_OID)) {
             throw new IllegalArgumentException("ACSE presentation contexts do not negotiate AMHS P1 abstract syntax");
+        }
+        Set<String> seen = new HashSet<>();
+        for (String oid : aarq.presentationContextOids()) {
+            if (!StringUtils.hasText(oid)) {
+                throw new IllegalArgumentException("ACSE presentation context OID must not be empty");
+            }
+            if (!seen.add(oid)) {
+                throw new IllegalArgumentException("ACSE presentation contexts must not contain duplicates");
+            }
+        }
+    }
+
+    private void validateAarqEntityTitles(AcseModels.AARQApdu aarq) {
+        validateAeTitlePair("calling", aarq.callingApTitle().isPresent(), aarq.callingAeTitle().isPresent(), aarq.callingAeQualifier().isPresent());
+        validateAeTitlePair("called", aarq.calledApTitle().isPresent(), aarq.calledAeTitle().isPresent(), aarq.calledAeQualifier().isPresent());
+    }
+
+    private void validateAeTitlePair(String side, boolean hasApTitle, boolean hasAeTitle, boolean hasAeQualifier) {
+        if (hasApTitle && !hasAeTitle && !hasAeQualifier) {
+            throw new IllegalArgumentException("ACSE " + side + " AP-title requires AE-title or AE-qualifier");
+        }
+        if ((hasAeTitle || hasAeQualifier) && !hasApTitle) {
+            throw new IllegalArgumentException("ACSE " + side + " AE-title/AE-qualifier requires AP-title");
+        }
+    }
+
+    private void validateAarqAuthentication(AcseModels.AARQApdu aarq) {
+        if (requireAcseAuthentication && aarq.authenticationValue().isEmpty()) {
+            throw new IllegalArgumentException("ACSE authentication-value is mandatory");
+        }
+        if (aarq.authenticationValue().isPresent() && aarq.authenticationValue().get().length == 0) {
+            throw new IllegalArgumentException("ACSE authentication-value cannot be empty when provided");
+        }
+    }
+
+    private void validateAarqUserInformation(AcseModels.AARQApdu aarq) {
+        if (aarq.userInformation().isEmpty()) {
+            throw new IllegalArgumentException("ACSE user-information is mandatory for AMHS association information");
+        }
+        int size = aarq.userInformation().get().length;
+        if (size == 0) {
+            throw new IllegalArgumentException("ACSE user-information must carry association information");
+        }
+        if (size > MAX_ACSE_USER_INFORMATION_SIZE) {
+            throw new IllegalArgumentException("ACSE user-information exceeds profile maximum size");
         }
     }
 
