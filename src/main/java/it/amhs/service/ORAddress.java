@@ -17,7 +17,7 @@ public final class ORAddress {
     private static final Pattern IA5_STRING = Pattern.compile("^[\\x20-\\x7E]*$");
     private static final List<Character> DISALLOWED_VALUE_CHARS = List.of('/', '+', '"');
     private static final Map<String, Integer> MAX_LENGTHS = Map.of(
-        "C", 2,
+        "C", 3,
         "ADMD", 16,
         "PRMD", 16,
         "O", 64,
