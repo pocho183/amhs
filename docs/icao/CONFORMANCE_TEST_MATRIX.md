@@ -13,7 +13,7 @@ This matrix is intended to close the "documentation layer" gap by mapping expect
 | O/R Address | Validate address grammar and policy checks | `ORAddressTest`, `AMHSComplianceValidatorTest` | Expand to full ORName CHOICE and legacy string variants |
 | Security/PKI | Validate identity binding and TLS behavior | `AMHSComplianceValidatorTest`, TLS runtime config | Add CRL/OCSP tests and ATN PKI profile statement |
 | Routing/S&F | Validate route selection, retries, fallback, loop detect | `RelayRoutingServiceTest`, `OutboundRelayEngineTest` | Add sustained-load and recovery tests |
-| DR/NDR | Validate report lifecycle and correlation | `AMHSDeliveryReportService` + repository/domain model | Add protocol-level DR/NDR correlation campaign with peer fixtures |
+| DR/NDR | Validate report lifecycle and correlation | `AMHSDeliveryReportService` + repository/domain model | Add peer-wire campaign proving canonical ITU-T X.411 ASN.1 tag numbering (current checks are profile-table based) |
 | Operations | Validate 24/7 reliability and observability | `OPERATIONS_GUIDE.md` operational notes | Add SLOs, failover drills, backup/restore evidence |
 
 ## 2. Required evidence package for external assessment

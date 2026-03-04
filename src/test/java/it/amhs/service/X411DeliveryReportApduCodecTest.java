@@ -2,6 +2,7 @@ package it.amhs.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
@@ -59,6 +60,24 @@ class X411DeliveryReportApduCodecTest {
             X411DeliveryReportApduCodec.ReportedRecipientInfo.from("/CN=OPS-1", AMHSDeliveryStatus.FAILED, "X411:16");
 
         assertEquals(16, info.diagnosticCode());
+    }
+
+
+    @Test
+    void validatesEncodedNonDeliveryReportAgainstProfileTagTable() {
+        X411DeliveryReportApduCodec.NonDeliveryReportApdu source = new X411DeliveryReportApduCodec.NonDeliveryReportApdu(
+            "MTS-321",
+            false,
+            List.of(new X411DeliveryReportApduCodec.ReportedRecipientInfo("/CN=OPS-1", "FAILED", "X411:22")),
+            "transfer-failure"
+        );
+
+        byte[] encoded = codec.encodeNonDeliveryReport(source);
+        X411DeliveryReportApduCodec.ValidationResult validation = codec.validateEncodedNonDeliveryReport(encoded);
+
+        assertEquals(X411TagMap.TAG_CLASS_CONTEXT, validation.tagClass());
+        assertEquals(X411TagMap.APDU_NON_DELIVERY_REPORT, validation.tagNumber());
+        assertTrue(validation.fieldCount() >= 3);
     }
 
     @Test
