@@ -1,6 +1,7 @@
 package it.amhs.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,26 @@ class X411DiagnosticMapperTest {
     }
 
     @Test
+    void supportsAdditionalX411ReasonKeywords() {
+        assertEquals(
+            X411Diagnostic.ReasonCode.CONVERSION_NOT_ALLOWED,
+            mapper.mapDiagnostic("conversion-not-allowed", "gateway policy", null).reasonCode()
+        );
+        assertEquals(
+            X411Diagnostic.ReasonCode.CONTENT_TYPE_NOT_SUPPORTED,
+            mapper.mapDiagnostic("content-type-not-supported", "unsupported body part", null).reasonCode()
+        );
+        assertEquals(
+            X411Diagnostic.ReasonCode.RECIPIENT_REASSIGNED,
+            mapper.mapDiagnostic("recipient-reassigned", "new OR-address", null).reasonCode()
+        );
+        assertEquals(
+            X411Diagnostic.ReasonCode.EXPANSION_FAILED,
+            mapper.mapDiagnostic("expansion-failed", "dl lookup failed", null).reasonCode()
+        );
+    }
+
+    @Test
     void normalizesInvalidDiagnosticCodesToDefault() {
         assertEquals("X411:31", mapper.map("reason-code=9", "diagnostic-code=999"));
     }
@@ -58,5 +79,17 @@ class X411DiagnosticMapperTest {
     @Test
     void fallsBackToGeneralFailure() {
         assertEquals("X411:31", mapper.map("unexpected-issue", "opaque diagnostics"));
+    }
+
+    @Test
+    void supportsStrictAsn1MappingForKnownCodes() {
+        X411Diagnostic diagnostic = mapper.mapDiagnosticFromAsn1Codes(15, 6);
+        assertEquals(X411Diagnostic.ReasonCode.RECIPIENT_REASSIGNED, diagnostic.reasonCode());
+        assertEquals("X411:6", diagnostic.toPersistenceCode());
+    }
+
+    @Test
+    void rejectsUnknownReasonCodeInStrictAsn1Mapping() {
+        assertThrows(IllegalArgumentException.class, () -> mapper.mapDiagnosticFromAsn1Codes(99, 6));
     }
 }
