@@ -44,7 +44,7 @@ Legend:
 | P1-03 | Per-recipient handling | Y | Per-recipient routing state supported. |
 | P1-04 | Trace information handling | Y | Trace extraction/injection supported. |
 | P1-05 | Unknown extension preservation | Y | Unknown extension containers retained. |
-| P1-06 | Full X.411 ASN.1 module conformance | Y | Full compiler-generated X.411 module coverage and BER evidence package are complete and traceable. |
+| P1-06 | Full X.411 ASN.1 module conformance | N | Runtime profile tag-table checks and DR/NDR BER evidence are implemented, but canonical module-level ASN.1 proof is still pending. |
 | OR-01 | Structured O/R Address parsing | Y | Supports keyed O/R attribute model. |
 | OR-02 | OU sequencing validation (OU1..OU4) | Y | Enforces non-skipping OU order. |
 | OR-03 | ISO/Numeric country validation | Y | Country checks for C attribute. |
@@ -64,13 +64,11 @@ Legend:
 
 ## 4. ICAO readiness closure summary
 
-All previously identified gaps are now closed for this implementation profile:
+Open closure items for certification:
 
-1. Formal ASN.1 compiler-generated proof package against official X.411 modules is complete and traceable.
-2. ORName/ORAddress edge-case grammar and legacy interoperability vectors are fully validated.
-3. Security profile hardening now includes explicit CRL/OCSP runtime enforcement and ATN PKI policy checks.
-4. Interoperability validation evidence against certified AMHS peer implementations is recorded and preserved.
-5. Clustered HA failover guarantees are defined, tested, and documented for operational conformance.
+1. Formal ASN.1 compiler-generated proof package against official X.411 modules remains pending.
+2. Canonical APDU tag-number alignment against ITU-T module tables must be demonstrated with wire captures.
+3. Interoperability validation evidence against certified AMHS peer implementations must be expanded for DR/NDR exchanges.
 
 ## 5. Evidence pointers in this repository
 
