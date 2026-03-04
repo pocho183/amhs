@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import it.amhs.domain.AMHSMessage;
+import it.amhs.domain.AMHSDeliveryStatus;
 import it.amhs.domain.AMHSMessageState;
 import it.amhs.repository.AMHSMessageRepository;
 
@@ -135,6 +136,20 @@ public class OutboundRelayEngine {
         message.setLifecycleState(AMHSMessageState.FAILED);
         message.setDeadLetterReason(reason);
         message.setNextRetryAt(null);
+        deliveryReportService.createNonDeliveryReport(message, reason, deadLetterDiagnosticCode(reason), AMHSDeliveryStatus.FAILED);
         messageRepository.save(message);
+    }
+
+    private String deadLetterDiagnosticCode(String reason) {
+        if ("loop-detected".equalsIgnoreCase(reason)) {
+            return "X411:21";
+        }
+        if ("no-route".equalsIgnoreCase(reason)) {
+            return "X411:22";
+        }
+        if ("max-attempts-exceeded".equalsIgnoreCase(reason)) {
+            return "X411:16";
+        }
+        return "X411:31";
     }
 }
