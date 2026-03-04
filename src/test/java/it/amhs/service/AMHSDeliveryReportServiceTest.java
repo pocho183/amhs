@@ -1,6 +1,7 @@
 package it.amhs.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -63,6 +64,9 @@ class AMHSDeliveryReportServiceTest {
         assertEquals("X411:22", captor.getValue().getX411DiagnosticCode());
         assertEquals(AMHSDeliveryStatus.FAILED, captor.getValue().getDeliveryStatus());
         assertEquals("MSG::MSG-2", captor.getValue().getCorrelationToken());
+        assertNotNull(captor.getValue().getNdrApduRawBerHex());
+        assertEquals(X411TagMap.TAG_CLASS_CONTEXT, captor.getValue().getNdrApduTagClass());
+        assertEquals(X411TagMap.APDU_NON_DELIVERY_REPORT, captor.getValue().getNdrApduTagNumber());
     }
 
     @Test
@@ -93,6 +97,7 @@ class AMHSDeliveryReportServiceTest {
         assertEquals(AMHSDeliveryStatus.FAILED, reports.get(0).getDeliveryStatus());
         assertEquals("/C=IT/ADMD=ICAO/PRMD=ENAV/O=ATC/CN=OPS-1", reports.get(0).getRecipient());
         assertEquals("X411:22", reports.get(0).getX411DiagnosticCode());
+        assertNotNull(reports.get(0).getNdrApduRawBerHex());
 
         assertEquals(AMHSDeliveryStatus.DEFERRED, reports.get(1).getDeliveryStatus());
         assertEquals("/C=IT/ADMD=ICAO/PRMD=ENAV/O=ATC/CN=OPS-2", reports.get(1).getRecipient());

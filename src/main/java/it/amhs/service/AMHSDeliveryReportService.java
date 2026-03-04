@@ -58,6 +58,8 @@ public class AMHSDeliveryReportService {
             AMHSReportType.DR,
             AMHSDeliveryStatus.DELIVERED,
             "X411:0",
+            null,
+            null,
             null
         );
         deliveryReportRepository.save(report);
@@ -96,6 +98,8 @@ public class AMHSDeliveryReportService {
                 return X411DeliveryReportApduCodec.ReportedRecipientInfo.from(entry.getKey(), status, diagnostic.toPersistenceCode());
             })
             .collect(Collectors.toList());
+        byte[] rawNdrApdu = null;
+        X411DeliveryReportApduCodec.ValidationResult validationResult = null;
         if (!reportedRecipientInfo.isEmpty()) {
             X411DeliveryReportApduCodec.NonDeliveryReportApdu apdu = new X411DeliveryReportApduCodec.NonDeliveryReportApdu(
                 message.getMtsIdentifier() == null ? message.getMessageId() : message.getMtsIdentifier(),
@@ -103,7 +107,8 @@ public class AMHSDeliveryReportService {
                 reportedRecipientInfo,
                 outcome.diagnostic()
             );
-            reportApduCodec.encodeNonDeliveryReport(apdu);
+            rawNdrApdu = reportApduCodec.encodeNonDeliveryReport(apdu);
+            validationResult = reportApduCodec.validateEncodedNonDeliveryReport(rawNdrApdu);
         }
 
         Map<Integer, String> deferredDiagnostics = new LinkedHashMap<>();
@@ -119,7 +124,7 @@ public class AMHSDeliveryReportService {
             AMHSDeliveryStatus status = diagnostic.transientFailure() || recipientOutcome.status() == 1
                 ? AMHSDeliveryStatus.DEFERRED
                 : AMHSDeliveryStatus.FAILED;
-            createNonDeliveryReportForRecipient(message, entry.getKey(), reason, diagnostic.toPersistenceCode(), status);
+            createNonDeliveryReportForRecipient(message, entry.getKey(), reason, diagnostic.toPersistenceCode(), status, rawNdrApdu, validationResult);
 
             if (status == AMHSDeliveryStatus.DEFERRED) {
                 deferredDiagnostics.put(recipientOutcome.status(), reason);
@@ -139,7 +144,15 @@ public class AMHSDeliveryReportService {
     }
 
     public void createNonDeliveryReport(AMHSMessage message, String reason, String diagnosticCode, AMHSDeliveryStatus status) {
-        createNonDeliveryReportForRecipient(message, message.getRecipient(), reason, diagnosticCode, status);
+        X411DeliveryReportApduCodec.NonDeliveryReportApdu apdu = new X411DeliveryReportApduCodec.NonDeliveryReportApdu(
+            message.getMtsIdentifier() == null ? message.getMessageId() : message.getMtsIdentifier(),
+            shouldReturnContent(message),
+            List.of(X411DeliveryReportApduCodec.ReportedRecipientInfo.from(message.getRecipient(), status, diagnosticCode)),
+            reason
+        );
+        byte[] rawNdrApdu = reportApduCodec.encodeNonDeliveryReport(apdu);
+        X411DeliveryReportApduCodec.ValidationResult validationResult = reportApduCodec.validateEncodedNonDeliveryReport(rawNdrApdu);
+        createNonDeliveryReportForRecipient(message, message.getRecipient(), reason, diagnosticCode, status, rawNdrApdu, validationResult);
     }
 
     private void createNonDeliveryReportForRecipient(
@@ -147,7 +160,9 @@ public class AMHSDeliveryReportService {
         String recipient,
         String reason,
         String diagnosticCode,
-        AMHSDeliveryStatus status
+        AMHSDeliveryStatus status,
+        byte[] rawNdrApdu,
+        X411DeliveryReportApduCodec.ValidationResult validationResult
     ) {
         AMHSDeliveryReport report = buildReport(
             message,
@@ -155,7 +170,9 @@ public class AMHSDeliveryReportService {
             AMHSReportType.NDR,
             status,
             diagnosticCode,
-            reason
+            reason,
+            rawNdrApdu,
+            validationResult
         );
         deliveryReportRepository.save(report);
     }
@@ -186,7 +203,9 @@ public class AMHSDeliveryReportService {
         AMHSReportType reportType,
         AMHSDeliveryStatus status,
         String diagnosticCode,
-        String reason
+        String reason,
+        byte[] rawNdrApdu,
+        X411DeliveryReportApduCodec.ValidationResult validationResult
     ) {
         AMHSDeliveryReport report = new AMHSDeliveryReport();
         report.setMessage(message);
@@ -199,6 +218,13 @@ public class AMHSDeliveryReportService {
         report.setExpiresAt(message.getDrExpirationAt());
         report.setRelatedMtsIdentifier(message.getMtsIdentifier());
         report.setCorrelationToken(buildCorrelationToken(message));
+        if (reportType == AMHSReportType.NDR) {
+            report.setNdrApduRawBer(rawNdrApdu);
+            if (validationResult != null) {
+                report.setNdrApduTagClass(validationResult.tagClass());
+                report.setNdrApduTagNumber(validationResult.tagNumber());
+            }
+        }
         return report;
     }
 

@@ -17,6 +17,15 @@ class X411TagMapTest {
         assertFalse(X411TagMap.isKnownEnvelopeFieldTag(99));
     }
 
+
+    @Test
+    void shouldRejectNonContextAssociationTagClass() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> X411TagMap.validateAssociationApdu(new X411TagMap.BerApduTag(X411TagMap.TAG_CLASS_APPLICATION, X411TagMap.APDU_BIND))
+        );
+    }
+
     @Test
     void shouldRejectUnknownAssociationApduTag() {
         assertThrows(IllegalArgumentException.class, () -> X411TagMap.validateAssociationApduTag(9));
