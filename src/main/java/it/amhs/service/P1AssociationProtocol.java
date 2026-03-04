@@ -56,11 +56,11 @@ public class P1AssociationProtocol {
 
     public Pdu decode(byte[] payload) {
         BerTlv pdu = BerCodec.decodeSingle(payload);
-        if (pdu.tagClass() != 2 || !pdu.constructed()) {
-            throw new IllegalArgumentException("P1 association PDU must use context-specific constructed tags");
+        if (!pdu.constructed()) {
+            throw new IllegalArgumentException("P1 association PDU must use constructed tags");
         }
 
-        X411TagMap.validateAssociationApduTag(pdu.tagNumber());
+        X411TagMap.validateAssociationApdu(new X411TagMap.BerApduTag(pdu.tagClass(), pdu.tagNumber()));
         return switch (pdu.tagNumber()) {
             case X411TagMap.APDU_BIND -> decodeBind(pdu.value());
             case X411TagMap.APDU_TRANSFER -> new TransferPdu(pdu.value());

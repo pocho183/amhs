@@ -3,6 +3,7 @@
 This document provides a **module-traceability baseline** for the current AMHS implementation, linking runtime tag maps and parser checks to X.411-oriented APDU/envelope structures used by the stack.
 
 > Scope note: this is a pragmatic implementation traceability artifact and not a replacement for a full formal ASN.1-generated conformance package.
+> Certification note: current runtime APDU identifiers are **context-specific profile tags** used by this stack and are not claimed to be the canonical ITU-T X.411 APPLICATION-tag assignment.
 
 ## 1) Association APDU tags
 
@@ -77,10 +78,23 @@ Directory string interoperability now handled:
 Evidence tests:
 - `src/test/java/it/amhs/service/ORNameMapperTest.java`
 
-## 5) Current conformance posture
+
+## 5) DR/NDR BER evidence hooks
+
+Runtime source of truth: `X411DeliveryReportApduCodec` + `AMHSDeliveryReportService` + `AMHSDeliveryReport`.
+
+Implemented evidence controls:
+- NDR APDU bytes are encoded once and stored as raw BER hex (`ndr_apdu_raw_ber`) with tag class/number metadata.
+- Encoded NDR APDU is validated before persistence (`validateEncodedNonDeliveryReport`) for required profile fields and APDU tag identity.
+- Persisted metadata can be exported during conformance campaigns as wire-evidence artifacts.
+
+Boundary note:
+- This does **not** by itself prove canonical X.411 ASN.1 module numbering; it proves deterministic conformance to the stack profile table in this document.
+
+## 6) Current conformance posture
 
 - Tag-level mapping traceability: **implemented**.
 - Runtime guardrails for unknown APDU/bind/envelope tags: **implemented**.
 - ORName CHOICE and DirectoryName string-family decoding baseline: **implemented**.
-- Formal ASN.1 compiler-generated proof package against official X.411 modules: **pending**.
+- Formal ASN.1 compiler-generated proof package against official X.411 modules: **pending** (still required for certification).
 

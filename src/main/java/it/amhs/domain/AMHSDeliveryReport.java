@@ -1,6 +1,7 @@
 package it.amhs.domain;
 
 import java.util.Date;
+import java.util.HexFormat;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -61,9 +62,27 @@ public class AMHSDeliveryReport {
     @Temporal(TemporalType.TIMESTAMP)
     private Date expiresAt;
 
+
+    @Column(name = "ndr_apdu_raw_ber", length = 8192)
+    private String ndrApduRawBerHex;
+
+    @Column(name = "ndr_apdu_tag_class")
+    private Integer ndrApduTagClass;
+
+    @Column(name = "ndr_apdu_tag_number")
+    private Integer ndrApduTagNumber;
+
     @Column(name = "generated_at", nullable = false, updatable = false)
     @Temporal(TemporalType.TIMESTAMP)
     private Date generatedAt;
+
+    public void setNdrApduRawBer(byte[] apdu) {
+        if (apdu == null || apdu.length == 0) {
+            this.ndrApduRawBerHex = null;
+            return;
+        }
+        this.ndrApduRawBerHex = HexFormat.of().formatHex(apdu);
+    }
 
     @PrePersist
     protected void onCreate() {
