@@ -28,10 +28,31 @@ class X411DiagnosticMapperTest {
 
     @Test
     void mapsStructuredReasonAndDiagnosticCodeFields() {
-        X411Diagnostic diagnostic = mapper.mapDiagnostic("reason-code=2", "diagnostic-code=28; supplemental-info=congestion", 1);
+        X411Diagnostic diagnostic = mapper.mapDiagnostic("reason-code=9", "diagnostic-code=28; supplemental-info=congestion", 1);
         assertEquals(X411Diagnostic.ReasonCode.CONGESTION, diagnostic.reasonCode());
         assertTrue(diagnostic.transientFailure());
         assertEquals("X411:28", diagnostic.toPersistenceCode());
+    }
+
+    @Test
+    void supportsExpandedReasonKeywords() {
+        assertEquals(
+            X411Diagnostic.ReasonCode.CONVERSION_NOT_PERFORMED,
+            mapper.mapDiagnostic("conversion-not-performed", "cannot downgrade body part", null).reasonCode()
+        );
+        assertEquals(
+            X411Diagnostic.ReasonCode.CONTENT_TOO_LARGE,
+            mapper.mapDiagnostic("content-too-large", "size exceeded", null).reasonCode()
+        );
+        assertEquals(
+            X411Diagnostic.ReasonCode.RECIPIENT_UNAVAILABLE,
+            mapper.mapDiagnostic("recipient-unavailable", "mailbox locked", null).reasonCode()
+        );
+    }
+
+    @Test
+    void normalizesInvalidDiagnosticCodesToDefault() {
+        assertEquals("X411:31", mapper.map("reason-code=9", "diagnostic-code=999"));
     }
 
     @Test

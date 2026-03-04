@@ -12,7 +12,7 @@ import org.springframework.util.StringUtils;
 @Component
 public class X411DiagnosticMapper {
 
-    private static final int DEFAULT_FAILURE_DIAGNOSTIC = 31;
+    private static final int DEFAULT_FAILURE_DIAGNOSTIC = X411Diagnostic.DEFAULT_DIAGNOSTIC_CODE;
 
     private static final Pattern DIAGNOSTIC_CODE_PATTERN = Pattern.compile("(?:^|[;,\\s])diagnostic-code\\s*[=:]\\s*([0-9]{1,3})(?:$|[;,\\s])", Pattern.CASE_INSENSITIVE);
     private static final Pattern REASON_CODE_PATTERN = Pattern.compile("(?:^|[;,\\s])reason-code\\s*[=:]\\s*([0-9]{1,3})(?:$|[;,\\s])", Pattern.CASE_INSENSITIVE);
@@ -22,10 +22,16 @@ public class X411DiagnosticMapper {
 
     static {
         KEYWORD_TO_REASON.put("unable-to-transfer", X411Diagnostic.ReasonCode.UNABLE_TO_TRANSFER);
+        KEYWORD_TO_REASON.put("transfer-impossible", X411Diagnostic.ReasonCode.TRANSFER_IMPOSSIBLE);
+        KEYWORD_TO_REASON.put("conversion-not-performed", X411Diagnostic.ReasonCode.CONVERSION_NOT_PERFORMED);
+        KEYWORD_TO_REASON.put("content-too-large", X411Diagnostic.ReasonCode.CONTENT_TOO_LARGE);
+        KEYWORD_TO_REASON.put("recipient-unavailable", X411Diagnostic.ReasonCode.RECIPIENT_UNAVAILABLE);
         KEYWORD_TO_REASON.put("routing-failure", X411Diagnostic.ReasonCode.ROUTING_FAILURE);
         KEYWORD_TO_REASON.put("congestion", X411Diagnostic.ReasonCode.CONGESTION);
+        KEYWORD_TO_REASON.put("loop-detected", X411Diagnostic.ReasonCode.LOOP_DETECTED);
         KEYWORD_TO_REASON.put("security", X411Diagnostic.ReasonCode.SECURITY_FAILURE);
         KEYWORD_TO_REASON.put("authentication", X411Diagnostic.ReasonCode.SECURITY_FAILURE);
+        KEYWORD_TO_REASON.put("syntax", X411Diagnostic.ReasonCode.CONTENT_SYNTAX_ERROR);
         KEYWORD_TO_REASON.put("validation", X411Diagnostic.ReasonCode.CONTENT_SYNTAX_ERROR);
 
         KEYWORD_TO_DIAGNOSTIC.put("timeout", 16);
@@ -62,6 +68,10 @@ public class X411DiagnosticMapper {
         int diagnosticCode = explicitX411Code != null
             ? explicitX411Code
             : (explicitDiagnosticCode != null ? explicitDiagnosticCode : inferDiagnosticCode(corpus));
+
+        if (!X411Diagnostic.isValidDiagnosticCode(diagnosticCode)) {
+            diagnosticCode = DEFAULT_FAILURE_DIAGNOSTIC;
+        }
 
         return X411Diagnostic.of(reasonCode, diagnosticCode);
     }
