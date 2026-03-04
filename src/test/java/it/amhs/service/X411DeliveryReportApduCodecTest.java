@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,56 @@ class X411DeliveryReportApduCodecTest {
         assertEquals("/CN=OPS-1", decoded.reportedRecipientInfo().get(0).recipient());
         assertEquals("FAILED", decoded.reportedRecipientInfo().get(0).deliveryStatus());
         assertEquals(28, decoded.reportedRecipientInfo().get(1).diagnosticCode());
+    }
+
+    @Test
+    void encodesStructuredMtsIdentifierRecipientAndEnumeratedStatus() {
+        X411DeliveryReportApduCodec.NonDeliveryReportApdu source = new X411DeliveryReportApduCodec.NonDeliveryReportApdu(
+            "MTS-777",
+            false,
+            List.of(new X411DeliveryReportApduCodec.ReportedRecipientInfo("/C=IT/ADMD=ICAO/PRMD=ROMA/CN=OPS-1", "FAILED", 16)),
+            null
+        );
+
+        byte[] encoded = codec.encodeNonDeliveryReport(source);
+        BerTlv apdu = BerCodec.decodeSingle(encoded);
+        List<BerTlv> fields = BerCodec.decodeAll(apdu.value());
+
+        BerTlv mtsIdentifier = BerCodec.findOptional(fields, X411TagMap.TAG_CLASS_CONTEXT, 0).orElseThrow();
+        assertTrue(mtsIdentifier.constructed());
+
+        BerTlv recipientContainer = BerCodec.findOptional(fields, X411TagMap.TAG_CLASS_CONTEXT, 2).orElseThrow();
+        BerTlv recipientEntry = BerCodec.decodeAll(recipientContainer.value()).get(0);
+        List<BerTlv> recipientFields = BerCodec.decodeAll(recipientEntry.value());
+
+        BerTlv recipient = BerCodec.findOptional(recipientFields, X411TagMap.TAG_CLASS_CONTEXT, 0).orElseThrow();
+        BerTlv status = BerCodec.findOptional(recipientFields, X411TagMap.TAG_CLASS_CONTEXT, 1).orElseThrow();
+        assertTrue(recipient.constructed());
+        assertEquals(1, status.value().length);
+        assertEquals(3, status.value()[0]);
+    }
+
+    @Test
+    void decodesLegacyIa5AndStatusNameFormatForBackwardCompatibility() {
+        byte[] entryValue = concat(
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 0, 0, 9, "/CN=OPS-1".getBytes(StandardCharsets.US_ASCII))),
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 1, 0, 6, "FAILED".getBytes(StandardCharsets.US_ASCII))),
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 2, 0, 2, "22".getBytes(StandardCharsets.US_ASCII)))
+        );
+        byte[] recipientEntry = BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 16, 0, entryValue.length, entryValue));
+        byte[] recipients = BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 2, 0, recipientEntry.length, recipientEntry));
+        byte[] payload = concat(
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 0, 0, 7, "MTS-LEG".getBytes(StandardCharsets.US_ASCII))),
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 1, 0, 1, new byte[] {(byte) 0xFF})),
+            recipients
+        );
+        byte[] apdu = BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_APPLICATION, true, X411TagMap.APDU_NON_DELIVERY_REPORT, 0, payload.length, payload));
+
+        X411DeliveryReportApduCodec.NonDeliveryReportApdu decoded = codec.decodeNonDeliveryReport(apdu);
+
+        assertEquals("MTS-LEG", decoded.mtsIdentifier());
+        assertEquals("FAILED", decoded.reportedRecipientInfo().get(0).deliveryStatus());
+        assertEquals(22, decoded.reportedRecipientInfo().get(0).diagnosticCode());
     }
 
     @Test
@@ -90,5 +141,19 @@ class X411DeliveryReportApduCodecTest {
         );
 
         assertThrows(IllegalArgumentException.class, () -> codec.encodeNonDeliveryReport(source));
+    }
+
+    private static byte[] concat(byte[]... chunks) {
+        int len = 0;
+        for (byte[] chunk : chunks) {
+            len += chunk.length;
+        }
+        byte[] out = new byte[len];
+        int offset = 0;
+        for (byte[] chunk : chunks) {
+            System.arraycopy(chunk, 0, out, offset, chunk.length);
+            offset += chunk.length;
+        }
+        return out;
     }
 }

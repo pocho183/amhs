@@ -19,7 +19,7 @@ public class X411DeliveryReportApduCodec {
             throw new IllegalArgumentException("NonDeliveryReport requires at least one ReportedRecipientInfo");
         }
         byte[] payload = concat(
-            encodeIa5(0, report.mtsIdentifier()),
+            encodeMtsIdentifier(report.mtsIdentifier()),
             encodeBoolean(1, report.returnOfContent()),
             encodeReportedRecipientInfo(report.reportedRecipientInfo()),
             encodeOptionalIa5(3, report.nonDeliveryReason())
@@ -59,7 +59,7 @@ public class X411DeliveryReportApduCodec {
             throw new IllegalArgumentException("Unexpected APDU tag for NonDeliveryReport");
         }
         List<BerTlv> fields = BerCodec.decodeAll(tlv.value());
-        String mtsId = decodeRequiredIa5(fields, 0, "mtsIdentifier");
+        String mtsId = decodeMtsIdentifier(fields);
         boolean returnContent = BerCodec.findOptional(fields, X411TagMap.TAG_CLASS_CONTEXT, 1)
             .map(flag -> flag.value().length > 0 && flag.value()[0] != 0)
             .orElse(false);
@@ -68,6 +68,21 @@ public class X411DeliveryReportApduCodec {
             .map(v -> new String(v.value(), StandardCharsets.US_ASCII))
             .orElse(null);
         return new NonDeliveryReportApdu(mtsId, returnContent, recipients, reason);
+    }
+
+    private String decodeMtsIdentifier(List<BerTlv> fields) {
+        BerTlv mtsField = BerCodec.findOptional(fields, X411TagMap.TAG_CLASS_CONTEXT, 0)
+            .orElseThrow(() -> new IllegalArgumentException("Missing report field 'mtsIdentifier'"));
+        if (!mtsField.constructed()) {
+            String legacy = new String(mtsField.value(), StandardCharsets.US_ASCII).trim();
+            if (legacy.isBlank()) {
+                throw new IllegalArgumentException("Missing report field 'mtsIdentifier'");
+            }
+            return legacy;
+        }
+
+        List<BerTlv> mtsFields = BerCodec.decodeAll(mtsField.value());
+        return decodeRequiredIa5(mtsFields, 0, "mtsIdentifier.localIdentifier");
     }
 
     private List<ReportedRecipientInfo> decodeRecipients(List<BerTlv> fields) {
@@ -79,10 +94,10 @@ public class X411DeliveryReportApduCodec {
         }
         return items.stream().map(item -> {
             List<BerTlv> recipientFields = BerCodec.decodeAll(item.value());
-            String recipient = decodeRequiredIa5(recipientFields, 0, "recipient");
-            String statusValue = decodeRequiredIa5(recipientFields, 1, "status");
+            String recipient = decodeRecipient(recipientFields);
+            String statusValue = decodeDeliveryStatus(recipientFields);
             Integer diagnostic = BerCodec.findOptional(recipientFields, X411TagMap.TAG_CLASS_CONTEXT, 2)
-                .map(value -> decodeInteger(value.value()))
+                .map(this::decodeDiagnosticCode)
                 .orElse(null);
             return new ReportedRecipientInfo(recipient, statusValue, diagnostic);
         }).toList();
@@ -95,11 +110,118 @@ public class X411DeliveryReportApduCodec {
 
     private byte[] encodeRecipientInfo(ReportedRecipientInfo info) {
         byte[] value = concat(
-            encodeIa5(0, info.recipient()),
-            encodeIa5(1, info.deliveryStatus()),
+            encodeRecipient(info.recipient()),
+            encodeDeliveryStatus(info.deliveryStatus()),
             encodeOptionalInteger(2, info.diagnosticCode())
         );
         return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 16, 0, value.length, value));
+    }
+
+    private byte[] encodeMtsIdentifier(String mtsIdentifier) {
+        byte[] localIdentifier = encodeIa5(0, mtsIdentifier);
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 0, 0, localIdentifier.length, localIdentifier));
+    }
+
+    private byte[] encodeRecipient(String recipient) {
+        if (recipient == null || recipient.isBlank()) {
+            throw new IllegalArgumentException("Required report field is blank [recipient]");
+        }
+        ORAddress address = ORAddress.parse(recipient.trim());
+        byte[] addressContent = concat(address.attributes().entrySet().stream()
+            .map(entry -> encodeAddressAttribute(entry.getKey(), entry.getValue()))
+            .toArray(byte[][]::new));
+        byte[] orAddress = BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 1, 0, addressContent.length, addressContent));
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 0, 0, orAddress.length, orAddress));
+    }
+
+    private byte[] encodeAddressAttribute(String key, String value) {
+        int tag = mapAddressAttributeTag(key);
+        byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, tag, 0, bytes.length, bytes));
+    }
+
+    private int mapAddressAttributeTag(String key) {
+        return switch (key.toUpperCase(Locale.ROOT)) {
+            case "C" -> 0;
+            case "ADMD" -> 1;
+            case "PRMD" -> 2;
+            case "O" -> 3;
+            case "OU1" -> 4;
+            case "OU2" -> 5;
+            case "OU3" -> 6;
+            case "OU4" -> 7;
+            case "CN" -> 8;
+            default -> 30;
+        };
+    }
+
+    private String decodeRecipient(List<BerTlv> fields) {
+        BerTlv recipientField = BerCodec.findOptional(fields, X411TagMap.TAG_CLASS_CONTEXT, 0)
+            .orElseThrow(() -> new IllegalArgumentException("Missing report field 'recipient'"));
+
+        if (!recipientField.constructed()) {
+            return decodeRequiredIa5(fields, 0, "recipient");
+        }
+
+        return ORNameMapper.fromBer(recipientField).orAddress().toCanonicalString();
+    }
+
+    private byte[] encodeDeliveryStatus(String status) {
+        if (status == null || status.isBlank()) {
+            throw new IllegalArgumentException("Required report field is blank [status]");
+        }
+        int code = deliveryStatusToCode(status);
+        byte[] value = encodeInteger(code);
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 1, 0, value.length, value));
+    }
+
+    private String decodeDeliveryStatus(List<BerTlv> fields) {
+        BerTlv statusField = BerCodec.findOptional(fields, X411TagMap.TAG_CLASS_CONTEXT, 1)
+            .orElseThrow(() -> new IllegalArgumentException("Missing report field 'status'"));
+        if (looksLikeAscii(statusField.value())) {
+            return new String(statusField.value(), StandardCharsets.US_ASCII).trim();
+        }
+        return deliveryStatusFromCode(decodeInteger(statusField.value()));
+    }
+
+    private Integer decodeDiagnosticCode(BerTlv tlv) {
+        if (looksLikeAscii(tlv.value())) {
+            return ReportedRecipientInfo.parseDiagnosticCode(new String(tlv.value(), StandardCharsets.US_ASCII));
+        }
+        return decodeInteger(tlv.value());
+    }
+
+    private boolean looksLikeAscii(byte[] value) {
+        if (value == null || value.length == 0) {
+            return false;
+        }
+        for (byte b : value) {
+            int code = b & 0xFF;
+            if (code < 0x20 || code > 0x7E) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private int deliveryStatusToCode(String status) {
+        return switch (status.trim().toUpperCase(Locale.ROOT)) {
+            case "DELIVERED" -> 0;
+            case "DEFERRED" -> 1;
+            case "EXPIRED" -> 2;
+            case "FAILED" -> 3;
+            default -> throw new IllegalArgumentException("Unsupported deliveryStatus: " + status);
+        };
+    }
+
+    private String deliveryStatusFromCode(int code) {
+        return switch (code) {
+            case 0 -> "DELIVERED";
+            case 1 -> "DEFERRED";
+            case 2 -> "EXPIRED";
+            case 3 -> "FAILED";
+            default -> throw new IllegalArgumentException("Unsupported delivery status code: " + code);
+        };
     }
 
     private byte[] encodeIa5(int tag, String value) {
