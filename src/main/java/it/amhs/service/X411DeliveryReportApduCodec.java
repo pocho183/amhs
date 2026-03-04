@@ -14,9 +14,6 @@ import it.amhs.domain.AMHSDeliveryStatus;
  */
 public class X411DeliveryReportApduCodec {
 
-    private static final int APPLICATION_TAG_CLASS = 1;
-    private static final int CONTEXT_SPECIFIC_TAG_CLASS = 2;
-
     public byte[] encodeNonDeliveryReport(NonDeliveryReportApdu report) {
         if (report.reportedRecipientInfo() == null || report.reportedRecipientInfo().isEmpty()) {
             throw new IllegalArgumentException("NonDeliveryReport requires at least one ReportedRecipientInfo");
@@ -27,16 +24,19 @@ public class X411DeliveryReportApduCodec {
             encodeReportedRecipientInfo(report.reportedRecipientInfo()),
             encodeOptionalIa5(3, report.nonDeliveryReason())
         );
-        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, X411TagMap.APDU_NON_DELIVERY_REPORT, 0, payload.length, payload));
+        return BerCodec.encode(
+            new BerTlv(X411TagMap.TAG_CLASS_APPLICATION, true, X411TagMap.APDU_NON_DELIVERY_REPORT, 0, payload.length, payload)
+        );
     }
-
 
     public ValidationResult validateEncodedNonDeliveryReport(byte[] apdu) {
         BerTlv tlv = BerCodec.decodeSingle(apdu);
         if (!tlv.constructed()) {
             throw new IllegalArgumentException("NonDeliveryReport APDU must be constructed");
         }
-        X411TagMap.validateAssociationApdu(new X411TagMap.BerApduTag(tlv.tagClass(), tlv.tagNumber()));
+        if (tlv.tagClass() != X411TagMap.TAG_CLASS_APPLICATION) {
+            throw new IllegalArgumentException("NonDeliveryReport APDU must use APPLICATION tag class");
+        }
         if (tlv.tagNumber() != X411TagMap.APDU_NON_DELIVERY_REPORT) {
             throw new IllegalArgumentException("Unexpected APDU tag for NonDeliveryReport");
         }
@@ -55,7 +55,7 @@ public class X411DeliveryReportApduCodec {
 
     public NonDeliveryReportApdu decodeNonDeliveryReport(byte[] apdu) {
         BerTlv tlv = BerCodec.decodeSingle(apdu);
-        if (tlv.tagClass() != X411TagMap.TAG_CLASS_CONTEXT || !tlv.constructed() || tlv.tagNumber() != X411TagMap.APDU_NON_DELIVERY_REPORT) {
+        if (tlv.tagClass() != X411TagMap.TAG_CLASS_APPLICATION || !tlv.constructed() || tlv.tagNumber() != X411TagMap.APDU_NON_DELIVERY_REPORT) {
             throw new IllegalArgumentException("Unexpected APDU tag for NonDeliveryReport");
         }
         List<BerTlv> fields = BerCodec.decodeAll(tlv.value());
@@ -81,8 +81,8 @@ public class X411DeliveryReportApduCodec {
             List<BerTlv> recipientFields = BerCodec.decodeAll(item.value());
             String recipient = decodeRequiredIa5(recipientFields, 0, "recipient");
             String statusValue = decodeRequiredIa5(recipientFields, 1, "status");
-            String diagnostic = BerCodec.findOptional(recipientFields, X411TagMap.TAG_CLASS_CONTEXT, 2)
-                .map(v -> new String(v.value(), StandardCharsets.US_ASCII))
+            Integer diagnostic = BerCodec.findOptional(recipientFields, X411TagMap.TAG_CLASS_CONTEXT, 2)
+                .map(value -> decodeInteger(value.value()))
                 .orElse(null);
             return new ReportedRecipientInfo(recipient, statusValue, diagnostic);
         }).toList();
@@ -129,6 +129,51 @@ public class X411DeliveryReportApduCodec {
         return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, tag, 0, 1, new byte[] {(byte) (value ? 0xFF : 0x00)}));
     }
 
+    private byte[] encodeOptionalInteger(int tag, Integer value) {
+        if (value == null) {
+            return new byte[0];
+        }
+        if (value < 0) {
+            throw new IllegalArgumentException("INTEGER value must be non-negative");
+        }
+        byte[] bytes = encodeInteger(value);
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, tag, 0, bytes.length, bytes));
+    }
+
+    private static byte[] encodeInteger(int value) {
+        if (value == 0) {
+            return new byte[] {0x00};
+        }
+        int temp = value;
+        int size = 0;
+        byte[] buffer = new byte[5];
+        while (temp > 0) {
+            buffer[buffer.length - 1 - size] = (byte) (temp & 0xFF);
+            temp >>>= 8;
+            size++;
+        }
+        int start = buffer.length - size;
+        if ((buffer[start] & 0x80) != 0) {
+            start--;
+            buffer[start] = 0x00;
+            size++;
+        }
+        byte[] out = new byte[size];
+        System.arraycopy(buffer, start, out, 0, size);
+        return out;
+    }
+
+    private static int decodeInteger(byte[] value) {
+        if (value == null || value.length == 0) {
+            throw new IllegalArgumentException("Invalid INTEGER encoding");
+        }
+        int result = 0;
+        for (byte b : value) {
+            result = (result << 8) | (b & 0xFF);
+        }
+        return result;
+    }
+
     private static byte[] concat(byte[]... chunks) {
         int len = 0;
         for (byte[] chunk : chunks) {
@@ -159,28 +204,9 @@ public class X411DeliveryReportApduCodec {
     public record ValidationResult(int tagClass, int tagNumber, int fieldCount) {
     }
 
-    public record ReportedRecipientInfo(String recipient, String deliveryStatus, String diagnosticCode) {
+    public record ReportedRecipientInfo(String recipient, String deliveryStatus, Integer diagnosticCode) {
         public static ReportedRecipientInfo from(String recipient, AMHSDeliveryStatus status, String diagnosticCode) {
             return new ReportedRecipientInfo(recipient, status.name(), parseDiagnosticCode(diagnosticCode));
-        }
-
-        private static Integer parseDiagnosticCode(String diagnosticCode) {
-            if (diagnosticCode == null || diagnosticCode.isBlank()) {
-                return null;
-            }
-            String normalized = diagnosticCode.trim().toUpperCase(Locale.ROOT);
-            if (normalized.startsWith("X411:")) {
-                normalized = normalized.substring(5);
-            }
-            try {
-                int value = Integer.parseInt(normalized);
-                if (!X411Diagnostic.isValidDiagnosticCode(value)) {
-                    throw new IllegalArgumentException("Invalid diagnosticCode value: " + diagnosticCode);
-                }
-                return value;
-            } catch (NumberFormatException ex) {
-                throw new IllegalArgumentException("Invalid diagnosticCode value: " + diagnosticCode, ex);
-            }
         }
 
         private static Integer parseDiagnosticCode(String diagnosticCode) {

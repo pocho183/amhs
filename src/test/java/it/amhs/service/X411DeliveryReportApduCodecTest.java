@@ -68,14 +68,14 @@ class X411DeliveryReportApduCodecTest {
         X411DeliveryReportApduCodec.NonDeliveryReportApdu source = new X411DeliveryReportApduCodec.NonDeliveryReportApdu(
             "MTS-321",
             false,
-            List.of(new X411DeliveryReportApduCodec.ReportedRecipientInfo("/CN=OPS-1", "FAILED", "X411:22")),
+            List.of(X411DeliveryReportApduCodec.ReportedRecipientInfo.from("/CN=OPS-1", AMHSDeliveryStatus.FAILED, "X411:22")),
             "transfer-failure"
         );
 
         byte[] encoded = codec.encodeNonDeliveryReport(source);
         X411DeliveryReportApduCodec.ValidationResult validation = codec.validateEncodedNonDeliveryReport(encoded);
 
-        assertEquals(X411TagMap.TAG_CLASS_CONTEXT, validation.tagClass());
+        assertEquals(X411TagMap.TAG_CLASS_APPLICATION, validation.tagClass());
         assertEquals(X411TagMap.APDU_NON_DELIVERY_REPORT, validation.tagNumber());
         assertTrue(validation.fieldCount() >= 3);
     }
