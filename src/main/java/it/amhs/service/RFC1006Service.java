@@ -3,6 +3,7 @@ package it.amhs.service;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.EOFException;
+import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -105,7 +106,7 @@ public class RFC1006Service {
         );
     }
 
-    public void handleClient(SSLSocket socket) {
+    public void handleClient(Socket socket) {
         try (InputStream in = socket.getInputStream(); OutputStream out = socket.getOutputStream()) {
             socket.setSoTimeout(idleTimeoutMillis);
             CertificateIdentity identity = extractCertificateIdentity(socket);
@@ -649,9 +650,12 @@ public class RFC1006Service {
         }
     }
 
-    private CertificateIdentity extractCertificateIdentity(SSLSocket socket) {
+    private CertificateIdentity extractCertificateIdentity(Socket socket) {
+        if (!(socket instanceof SSLSocket sslSocket)) {
+            return new CertificateIdentity(null, null);
+        }
         try {
-            Principal principal = socket.getSession().getPeerPrincipal();
+            Principal principal = sslSocket.getSession().getPeerPrincipal();
             return parseDn(principal.getName());
         } catch (SSLPeerUnverifiedException ex) {
             logger.info("Client certificate not provided");

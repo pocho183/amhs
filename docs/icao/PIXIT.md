@@ -8,13 +8,13 @@ This PIXIT captures implementation-specific parameters required by a conformance
 
 - Product: `amhs` server
 - Runtime: Java / Spring Boot non-web process
-- Main protocol entrypoint: RFC1006 over TLS
+- Main protocol entrypoint: RFC1006 (transport selectable: clear or TLS)
 
 ## 2. Network and transport PIXIT values
 
 - RFC1006 listener port: configured by `rfc1006.server.port` (default `102`)
-- TLS server authentication: enabled
-- TLS client authentication: controlled by `rfc1006.tls.need-client-auth`
+- TLS server authentication: controlled by `rfc1006.tls.enabled`
+- TLS client authentication: controlled by `rfc1006.tls.need-client-auth` (when TLS is enabled)
 - Maximum accepted AMHS body size: `100000` bytes (application-level validation)
 - Transport controls implemented:
   - TPKT framing validation
