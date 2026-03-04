@@ -182,5 +182,24 @@ public class X411DeliveryReportApduCodec {
                 throw new IllegalArgumentException("Invalid diagnosticCode value: " + diagnosticCode, ex);
             }
         }
+
+        private static Integer parseDiagnosticCode(String diagnosticCode) {
+            if (diagnosticCode == null || diagnosticCode.isBlank()) {
+                return null;
+            }
+            String normalized = diagnosticCode.trim().toUpperCase(Locale.ROOT);
+            if (normalized.startsWith("X411:")) {
+                normalized = normalized.substring(5);
+            }
+            try {
+                int value = Integer.parseInt(normalized);
+                if (!X411Diagnostic.isValidDiagnosticCode(value)) {
+                    throw new IllegalArgumentException("Invalid diagnosticCode value: " + diagnosticCode);
+                }
+                return value;
+            } catch (NumberFormatException ex) {
+                throw new IllegalArgumentException("Invalid diagnosticCode value: " + diagnosticCode, ex);
+            }
+        }
     }
 }
