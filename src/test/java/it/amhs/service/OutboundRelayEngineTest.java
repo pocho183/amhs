@@ -5,10 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 
+import it.amhs.domain.AMHSDeliveryStatus;
 import it.amhs.domain.AMHSMessage;
 import it.amhs.domain.AMHSMessageState;
 import it.amhs.repository.AMHSMessageRepository;
@@ -33,6 +35,7 @@ class OutboundRelayEngineTest {
 
         assertEquals(AMHSMessageState.FAILED, msg.getLifecycleState());
         assertEquals("no-route", msg.getDeadLetterReason());
+        verify(dr).createNonDeliveryReport(eq(msg), eq("no-route"), eq("X411:22"), eq(AMHSDeliveryStatus.FAILED));
         verify(repo).save(msg);
     }
 

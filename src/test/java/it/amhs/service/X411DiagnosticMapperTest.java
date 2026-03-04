@@ -1,6 +1,7 @@
 package it.amhs.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -20,14 +21,18 @@ class X411DiagnosticMapperTest {
 
     @Test
     void mapsRoutingFailureToUnreachableCode() {
-        assertEquals("X411:22", mapper.map("no-route", "peer unreachable"));
+        X411Diagnostic diagnostic = mapper.mapDiagnostic("no-route", "peer unreachable", 2);
+        assertEquals(X411Diagnostic.ReasonCode.ROUTING_FAILURE, diagnostic.reasonCode());
+        assertEquals("X411:22", diagnostic.toPersistenceCode());
     }
 
     @Test
-    void mapsStructuredDiagnosticCodeField() {
-        assertEquals("X411:28", mapper.map("reason-code=1", "diagnostic-code=28; supplemental-info=congestion"));
+    void mapsStructuredReasonAndDiagnosticCodeFields() {
+        X411Diagnostic diagnostic = mapper.mapDiagnostic("reason-code=2", "diagnostic-code=28; supplemental-info=congestion", 1);
+        assertEquals(X411Diagnostic.ReasonCode.CONGESTION, diagnostic.reasonCode());
+        assertTrue(diagnostic.transientFailure());
+        assertEquals("X411:28", diagnostic.toPersistenceCode());
     }
-
 
     @Test
     void fallsBackToGeneralFailure() {

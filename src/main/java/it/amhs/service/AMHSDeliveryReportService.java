@@ -67,12 +67,14 @@ public class AMHSDeliveryReportService {
             return;
         }
 
-        AMHSDeliveryStatus status = outcome.hasDeferredRecipients() ? AMHSDeliveryStatus.DEFERRED : AMHSDeliveryStatus.FAILED;
         String reason = outcome.diagnostic() == null || outcome.diagnostic().isBlank()
-            ? (status == AMHSDeliveryStatus.DEFERRED ? "transfer-deferred" : "transfer-rejected")
+            ? (outcome.hasDeferredRecipients() ? "transfer-deferred" : "transfer-rejected")
             : outcome.diagnostic();
-        String diagnosticCode = diagnosticMapper.map(reason, outcome.diagnostic());
-        createNonDeliveryReport(message, reason, diagnosticCode, status);
+        X411Diagnostic diagnostic = diagnosticMapper.mapDiagnostic(reason, outcome.diagnostic(), null);
+        AMHSDeliveryStatus status = diagnostic.transientFailure() || outcome.hasDeferredRecipients()
+            ? AMHSDeliveryStatus.DEFERRED
+            : AMHSDeliveryStatus.FAILED;
+        createNonDeliveryReport(message, reason, diagnostic.toPersistenceCode(), status);
     }
 
     private void createRecipientReports(AMHSMessage message, OutboundP1Client.RelayTransferOutcome outcome) {
@@ -84,10 +86,12 @@ public class AMHSDeliveryReportService {
                 continue;
             }
 
-            AMHSDeliveryStatus status = recipientOutcome.status() == 1 ? AMHSDeliveryStatus.DEFERRED : AMHSDeliveryStatus.FAILED;
-            String reason = resolveRecipientReason(status, recipientOutcome);
-            String diagnosticCode = diagnosticMapper.map(reason, recipientOutcome.diagnostic());
-            createNonDeliveryReportForRecipient(message, entry.getKey(), reason, diagnosticCode, status);
+            String reason = resolveRecipientReason(recipientOutcome);
+            X411Diagnostic diagnostic = diagnosticMapper.mapDiagnostic(reason, recipientOutcome.diagnostic(), recipientOutcome.status());
+            AMHSDeliveryStatus status = diagnostic.transientFailure() || recipientOutcome.status() == 1
+                ? AMHSDeliveryStatus.DEFERRED
+                : AMHSDeliveryStatus.FAILED;
+            createNonDeliveryReportForRecipient(message, entry.getKey(), reason, diagnostic.toPersistenceCode(), status);
 
             if (status == AMHSDeliveryStatus.DEFERRED) {
                 deferredDiagnostics.put(recipientOutcome.status(), reason);
@@ -180,11 +184,11 @@ public class AMHSDeliveryReportService {
         return message.getIpnRequest() != null && message.getIpnRequest() > 0;
     }
 
-    private String resolveRecipientReason(AMHSDeliveryStatus status, OutboundP1Client.RelayTransferOutcome.RecipientOutcome outcome) {
+    private String resolveRecipientReason(OutboundP1Client.RelayTransferOutcome.RecipientOutcome outcome) {
         if (outcome.diagnostic() != null && !outcome.diagnostic().isBlank()) {
             return outcome.diagnostic();
         }
-        return status == AMHSDeliveryStatus.DEFERRED ? "recipient-deferred" : "recipient-failed";
+        return outcome.status() == 1 ? "recipient-deferred" : "recipient-failed";
     }
 
     private String buildCorrelationToken(AMHSMessage message) {
