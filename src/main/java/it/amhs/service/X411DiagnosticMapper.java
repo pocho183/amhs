@@ -3,6 +3,8 @@ package it.amhs.service;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -11,6 +13,8 @@ import org.springframework.util.StringUtils;
 public class X411DiagnosticMapper {
 
     private static final String DEFAULT_FAILURE_CODE = "X411:31";
+
+    private static final Pattern DIAGNOSTIC_CODE_PATTERN = Pattern.compile("(?:^|[;,\\s])diagnostic-code\\s*[=:]\\s*([0-9]{1,3})(?:$|[;,\\s])", Pattern.CASE_INSENSITIVE);
 
     private static final Map<String, String> KEYWORD_TO_CODE = new LinkedHashMap<>();
 
@@ -40,6 +44,11 @@ public class X411DiagnosticMapper {
             return explicit;
         }
 
+        String explicitDiagnosticCode = firstDiagnosticCode(reason, diagnostic);
+        if (explicitDiagnosticCode != null) {
+            return explicitDiagnosticCode;
+        }
+
         String corpus = ((reason == null ? "" : reason) + " " + (diagnostic == null ? "" : diagnostic))
             .toLowerCase(Locale.ROOT);
 
@@ -49,6 +58,20 @@ public class X411DiagnosticMapper {
             }
         }
         return DEFAULT_FAILURE_CODE;
+    }
+
+
+    private String firstDiagnosticCode(String... values) {
+        for (String value : values) {
+            if (!StringUtils.hasText(value)) {
+                continue;
+            }
+            Matcher matcher = DIAGNOSTIC_CODE_PATTERN.matcher(value);
+            if (matcher.find()) {
+                return "X411:" + Integer.parseInt(matcher.group(1));
+            }
+        }
+        return null;
     }
 
     private String firstX411Code(String... values) {

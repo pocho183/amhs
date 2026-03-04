@@ -94,8 +94,12 @@ public class OutboundRelayEngine {
             message.setTransferTrace(RFC1006Service.appendTraceHop(existingTrace, Instant.now(), localMtaName, localRoutingDomain));
             message.setLastRelayError(transferOutcome.accepted() ? null : transferOutcome.diagnostic());
             message.setNextRetryAt(null);
-            if (transferOutcome.accepted()) {
+            if (transferOutcome.accepted() && !transferOutcome.hasRecipientFailures() && !transferOutcome.hasDeferredRecipients()) {
                 message.setLifecycleState(AMHSMessageState.TRANSFERRED);
+            } else if (!transferOutcome.hasRecipientFailures() && transferOutcome.hasDeferredRecipients()) {
+                message.setLifecycleState(AMHSMessageState.DEFERRED);
+                message.setDeadLetterReason("transfer-deferred");
+                deliveryReportService.handleTransferOutcome(message, transferOutcome);
             } else {
                 message.setLifecycleState(AMHSMessageState.FAILED);
                 message.setDeadLetterReason("transfer-rejected");
