@@ -14,6 +14,8 @@ public final class X411TagMap {
     public static final int APDU_BIND_RESULT = 10;
     public static final int APDU_RELEASE_RESULT = 11;
     public static final int APDU_TRANSFER_RESULT = 12;
+    public static final int APDU_NON_DELIVERY_REPORT = 13;
+    public static final int APDU_DELIVERY_REPORT = 14;
 
     public static final int BIND_CALLING_MTA = 0;
     public static final int BIND_CALLED_MTA = 1;
@@ -40,7 +42,9 @@ public final class X411TagMap {
         APDU_ERROR,
         APDU_BIND_RESULT,
         APDU_RELEASE_RESULT,
-        APDU_TRANSFER_RESULT
+        APDU_TRANSFER_RESULT,
+        APDU_NON_DELIVERY_REPORT,
+        APDU_DELIVERY_REPORT
     );
 
 
