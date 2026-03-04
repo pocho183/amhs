@@ -4,7 +4,12 @@ import java.util.Set;
 
 public final class X411TagMap {
 
-    // Context tags aligned with X.411-style MTA APDU envelope used by this stack.
+    public static final int TAG_CLASS_UNIVERSAL = 0;
+    public static final int TAG_CLASS_APPLICATION = 1;
+    public static final int TAG_CLASS_CONTEXT = 2;
+    public static final int TAG_CLASS_PRIVATE = 3;
+
+    // Context-tag profile used by the current stack for P1 association APDUs.
     // Traceability baseline is documented in docs/icao/X411_MODULE_TRACEABILITY.md.
     public static final int APDU_BIND = 0;
     public static final int APDU_TRANSFER = 1;
@@ -71,9 +76,26 @@ public final class X411TagMap {
     private X411TagMap() {
     }
 
+    public static void validateAssociationApdu(BerApduTag apduTag) {
+        if (apduTag.tagClass() != TAG_CLASS_CONTEXT) {
+            throw new IllegalArgumentException(
+                "Unsupported X.411 association APDU tag class [" + apduTag.tagClass() + "]"
+            );
+        }
+        validateAssociationApduTag(apduTag.tagNumber());
+    }
+
     public static void validateAssociationApduTag(int tagNumber) {
         if (!ASSOCIATION_APDU_TAGS.contains(tagNumber)) {
             throw new IllegalArgumentException("Unsupported X.411 association APDU tag [" + tagNumber + "]");
+        }
+    }
+
+    public static void validateContextTagClass(int tagClass, String fieldName) {
+        if (tagClass != TAG_CLASS_CONTEXT) {
+            throw new IllegalArgumentException(
+                "Expected context-specific tag class for " + fieldName + " but found [" + tagClass + "]"
+            );
         }
     }
 
@@ -87,6 +109,9 @@ public final class X411TagMap {
 
     public static boolean isExtensionEnvelopeFieldTag(int tagNumber) {
         return tagNumber > ENVELOPE_EXTENSIONS;
+    }
+
+    public record BerApduTag(int tagClass, int tagNumber) {
     }
 
 }
