@@ -190,6 +190,13 @@ La codifica/decodifica ACSE include ora anche i blocchi principali che prima era
 
 Nota: restano possibili differenze di interoperabilità con stack X.227 rigorosi su varianti opzionali/semantiche avanzate non necessarie al profilo operativo corrente.
 
+
+### Profilo operativo HA/failover (attuale)
+
+- **Modalità supportata**: active/passive con DB condiviso e restart del servizio sul nodo passivo.
+- **Continuità stato**: messaggi, tentativi relay, trace e report DR/NDR persistono su DB e vengono ripresi al riavvio.
+- **Limite noto**: non esiste coordinamento cluster in-process (leader election/quorum), quindi non sono garantiti failover zero-loss senza orchestrazione esterna.
+
 ### Routing relay outbound (nuovo)
 
 Configurazione minima in `application.properties`:
