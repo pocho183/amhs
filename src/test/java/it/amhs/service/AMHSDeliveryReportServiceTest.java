@@ -17,6 +17,7 @@ import it.amhs.domain.AMHSDeliveryReport;
 import it.amhs.domain.AMHSDeliveryStatus;
 import it.amhs.domain.AMHSMessage;
 import it.amhs.domain.AMHSMessageState;
+import it.amhs.domain.AMHSProfile;
 import it.amhs.repository.AMHSDeliveryReportRepository;
 import it.amhs.repository.AMHSMessageRepository;
 
@@ -120,6 +121,39 @@ class AMHSDeliveryReportServiceTest {
         verify(reportRepo, times(2)).save(captor.capture());
         assertEquals(true, captor.getAllValues().get(0).isReturnOfContent());
         assertEquals(false, captor.getAllValues().get(1).isReturnOfContent());
+    }
+
+    @Test
+    void returnOfContentForIpnDependsOnProfileAndSizeLimit() {
+        AMHSDeliveryReportRepository reportRepo = mock(AMHSDeliveryReportRepository.class);
+        AMHSMessageRepository messageRepo = mock(AMHSMessageRepository.class);
+        AMHSMessageStateMachine stateMachine = mock(AMHSMessageStateMachine.class);
+        X411DiagnosticMapper mapper = new X411DiagnosticMapper();
+        AMHSDeliveryReportService service = new AMHSDeliveryReportService(reportRepo, messageRepo, stateMachine, mapper);
+
+        AMHSMessage basicProfile = message("MSG-B", null);
+        basicProfile.setProfile(AMHSProfile.P3);
+        basicProfile.setBody("short-body");
+        basicProfile.setIpnRequest(1);
+        service.createNonDeliveryReport(basicProfile, "failure", "X411:31", AMHSDeliveryStatus.FAILED);
+
+        AMHSMessage extendedProfile = message("MSG-E", null);
+        extendedProfile.setProfile(AMHSProfile.P1);
+        extendedProfile.setBody("short-body");
+        extendedProfile.setIpnRequest(1);
+        service.createNonDeliveryReport(extendedProfile, "failure", "X411:31", AMHSDeliveryStatus.FAILED);
+
+        AMHSMessage tooLarge = message("MSG-L", null);
+        tooLarge.setProfile(AMHSProfile.P1);
+        tooLarge.setBody("A".repeat(9000));
+        tooLarge.setDeliveryReport("full");
+        service.createNonDeliveryReport(tooLarge, "failure", "X411:31", AMHSDeliveryStatus.FAILED);
+
+        ArgumentCaptor<AMHSDeliveryReport> captor = ArgumentCaptor.forClass(AMHSDeliveryReport.class);
+        verify(reportRepo, times(3)).save(captor.capture());
+        assertEquals(false, captor.getAllValues().get(0).isReturnOfContent());
+        assertEquals(true, captor.getAllValues().get(1).isReturnOfContent());
+        assertEquals(false, captor.getAllValues().get(2).isReturnOfContent());
     }
 
     @Test

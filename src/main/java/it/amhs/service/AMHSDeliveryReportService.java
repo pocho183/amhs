@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import it.amhs.domain.AMHSDeliveryReport;
 import it.amhs.domain.AMHSDeliveryStatus;
 import it.amhs.domain.AMHSMessage;
 import it.amhs.domain.AMHSMessageState;
+import it.amhs.domain.AMHSProfile;
 import it.amhs.domain.AMHSReportType;
 import it.amhs.repository.AMHSDeliveryReportRepository;
 import it.amhs.repository.AMHSMessageRepository;
@@ -25,6 +27,10 @@ public class AMHSDeliveryReportService {
     private final AMHSMessageRepository messageRepository;
     private final AMHSMessageStateMachine stateMachine;
     private final X411DiagnosticMapper diagnosticMapper;
+    private final X411DeliveryReportApduCodec reportApduCodec;
+
+    private static final int BASIC_PROFILE_MAX_RETURN_CONTENT_OCTETS = 2048;
+    private static final int EXTENDED_PROFILE_MAX_RETURN_CONTENT_OCTETS = 8192;
 
     public AMHSDeliveryReportService(
         AMHSDeliveryReportRepository deliveryReportRepository,
@@ -36,6 +42,7 @@ public class AMHSDeliveryReportService {
         this.messageRepository = messageRepository;
         this.stateMachine = stateMachine;
         this.diagnosticMapper = diagnosticMapper;
+        this.reportApduCodec = new X411DeliveryReportApduCodec();
     }
 
     public void setReportExpiration(AMHSMessage message) {
@@ -78,6 +85,27 @@ public class AMHSDeliveryReportService {
     }
 
     private void createRecipientReports(AMHSMessage message, OutboundP1Client.RelayTransferOutcome outcome) {
+        List<X411DeliveryReportApduCodec.ReportedRecipientInfo> reportedRecipientInfo = outcome.recipientOutcomes().entrySet().stream()
+            .filter(entry -> entry.getValue().status() > 0)
+            .map(entry -> {
+                String reason = resolveRecipientReason(entry.getValue());
+                X411Diagnostic diagnostic = diagnosticMapper.mapDiagnostic(reason, entry.getValue().diagnostic(), entry.getValue().status());
+                AMHSDeliveryStatus status = diagnostic.transientFailure() || entry.getValue().status() == 1
+                    ? AMHSDeliveryStatus.DEFERRED
+                    : AMHSDeliveryStatus.FAILED;
+                return X411DeliveryReportApduCodec.ReportedRecipientInfo.from(entry.getKey(), status, diagnostic.toPersistenceCode());
+            })
+            .collect(Collectors.toList());
+        if (!reportedRecipientInfo.isEmpty()) {
+            X411DeliveryReportApduCodec.NonDeliveryReportApdu apdu = new X411DeliveryReportApduCodec.NonDeliveryReportApdu(
+                message.getMtsIdentifier() == null ? message.getMessageId() : message.getMtsIdentifier(),
+                shouldReturnContent(message),
+                reportedRecipientInfo,
+                outcome.diagnostic()
+            );
+            reportApduCodec.encodeNonDeliveryReport(apdu);
+        }
+
         Map<Integer, String> deferredDiagnostics = new LinkedHashMap<>();
 
         for (Map.Entry<String, OutboundP1Client.RelayTransferOutcome.RecipientOutcome> entry : outcome.recipientOutcomes().entrySet()) {
@@ -175,13 +203,24 @@ public class AMHSDeliveryReportService {
     }
 
     private boolean shouldReturnContent(AMHSMessage message) {
-        if (message.getDeliveryReport() != null && message.getDeliveryReport().equalsIgnoreCase("headers")) {
+        String deliveryReport = message.getDeliveryReport() == null ? "" : message.getDeliveryReport().trim().toLowerCase();
+        if (deliveryReport.equals("headers")) {
             return false;
         }
-        if (message.getDeliveryReport() != null && message.getDeliveryReport().equalsIgnoreCase("full")) {
-            return true;
+
+        int bodySize = message.getBody() == null ? 0 : message.getBody().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        int sizeLimit = message.getProfile() == AMHSProfile.P3
+            ? BASIC_PROFILE_MAX_RETURN_CONTENT_OCTETS
+            : EXTENDED_PROFILE_MAX_RETURN_CONTENT_OCTETS;
+        boolean withinLimit = bodySize <= sizeLimit;
+
+        if (deliveryReport.equals("full") || deliveryReport.equals("content-return-requested")) {
+            return withinLimit;
         }
-        return message.getIpnRequest() != null && message.getIpnRequest() > 0;
+        if (message.getIpnRequest() != null && message.getIpnRequest() > 0) {
+            return message.getProfile() != AMHSProfile.P3 && withinLimit;
+        }
+        return false;
     }
 
     private String resolveRecipientReason(OutboundP1Client.RelayTransferOutcome.RecipientOutcome outcome) {
