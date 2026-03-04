@@ -60,9 +60,27 @@ Hardening now in place:
 - Context tags greater than extension anchor are captured as unknown extensions.
 - Unsupported non-extension context tags are rejected.
 
-## 4) Current conformance posture
+
+## 4) ORName and DirectoryName CHOICE coverage
+
+Runtime source of truth: `src/main/java/it/amhs/service/ORNameMapper.java`.
+
+Implemented CHOICE/runtime behaviors:
+- `ORName ::= [0] DirectoryName` (directoryName-only): decoded and mapped to canonical textual directory form; parser provides CN fallback for internal O/R representation.
+- `ORName ::= [1] ORAddress` (or-address-only): decoded from structured or legacy IA5 forms.
+- Combined structured container carrying both directoryName and ORAddress: decoded with precedence on explicit ORAddress attributes.
+
+Directory string interoperability now handled:
+- TeletexString (T.61 approximation), BMPString, and UniversalString decoding.
+- X.500-style DistinguishedName parsing (`SEQUENCE OF SET OF SEQUENCE { type OID, value }`) with common attribute OID mapping (`CN`, `C`, `O`, `OU`, ...).
+
+Evidence tests:
+- `src/test/java/it/amhs/service/ORNameMapperTest.java`
+
+## 5) Current conformance posture
 
 - Tag-level mapping traceability: **implemented**.
 - Runtime guardrails for unknown APDU/bind/envelope tags: **implemented**.
+- ORName CHOICE and DirectoryName string-family decoding baseline: **implemented**.
 - Formal ASN.1 compiler-generated proof package against official X.411 modules: **pending**.
 
