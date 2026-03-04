@@ -1,10 +1,11 @@
 package it.amhs.network;
 
 import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLServerSocket;
-import javax.net.ssl.SSLSocket;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,28 +23,41 @@ public class RFC1006Server {
     private final String host;
     private final int port;
     private final SSLContext tls;
+    private final boolean tlsEnabled;
     private final boolean needClientAuth;
 
     public RFC1006Server(@Value("${rfc1006.server.host:0.0.0.0}") String host,
                          @Value("${rfc1006.server.port:102}") int port,
+                         @Value("${rfc1006.tls.enabled:false}") boolean tlsEnabled,
                          @Value("${rfc1006.tls.need-client-auth:false}") boolean needClientAuth,
                          SSLContext tls, RFC1006Service rfc1006Service) {
 		this.host = host;
 		this.port = port;
 		this.tls = tls;
+		this.tlsEnabled = tlsEnabled;
 		this.needClientAuth = needClientAuth;
 		this.rfc1006Service = rfc1006Service;
     }
 
     public void start() throws Exception {
-        SSLServerSocket server = (SSLServerSocket) tls.getServerSocketFactory().createServerSocket(port, 50, InetAddress.getByName(host));
-        server.setEnabledProtocols(new String[]{"TLSv1.3", "TLSv1.2"});
-        //server.setNeedClientAuth(false);
-        server.setNeedClientAuth(needClientAuth);
-        logger.info("AMHS RFC1006 TLS Server listening on {}:{}", host, port);
+        if (tlsEnabled) {
+            SSLServerSocket server = (SSLServerSocket) tls.getServerSocketFactory().createServerSocket(port, 50, InetAddress.getByName(host));
+            server.setEnabledProtocols(new String[]{"TLSv1.3", "TLSv1.2"});
+            server.setNeedClientAuth(needClientAuth);
+            logger.info("AMHS RFC1006 TLS server listening on {}:{}", host, port);
+            acceptLoop(server);
+            return;
+        }
+
+        ServerSocket server = new ServerSocket(port, 50, InetAddress.getByName(host));
+        logger.info("AMHS RFC1006 clear transport server listening on {}:{}", host, port);
+        acceptLoop(server);
+    }
+
+    private void acceptLoop(ServerSocket server) throws Exception {
         while (true) {
-            SSLSocket socket = (SSLSocket) server.accept();
-            logger.info("AMHS Connection from " + socket.getInetAddress());
+            Socket socket = server.accept();
+            logger.info("AMHS Connection from {}", socket.getInetAddress());
             new Thread(() -> rfc1006Service.handleClient(socket)).start();
         }
     }

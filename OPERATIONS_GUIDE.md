@@ -1,6 +1,6 @@
 # AMHS Server - Guida operativa (modalità non-web)
 
-Questa guida è allineata all'implementazione attuale: il servizio gira **senza API REST** ed espone solo endpoint RFC1006 su TLS.
+Questa guida è allineata all'implementazione attuale: il servizio gira **senza API REST** ed espone endpoint RFC1006 con trasporto configurabile (clear RFC1006 oppure TLS).
 
 > ⚠️ **Importante**: questa implementazione è un **simulatore AMHS applicativo** (header testuali + policy AMHS). Non implementa uno stack X.400/P1/P3 ASN.1 completo conforme ICAO Doc 9880/9705 end-to-end.
 
@@ -10,7 +10,10 @@ Questa guida è allineata all'implementazione attuale: il servizio gira **senza 
 
 - L'applicazione Spring Boot parte in modalità **non-web** (`WebApplicationType.NONE`).
 - Non c'è listener HTTP su `:8080`.
-- Il server AMHS è in ascolto su RFC1006/TLS (`rfc1006.server.port`, default `102`).
+- Il server AMHS è in ascolto su RFC1006 (`rfc1006.server.port`, default `102`).
+- Il trasporto è controllato da `rfc1006.tls.enabled`:
+  - `false` = RFC1006 classico (TPKT/COTP in chiaro, utile per interoperabilità ISODE legacy)
+  - `true` = RFC1006 su TLS (raccomandato in esercizio operativo)
 - Il campo `Channel` è una proprietà del messaggio AMHS (routing/policy), **non** una porta di ascolto.
 
 In pratica:
@@ -24,7 +27,8 @@ In pratica:
 Parametri principali:
 
 - `rfc1006.server.port=102`
-- `rfc1006.tls.need-client-auth=false|true`
+- `rfc1006.tls.enabled=false|true`
+- `rfc1006.tls.need-client-auth=false|true` (valido solo quando TLS è abilitato)
 - `tls.keystore.path=classpath:certs/server.p12`
 - `tls.keystore.password=...`
 - `tls.truststore.path=classpath:certs/client-truststore.jks`
