@@ -30,6 +30,7 @@ public class MTAService {
     private final AMHSMessageStateMachine stateMachine;
     private final AMHSDeliveryReportService deliveryReportService;
     private final boolean databaseEnabled;
+    private final X411DiagnosticMapper diagnosticMapper;
 
     public MTAService(
         AMHSMessageRepository amhsMessagesRepository,
@@ -37,6 +38,7 @@ public class MTAService {
         AMHSChannelService channelService,
         AMHSMessageStateMachine stateMachine,
         AMHSDeliveryReportService deliveryReportService,
+        X411DiagnosticMapper diagnosticMapper,
         @Value("${amhs.database.enabled:true}") boolean databaseEnabled
     ) {
         this.amhsMessagesRepository = amhsMessagesRepository;
@@ -45,6 +47,7 @@ public class MTAService {
         this.stateMachine = stateMachine;
         this.deliveryReportService = deliveryReportService;
         this.databaseEnabled = databaseEnabled;
+        this.diagnosticMapper = diagnosticMapper;
     }
 
     public AMHSMessage storeMessage(
@@ -189,7 +192,9 @@ public class MTAService {
             if (message.getLifecycleState() != AMHSMessageState.REPORTED) {
                 stateMachine.transition(message, AMHSMessageState.FAILED);
                 AMHSMessage failed = amhsMessagesRepository.save(message);
-                deliveryReportService.createNonDeliveryReport(failed, "validation-or-routing-failure", "X411:31", AMHSDeliveryStatus.FAILED);
+                String reason = "validation-or-routing-failure";
+                String diagnosticCode = diagnosticMapper.map(reason, ex.getMessage());
+                deliveryReportService.createNonDeliveryReport(failed, reason, diagnosticCode, AMHSDeliveryStatus.FAILED);
                 stateMachine.transition(failed, AMHSMessageState.REPORTED);
                 amhsMessagesRepository.save(failed);
             }

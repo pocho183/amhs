@@ -47,6 +47,13 @@ public class AMHSDeliveryReport {
     @Column(name = "non_delivery_reason", length = 128)
     private String nonDeliveryReason;
 
+
+    @Column(name = "related_mts_identifier", length = 255)
+    private String relatedMtsIdentifier;
+
+    @Column(name = "correlation_token", length = 255)
+    private String correlationToken;
+
     @Column(name = "return_of_content", nullable = false)
     private boolean returnOfContent;
 

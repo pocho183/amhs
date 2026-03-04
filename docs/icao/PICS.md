@@ -58,17 +58,17 @@ Legend:
 | R-01 | Outbound relay routing table | Y | Prefix-based route selection implemented. |
 | R-02 | Alternate route fallback | Y | Alternate next-hop path supported. |
 | R-03 | Retry with exponential backoff | Y | Retry policy and dead-letter path supported. |
-| R-04 | NDR/DR protocol-level correlation | P | Delivery report persistence exists; full protocol correlation pending. |
-| D-01 | Negative diagnostic mapping completeness | P | Core diagnostics present, full matrix pending. |
-| O-01 | Operational HA/failover profile | N | No built-in clustered failover guarantees. |
+| R-04 | NDR/DR protocol-level correlation | Y | DR/NDR reports now persist `related_mts_identifier` and `correlation_token` for protocol-level message/report linkage. |
+| D-01 | Negative diagnostic mapping completeness | Y | Dedicated X.411 diagnostic mapper covers timeout, routing, loop, security/auth and validation failure classes with explicit/fallback code selection. |
+| O-01 | Operational HA/failover profile | P | No clustered failover in-process; persistence-backed restart/recovery profile is documented for active/passive operations. |
 
 ## 4. Known profile gaps (must close for strict ICAO readiness)
 
 1. Replace ad-hoc/simplified ASN.1 assumptions with official X.411 module-traceable definitions.
 2. Complete ORName/ORAddress grammar and string-type interoperability (including Teletex/DirectoryName choices).
 3. Harden security profile with explicit CRL/OCSP and ATN PKI policy checks.
-4. Expand diagnostics to full mandatory negative scenarios and result mappings.
-5. Validate interoperability against a certified AMHS node and preserve evidence.
+4. Validate interoperability against a certified AMHS node and preserve evidence.
+5. Define/validate clustered HA failover guarantees for strict operational conformance.
 
 ## 5. Evidence pointers in this repository
 

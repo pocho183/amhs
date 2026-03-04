@@ -22,15 +22,18 @@ public class AMHSDeliveryReportService {
     private final AMHSDeliveryReportRepository deliveryReportRepository;
     private final AMHSMessageRepository messageRepository;
     private final AMHSMessageStateMachine stateMachine;
+    private final X411DiagnosticMapper diagnosticMapper;
 
     public AMHSDeliveryReportService(
         AMHSDeliveryReportRepository deliveryReportRepository,
         AMHSMessageRepository messageRepository,
-        AMHSMessageStateMachine stateMachine
+        AMHSMessageStateMachine stateMachine,
+        X411DiagnosticMapper diagnosticMapper
     ) {
         this.deliveryReportRepository = deliveryReportRepository;
         this.messageRepository = messageRepository;
         this.stateMachine = stateMachine;
+        this.diagnosticMapper = diagnosticMapper;
     }
 
     public void setReportExpiration(AMHSMessage message) {
@@ -58,7 +61,8 @@ public class AMHSDeliveryReportService {
 
         AMHSDeliveryStatus status = AMHSDeliveryStatus.FAILED;
         String reason = outcome.diagnostic() == null || outcome.diagnostic().isBlank() ? "transfer-rejected" : outcome.diagnostic();
-        createNonDeliveryReport(message, reason, "X411:31", status);
+        String diagnosticCode = diagnosticMapper.map(reason, outcome.diagnostic());
+        createNonDeliveryReport(message, reason, diagnosticCode, status);
     }
 
     public Optional<AMHSMessage> resolveByMtsIdentifier(String mtsIdentifier) {
@@ -115,10 +119,27 @@ public class AMHSDeliveryReportService {
         report.setNonDeliveryReason(reason);
         report.setReturnOfContent(shouldReturnContent(message));
         report.setExpiresAt(message.getDrExpirationAt());
+        report.setRelatedMtsIdentifier(message.getMtsIdentifier());
+        report.setCorrelationToken(buildCorrelationToken(message));
         return report;
     }
 
     private boolean shouldReturnContent(AMHSMessage message) {
         return message.getIpnRequest() != null && message.getIpnRequest() > 0;
+    }
+
+    private String buildCorrelationToken(AMHSMessage message) {
+        String msgId = message.getMessageId() == null ? "" : message.getMessageId().trim();
+        String mts = message.getMtsIdentifier() == null ? "" : message.getMtsIdentifier().trim();
+        if (!msgId.isEmpty() && !mts.isEmpty()) {
+            return msgId + "::" + mts;
+        }
+        if (!msgId.isEmpty()) {
+            return "MSG::" + msgId;
+        }
+        if (!mts.isEmpty()) {
+            return "MTS::" + mts;
+        }
+        return null;
     }
 }
