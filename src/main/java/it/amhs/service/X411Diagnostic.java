@@ -1,6 +1,7 @@
 package it.amhs.service;
 
 import java.util.Arrays;
+import java.util.Optional;
 
 public record X411Diagnostic(ReasonCode reasonCode, int diagnosticCode) {
 
@@ -39,7 +40,11 @@ public record X411Diagnostic(ReasonCode reasonCode, int diagnosticCode) {
         CONGESTION(9, true),
         DISTRIBUTION_LIST_EXPANSION_PROHIBITED(10, false),
         REDIRECTION_LOOP_DETECTED(11, false),
-        ALTERNATE_RECIPIENT_NOT_ALLOWED(12, false);
+        ALTERNATE_RECIPIENT_NOT_ALLOWED(12, false),
+        CONVERSION_NOT_ALLOWED(13, false),
+        CONTENT_TYPE_NOT_SUPPORTED(14, false),
+        RECIPIENT_REASSIGNED(15, false),
+        EXPANSION_FAILED(16, false);
 
         private final int code;
         private final boolean transientFailure;
@@ -54,10 +59,13 @@ public record X411Diagnostic(ReasonCode reasonCode, int diagnosticCode) {
         }
 
         public static ReasonCode fromCode(int code) {
+            return fromCodeOptional(code).orElse(UNABLE_TO_TRANSFER);
+        }
+
+        public static Optional<ReasonCode> fromCodeOptional(int code) {
             return Arrays.stream(values())
                 .filter(value -> value.code == code)
-                .findFirst()
-                .orElse(UNABLE_TO_TRANSFER);
+                .findFirst();
         }
     }
 }
