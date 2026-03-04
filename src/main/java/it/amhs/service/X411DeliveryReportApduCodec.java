@@ -2,6 +2,7 @@ package it.amhs.service;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 
 import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
@@ -12,6 +13,9 @@ import it.amhs.domain.AMHSDeliveryStatus;
  * from persistence entities before transport integration.
  */
 public class X411DeliveryReportApduCodec {
+
+    private static final int APPLICATION_TAG_CLASS = 1;
+    private static final int CONTEXT_SPECIFIC_TAG_CLASS = 2;
 
     public byte[] encodeNonDeliveryReport(NonDeliveryReportApdu report) {
         if (report.reportedRecipientInfo() == null || report.reportedRecipientInfo().isEmpty()) {
@@ -93,7 +97,7 @@ public class X411DeliveryReportApduCodec {
         byte[] value = concat(
             encodeIa5(0, info.recipient()),
             encodeIa5(1, info.deliveryStatus()),
-            encodeOptionalIa5(2, info.diagnosticCode())
+            encodeOptionalInteger(2, info.diagnosticCode())
         );
         return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 16, 0, value.length, value));
     }
@@ -157,7 +161,26 @@ public class X411DeliveryReportApduCodec {
 
     public record ReportedRecipientInfo(String recipient, String deliveryStatus, String diagnosticCode) {
         public static ReportedRecipientInfo from(String recipient, AMHSDeliveryStatus status, String diagnosticCode) {
-            return new ReportedRecipientInfo(recipient, status.name(), diagnosticCode);
+            return new ReportedRecipientInfo(recipient, status.name(), parseDiagnosticCode(diagnosticCode));
+        }
+
+        private static Integer parseDiagnosticCode(String diagnosticCode) {
+            if (diagnosticCode == null || diagnosticCode.isBlank()) {
+                return null;
+            }
+            String normalized = diagnosticCode.trim().toUpperCase(Locale.ROOT);
+            if (normalized.startsWith("X411:")) {
+                normalized = normalized.substring(5);
+            }
+            try {
+                int value = Integer.parseInt(normalized);
+                if (!X411Diagnostic.isValidDiagnosticCode(value)) {
+                    throw new IllegalArgumentException("Invalid diagnosticCode value: " + diagnosticCode);
+                }
+                return value;
+            } catch (NumberFormatException ex) {
+                throw new IllegalArgumentException("Invalid diagnosticCode value: " + diagnosticCode, ex);
+            }
         }
     }
 }
