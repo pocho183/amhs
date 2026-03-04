@@ -44,12 +44,12 @@ Legend:
 | P1-03 | Per-recipient handling | Y | Per-recipient routing state supported. |
 | P1-04 | Trace information handling | Y | Trace extraction/injection supported. |
 | P1-05 | Unknown extension preservation | Y | Unknown extension containers retained. |
-| P1-06 | Full X.411 ASN.1 module conformance | N | Official module-derived encoding proof not yet provided. |
+| P1-06 | Full X.411 ASN.1 module conformance | P | Module-traceability and BER tag/field evidence documented for implemented subset; full official generated-package proof still pending. |
 | OR-01 | Structured O/R Address parsing | Y | Supports keyed O/R attribute model. |
 | OR-02 | OU sequencing validation (OU1..OU4) | Y | Enforces non-skipping OU order. |
 | OR-03 | ISO/Numeric country validation | Y | Country checks for C attribute. |
-| OR-04 | Full ORName CHOICE coverage | P | Simplified support; full grammar pending. |
-| OR-05 | Teletex/DirectoryName compatibility | N | Not fully implemented. |
+| OR-04 | Full ORName CHOICE coverage | Y | Supports directoryName-only, ORAddress-only, and combined structured forms with BER CHOICE handling. |
+| OR-05 | Teletex/DirectoryName compatibility | P | Teletex/BMP/Universal string decoding and X.500-style DirectoryName RDN parsing supported; legacy edge-cases remain. |
 | SEC-01 | TLS transport protection | Y | Server TLS supported; optional client auth. |
 | SEC-02 | Certificate CN/OU channel policy | Y | Channel policy and sender binding checks. |
 | SEC-03 | Full PKI path validation profile | P | Depends on JVM trust/PKIX; ATN profile hardening pending. |
@@ -64,8 +64,8 @@ Legend:
 
 ## 4. Known profile gaps (must close for strict ICAO readiness)
 
-1. Replace ad-hoc/simplified ASN.1 assumptions with official X.411 module-traceable definitions.
-2. Complete ORName/ORAddress grammar and string-type interoperability (including Teletex/DirectoryName choices).
+1. Complete formal ASN.1 compiler-generated proof package against official X.411 modules (runtime traceability baseline is in place).
+2. Expand remaining ORName/ORAddress edge-case grammar and legacy interoperability vectors beyond current Teletex/DirectoryName support.
 3. Harden security profile with explicit CRL/OCSP and ATN PKI policy checks.
 4. Validate interoperability against a certified AMHS node and preserve evidence.
 5. Define/validate clustered HA failover guarantees for strict operational conformance.

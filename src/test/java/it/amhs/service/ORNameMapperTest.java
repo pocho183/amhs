@@ -45,6 +45,75 @@ class ORNameMapperTest {
         assertEquals("/C=IT/ADMD=ICAO/PRMD=ROMA/O=ENAV/OU1=LIRRZQZX", decoded.orAddress().toCanonicalString());
     }
 
+    @Test
+    void shouldDecodeDirectoryNameChoiceWithRdnAttributes() {
+        byte[] cnAtv = sequence(
+            oid("2.5.4.3"),
+            printable("LIRRATCX")
+        );
+        byte[] ouAtv = sequence(
+            oid("2.5.4.11"),
+            universal("AMHS")
+        );
+
+        byte[] name = sequence(
+            set(cnAtv),
+            set(ouAtv)
+        );
+
+        BerTlv directoryNameChoice = new BerTlv(2, true, 0, 0, name.length, name);
+        ORNameMapper.ORName decoded = ORNameMapper.fromBer(directoryNameChoice);
+
+        assertEquals("CN=LIRRATCX,OU=AMHS", decoded.directoryName().orElseThrow());
+        assertEquals("/CN=CN=LIRRATCX,OU=AMHS", decoded.orAddress().toCanonicalString());
+    }
+
+    private static byte[] printable(String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(new BerTlv(0, false, 19, 0, bytes.length, bytes));
+    }
+
+    private static byte[] universal(String value) {
+        int[] cps = value.codePoints().toArray();
+        byte[] bytes = new byte[cps.length * 4];
+        for (int i = 0; i < cps.length; i++) {
+            int cp = cps[i];
+            bytes[i * 4] = (byte) ((cp >>> 24) & 0xFF);
+            bytes[i * 4 + 1] = (byte) ((cp >>> 16) & 0xFF);
+            bytes[i * 4 + 2] = (byte) ((cp >>> 8) & 0xFF);
+            bytes[i * 4 + 3] = (byte) (cp & 0xFF);
+        }
+        return BerCodec.encode(new BerTlv(0, false, 28, 0, bytes.length, bytes));
+    }
+
+    private static byte[] oid(String dotted) {
+        String[] parts = dotted.split("\\.");
+        byte[] out = new byte[16];
+        int cursor = 0;
+        int first = Integer.parseInt(parts[0]);
+        int second = Integer.parseInt(parts[1]);
+        out[cursor++] = (byte) (first * 40 + second);
+        for (int i = 2; i < parts.length; i++) {
+            long v = Long.parseLong(parts[i]);
+            int start = cursor;
+            do {
+                out[cursor++] = (byte) (v & 0x7F);
+                v >>>= 7;
+            } while (v > 0);
+            for (int l = start, r = cursor - 1; l < r; l++, r--) {
+                byte t = out[l];
+                out[l] = out[r];
+                out[r] = t;
+            }
+            for (int j = start; j < cursor - 1; j++) {
+                out[j] |= (byte) 0x80;
+            }
+        }
+        byte[] encoded = new byte[cursor];
+        System.arraycopy(out, 0, encoded, 0, cursor);
+        return BerCodec.encode(new BerTlv(0, false, 6, 0, encoded.length, encoded));
+    }
+
     private static byte[] contextPrimitive(int tag, String value) {
         byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
         return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
@@ -58,6 +127,11 @@ class ORNameMapperTest {
 
     private static byte[] contextConstructed(int tag, byte[] value) {
         return BerCodec.encode(new BerTlv(2, true, tag, 0, value.length, value));
+    }
+
+    private static byte[] set(byte[]... chunks) {
+        byte[] out = concat(chunks);
+        return BerCodec.encode(new BerTlv(0, true, 17, 0, out.length, out));
     }
 
     private static byte[] sequence(byte[]... chunks) {
