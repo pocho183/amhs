@@ -54,6 +54,9 @@ class X411DeliveryReportApduCodecTest {
 
         BerTlv mtsIdentifier = BerCodec.findOptional(fields, X411TagMap.TAG_CLASS_CONTEXT, 0).orElseThrow();
         assertTrue(mtsIdentifier.constructed());
+        List<BerTlv> mtsFields = BerCodec.decodeAll(mtsIdentifier.value());
+        assertTrue(BerCodec.findOptional(mtsFields, X411TagMap.TAG_CLASS_CONTEXT, 0).isPresent());
+        assertTrue(BerCodec.findOptional(mtsFields, X411TagMap.TAG_CLASS_CONTEXT, 1).isPresent());
 
         BerTlv recipientContainer = BerCodec.findOptional(fields, X411TagMap.TAG_CLASS_CONTEXT, 2).orElseThrow();
         BerTlv recipientEntry = BerCodec.decodeAll(recipientContainer.value()).get(0);
@@ -64,6 +67,37 @@ class X411DeliveryReportApduCodecTest {
         assertTrue(recipient.constructed());
         assertEquals(1, status.value().length);
         assertEquals(3, status.value()[0]);
+    }
+
+    @Test
+    void decodesStructuredMtsIdentifierWithGlobalDomainAndMessageIdentifier() {
+        byte[] gdiContent = concat(
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 0, 0, 2, "IT".getBytes(StandardCharsets.US_ASCII))),
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 1, 0, 4, "ICAO".getBytes(StandardCharsets.US_ASCII))),
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 2, 0, 4, "ROMA".getBytes(StandardCharsets.US_ASCII)))
+        );
+        byte[] gdiSequence = BerCodec.encode(new BerTlv(0, true, 16, 0, gdiContent.length, gdiContent));
+        byte[] mtsIdentifier = concat(
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 0, 0, gdiSequence.length, gdiSequence)),
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 1, 0, 7, "MTS-NEW".getBytes(StandardCharsets.US_ASCII)))
+        );
+
+        byte[] entryValue = concat(
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 0, 0, 9, "/CN=OPS-1".getBytes(StandardCharsets.US_ASCII))),
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 1, 0, 1, new byte[] {3}))
+        );
+        byte[] recipientEntry = BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 16, 0, entryValue.length, entryValue));
+        byte[] recipients = BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 2, 0, recipientEntry.length, recipientEntry));
+        byte[] payload = concat(
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 0, 0, mtsIdentifier.length, mtsIdentifier)),
+            BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, 1, 0, 1, new byte[] {(byte) 0xFF})),
+            recipients
+        );
+        byte[] apdu = BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_APPLICATION, true, X411TagMap.APDU_NON_DELIVERY_REPORT, 0, payload.length, payload));
+
+        X411DeliveryReportApduCodec.NonDeliveryReportApdu decoded = codec.decodeNonDeliveryReport(apdu);
+
+        assertEquals("MTS-NEW", decoded.mtsIdentifier());
     }
 
     @Test

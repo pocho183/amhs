@@ -19,7 +19,7 @@ public class X411DeliveryReportApduCodec {
             throw new IllegalArgumentException("NonDeliveryReport requires at least one ReportedRecipientInfo");
         }
         byte[] payload = concat(
-            encodeMtsIdentifier(report.mtsIdentifier()),
+            encodeMtsIdentifier(report.mtsIdentifier(), report.reportedRecipientInfo()),
             encodeBoolean(1, report.returnOfContent()),
             encodeReportedRecipientInfo(report.reportedRecipientInfo()),
             encodeOptionalIa5(3, report.nonDeliveryReason())
@@ -82,6 +82,9 @@ public class X411DeliveryReportApduCodec {
         }
 
         List<BerTlv> mtsFields = BerCodec.decodeAll(mtsField.value());
+        if (BerCodec.findOptional(mtsFields, X411TagMap.TAG_CLASS_CONTEXT, 1).isPresent()) {
+            return decodeRequiredIa5(mtsFields, 1, "mtsIdentifier.messageIdentifier.localIdentifier");
+        }
         return decodeRequiredIa5(mtsFields, 0, "mtsIdentifier.localIdentifier");
     }
 
@@ -117,9 +120,33 @@ public class X411DeliveryReportApduCodec {
         return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 16, 0, value.length, value));
     }
 
-    private byte[] encodeMtsIdentifier(String mtsIdentifier) {
-        byte[] localIdentifier = encodeIa5(0, mtsIdentifier);
-        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 0, 0, localIdentifier.length, localIdentifier));
+    private byte[] encodeMtsIdentifier(String mtsIdentifier, List<ReportedRecipientInfo> recipients) {
+        byte[] localIdentifier = encodeIa5(1, mtsIdentifier);
+        byte[] globalDomainIdentifier = deriveGlobalDomainIdentifier(recipients);
+        byte[] mtsContent = globalDomainIdentifier.length == 0
+            ? encodeIa5(0, mtsIdentifier)
+            : concat(globalDomainIdentifier, localIdentifier);
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 0, 0, mtsContent.length, mtsContent));
+    }
+
+    private byte[] deriveGlobalDomainIdentifier(List<ReportedRecipientInfo> recipients) {
+        if (recipients == null || recipients.isEmpty()) {
+            return new byte[0];
+        }
+        ORAddress address = ORAddress.parse(recipients.get(0).recipient().trim());
+        String country = address.get("C");
+        String admd = address.get("ADMD");
+        String prmd = address.get("PRMD");
+        if (country == null || admd == null || prmd == null) {
+            return new byte[0];
+        }
+        byte[] content = concat(
+            encodeIa5(0, country),
+            encodeIa5(1, admd),
+            encodeIa5(2, prmd)
+        );
+        byte[] gdiSequence = BerCodec.encode(new BerTlv(0, true, 16, 0, content.length, content));
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 0, 0, gdiSequence.length, gdiSequence));
     }
 
     private byte[] encodeRecipient(String recipient) {
@@ -141,17 +168,21 @@ public class X411DeliveryReportApduCodec {
     }
 
     private int mapAddressAttributeTag(String key) {
-        return switch (key.toUpperCase(Locale.ROOT)) {
+        String normalized = key.toUpperCase(Locale.ROOT);
+        if (normalized.startsWith("EXT-CTX-")) {
+            return Integer.parseInt(normalized.substring("EXT-CTX-".length()));
+        }
+        return switch (normalized) {
             case "C" -> 0;
-            case "ADMD" -> 1;
-            case "PRMD" -> 2;
+            case "A", "ADMD" -> 1;
+            case "P", "PRMD" -> 2;
             case "O" -> 3;
             case "OU1" -> 4;
             case "OU2" -> 5;
             case "OU3" -> 6;
             case "OU4" -> 7;
             case "CN" -> 8;
-            default -> 30;
+            default -> throw new IllegalArgumentException("Unsupported structured O/R attribute tag mapping: " + key);
         };
     }
 
