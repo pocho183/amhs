@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.EOFException;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -186,8 +187,8 @@ public class RFC1006Service {
                 try {
                     storeWithStrictPriority(incoming);
                     String ack = "Message-ID: " + incoming.messageId + "\n"
-                        + "From: " + incoming.to + "\n"
-                        + "To: " + incoming.from + "\n"
+                        + "From: " + incoming.from + "\n"
+                        + "To: " + incoming.to + "\n"
                         + "Status: RECEIVED\n";
                     sendRFC1006(out, ack);
                 } catch (IllegalArgumentException ex) {
@@ -200,6 +201,8 @@ public class RFC1006Service {
             }
         } catch (SocketTimeoutException timeout) {
             logger.info("RFC1006 idle timeout reached, closing client session after {} ms", idleTimeoutMillis);
+        } catch (SocketException | EOFException disconnect) {
+            logger.info("RFC1006 peer disconnected: {}", disconnect.getMessage());
         } catch (Exception e) {
             logger.error("RFC1006 handling error", e);
         } finally {
@@ -487,9 +490,9 @@ public class RFC1006Service {
             P1BerMessageParser.ParsedP1Message berMessage = p1BerMessageParser.parse(rawPayload);
             return new IncomingMessage(
                 berMessage.messageId() == null ? UUID.randomUUID().toString() : berMessage.messageId(),
-                berMessage.from(),
-                berMessage.to(),
-                berMessage.body(),
+                requireNonBlank(berMessage.from(), "from"),
+                requireNonBlank(berMessage.to(), "to"),
+                requireNonBlank(berMessage.body(), "body"),
                 berMessage.profile(),
                 berMessage.priority(),
                 berMessage.subject(),
@@ -534,8 +537,8 @@ public class RFC1006Service {
         }
 
         String messageId = headers.getOrDefault("Message-ID", UUID.randomUUID().toString());
-        String from = headers.getOrDefault("From", "UNKNOWN");
-        String to = headers.getOrDefault("To", "UNKNOWN");
+        String from = requiredHeader(headers, "From");
+        String to = requiredHeader(headers, "To");
         AMHSProfile profile = parseProfile(headers.getOrDefault("Profile", "P3"));
         AMHSPriority priority = parsePriority(headers.getOrDefault("Priority", "GG"));
         String subject = headers.getOrDefault("Subject", "");
@@ -546,7 +549,7 @@ public class RFC1006Service {
             messageId,
             from,
             to,
-            body,
+            requireNonBlank(body, "body"),
             profile,
             priority,
             subject,
@@ -560,6 +563,17 @@ public class RFC1006Service {
             null,
             System.nanoTime()
         );
+    }
+
+    private String requiredHeader(Map<String, String> headers, String key) {
+        return requireNonBlank(headers.get(key), key.toLowerCase());
+    }
+
+    private String requireNonBlank(String value, String fieldName) {
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException("Missing or blank AMHS field '" + fieldName + "'");
+        }
+        return value.trim();
     }
 
     static String appendTraceHop(String existingTrace, Instant arrivalInstant, String localMtaName, String routingDomain) {
