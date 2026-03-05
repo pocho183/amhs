@@ -23,8 +23,8 @@ class X411DeliveryReportApduCodecTest {
             "MTS-123",
             true,
             List.of(
-                new X411DeliveryReportApduCodec.ReportedRecipientInfo("/CN=OPS-1", "FAILED", 22),
-                new X411DeliveryReportApduCodec.ReportedRecipientInfo("/CN=OPS-2", "DEFERRED", 28)
+                new X411DeliveryReportApduCodec.ReportedRecipientInfo("/CN=OPS-1", "FAILURE", 22),
+                new X411DeliveryReportApduCodec.ReportedRecipientInfo("/CN=OPS-2", "DELAYED", 28)
             ),
             "transfer-failure"
         );
@@ -35,7 +35,7 @@ class X411DeliveryReportApduCodecTest {
         assertEquals("MTS-123", decoded.mtsIdentifier());
         assertEquals(2, decoded.reportedRecipientInfo().size());
         assertEquals("/CN=OPS-1", decoded.reportedRecipientInfo().get(0).recipient());
-        assertEquals("FAILED", decoded.reportedRecipientInfo().get(0).deliveryStatus());
+        assertEquals("FAILURE", decoded.reportedRecipientInfo().get(0).deliveryStatus());
         assertEquals(28, decoded.reportedRecipientInfo().get(1).diagnosticCode());
     }
 
@@ -66,7 +66,7 @@ class X411DeliveryReportApduCodecTest {
         BerTlv status = BerCodec.findOptional(recipientFields, X411TagMap.TAG_CLASS_CONTEXT, 1).orElseThrow();
         assertTrue(recipient.constructed());
         assertEquals(1, status.value().length);
-        assertEquals(3, status.value()[0]);
+        assertEquals(1, status.value()[0]);
     }
 
     @Test
@@ -165,6 +165,30 @@ class X411DeliveryReportApduCodecTest {
         assertTrue(validation.fieldCount() >= 3);
     }
 
+
+    @Test
+    void encodesDiagnosticAsReasonAndDiagnosticPair() {
+        X411DeliveryReportApduCodec.NonDeliveryReportApdu source = new X411DeliveryReportApduCodec.NonDeliveryReportApdu(
+            "MTS-999",
+            false,
+            List.of(new X411DeliveryReportApduCodec.ReportedRecipientInfo("/CN=OPS-1", "FAILURE", 22)),
+            null
+        );
+
+        byte[] encoded = codec.encodeNonDeliveryReport(source);
+        BerTlv apdu = BerCodec.decodeSingle(encoded);
+        List<BerTlv> fields = BerCodec.decodeAll(apdu.value());
+        BerTlv recipientContainer = BerCodec.findOptional(fields, X411TagMap.TAG_CLASS_CONTEXT, 2).orElseThrow();
+        BerTlv recipientEntry = BerCodec.decodeAll(recipientContainer.value()).get(0);
+        List<BerTlv> recipientFields = BerCodec.decodeAll(recipientEntry.value());
+
+        BerTlv diagnostic = BerCodec.findOptional(recipientFields, X411TagMap.TAG_CLASS_CONTEXT, 2).orElseThrow();
+        assertTrue(diagnostic.constructed());
+        List<BerTlv> pair = BerCodec.decodeAll(diagnostic.value());
+        assertEquals(0, decodeInteger(pair.get(0).value()));
+        assertEquals(22, decodeInteger(pair.get(1).value()));
+    }
+
     @Test
     void rejectsNonDeliveryReportWithoutRecipients() {
         X411DeliveryReportApduCodec.NonDeliveryReportApdu source = new X411DeliveryReportApduCodec.NonDeliveryReportApdu(
@@ -175,6 +199,14 @@ class X411DeliveryReportApduCodecTest {
         );
 
         assertThrows(IllegalArgumentException.class, () -> codec.encodeNonDeliveryReport(source));
+    }
+
+    private static int decodeInteger(byte[] value) {
+        int result = 0;
+        for (byte b : value) {
+            result = (result << 8) | (b & 0xFF);
+        }
+        return result;
     }
 
     private static byte[] concat(byte[]... chunks) {

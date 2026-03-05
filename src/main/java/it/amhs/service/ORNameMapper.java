@@ -155,6 +155,10 @@ public final class ORNameMapper {
                 case 6 -> "OU3";
                 case 7 -> "OU4";
                 case 8 -> "CN";
+                case 9 -> "S";
+                case 10 -> "G";
+                case 11 -> "I";
+                case 12 -> "NUMUID";
                 default -> "EXT-CTX-" + tagNumber;
             };
         }
