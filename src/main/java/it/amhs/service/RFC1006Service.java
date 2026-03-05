@@ -4,20 +4,17 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.EOFException;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -74,6 +71,7 @@ public class RFC1006Service {
     private final int idleTimeoutMillis;
     private final boolean requireAcseAuthentication;
     private final String expectedAcseAuthenticationValue;
+    private final IncomingMessageParser incomingMessageParser;
 
     public RFC1006Service(
         AMHSMessageRepository amhsMessagesRepository,
@@ -97,6 +95,7 @@ public class RFC1006Service {
         this.idleTimeoutMillis = idleTimeoutMillis;
         this.requireAcseAuthentication = requireAcseAuthentication;
         this.expectedAcseAuthenticationValue = expectedAcseAuthenticationValue == null ? "" : expectedAcseAuthenticationValue;
+        this.incomingMessageParser = new IncomingMessageParser(p1BerMessageParser, localMtaName, localRoutingDomain);
         this.priorityExecutor = new ThreadPoolExecutor(
             1,
             1,
@@ -182,12 +181,12 @@ public class RFC1006Service {
                     continue;
                 }
 
-                IncomingMessage incoming = parseIncomingMessage(payload, message, identity);
+                IncomingMessage incoming = incomingMessageParser.parse(payload, message, identity.cn(), identity.ou());
                 try {
                     storeWithStrictPriority(incoming);
                     String ack = "Message-ID: " + incoming.messageId + "\n"
-                        + "From: " + incoming.to + "\n"
-                        + "To: " + incoming.from + "\n"
+                        + "From: " + incoming.from + "\n"
+                        + "To: " + incoming.to + "\n"
                         + "Status: RECEIVED\n";
                     sendRFC1006(out, ack);
                 } catch (IllegalArgumentException ex) {
@@ -200,6 +199,8 @@ public class RFC1006Service {
             }
         } catch (SocketTimeoutException timeout) {
             logger.info("RFC1006 idle timeout reached, closing client session after {} ms", idleTimeoutMillis);
+        } catch (SocketException | EOFException disconnect) {
+            logger.info("RFC1006 peer disconnected: {}", disconnect.getMessage());
         } catch (Exception e) {
             logger.error("RFC1006 handling error", e);
         } finally {
@@ -482,86 +483,6 @@ public class RFC1006Service {
         }
     }
 
-    private IncomingMessage parseIncomingMessage(byte[] rawPayload, String message, CertificateIdentity identity) {
-        if (rawPayload.length > 0 && (rawPayload[0] & 0xFF) == 0x30) {
-            P1BerMessageParser.ParsedP1Message berMessage = p1BerMessageParser.parse(rawPayload);
-            return new IncomingMessage(
-                berMessage.messageId() == null ? UUID.randomUUID().toString() : berMessage.messageId(),
-                berMessage.from(),
-                berMessage.to(),
-                berMessage.body(),
-                berMessage.profile(),
-                berMessage.priority(),
-                berMessage.subject(),
-                AMHSChannelService.DEFAULT_CHANNEL_NAME,
-                identity.cn(),
-                identity.ou(),
-                berMessage.filingTime(),
-                berMessage.transferEnvelope().mtsIdentifier().flatMap(P1BerMessageParser.MTSIdentifier::localIdentifier).orElse(null),
-                berMessage.transferEnvelope().contentTypeOid().orElse(null),
-                appendTraceHop(
-                    berMessage.transferEnvelope().traceInformation().map(t -> String.join(">", t.hops())).orElse(null),
-                    Instant.now(),
-                    localMtaName,
-                    localRoutingDomain
-                ),
-                berMessage.transferEnvelope().perRecipientFields().isEmpty()
-                    ? null
-                    : berMessage.transferEnvelope().perRecipientFields().stream()
-                        .map(p -> p.recipient() + p.responsibility().map(r -> "(" + r + ")").orElse(""))
-                        .collect(java.util.stream.Collectors.joining(",")),
-                System.nanoTime()
-            );
-        }
-
-        Map<String, String> headers = new HashMap<>();
-        String body = "";
-
-        String[] parts = message.split(",|\\n");
-        for (String part : parts) {
-            if (!part.contains(":")) {
-                continue;
-            }
-            String[] kv = part.split(":", 2);
-            String key = kv[0].trim();
-            String value = kv[1].trim();
-
-            if (key.equalsIgnoreCase("Body")) {
-                body = value;
-            } else {
-                headers.put(key, value);
-            }
-        }
-
-        String messageId = headers.getOrDefault("Message-ID", UUID.randomUUID().toString());
-        String from = headers.getOrDefault("From", "UNKNOWN");
-        String to = headers.getOrDefault("To", "UNKNOWN");
-        AMHSProfile profile = parseProfile(headers.getOrDefault("Profile", "P3"));
-        AMHSPriority priority = parsePriority(headers.getOrDefault("Priority", "GG"));
-        String subject = headers.getOrDefault("Subject", "");
-        String channel = headers.getOrDefault("Channel", AMHSChannelService.DEFAULT_CHANNEL_NAME);
-        Date filingTime = parseFilingTime(headers.get("Filing-Time"));
-
-        return new IncomingMessage(
-            messageId,
-            from,
-            to,
-            body,
-            profile,
-            priority,
-            subject,
-            channel,
-            identity.cn(),
-            identity.ou(),
-            filingTime,
-            null,
-            null,
-            null,
-            null,
-            System.nanoTime()
-        );
-    }
-
     static String appendTraceHop(String existingTrace, Instant arrivalInstant, String localMtaName, String routingDomain) {
         String arrival = arrivalInstant == null ? Instant.now().toString() : arrivalInstant.toString();
         String mta = StringUtils.hasText(localMtaName) ? localMtaName.trim() : "LOCAL-MTA";
@@ -610,44 +531,6 @@ public class RFC1006Service {
             response = "Unknown command.\n";
         }
         sendRFC1006(out, response);
-    }
-
-    private AMHSProfile parseProfile(String value) {
-        try {
-            return AMHSProfile.valueOf(value.trim().toUpperCase());
-        } catch (Exception ex) {
-            logger.warn("Unsupported profile '{}', defaulting to P3", value);
-            return AMHSProfile.P3;
-        }
-    }
-
-    private AMHSPriority parsePriority(String value) {
-        try {
-            return AMHSPriority.valueOf(value.trim().toUpperCase());
-        } catch (Exception ex) {
-            logger.warn("Unsupported priority '{}', defaulting to GG", value);
-            return AMHSPriority.GG;
-        }
-    }
-
-    private Date parseFilingTime(String filingTimeHeader) {
-        if (filingTimeHeader == null || filingTimeHeader.isBlank()) {
-            return Date.from(Instant.now());
-        }
-
-        try {
-            return Date.from(Instant.parse(filingTimeHeader.trim()));
-        } catch (Exception ignored) {
-        }
-
-        try {
-            SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss");
-            format.setTimeZone(TimeZone.getTimeZone("UTC"));
-            return format.parse(filingTimeHeader.trim());
-        } catch (ParseException ex) {
-            logger.warn("Invalid Filing-Time '{}', defaulting to now", filingTimeHeader);
-            return Date.from(Instant.now());
-        }
     }
 
     private CertificateIdentity extractCertificateIdentity(Socket socket) {
@@ -857,7 +740,7 @@ public class RFC1006Service {
     private record COTPFrame(byte type, boolean endOfTSDU, byte[] payload) {
     }
 
-    private record IncomingMessage(
+    static record IncomingMessage(
         String messageId,
         String from,
         String to,
