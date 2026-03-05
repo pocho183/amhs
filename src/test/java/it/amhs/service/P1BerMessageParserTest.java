@@ -39,7 +39,6 @@ class P1BerMessageParserTest {
         assertEquals("SUBJECT", parsed.subject());
     }
 
-
     @Test
     void shouldParseP1ProfileValue() {
         byte[] content = concat(
@@ -105,13 +104,28 @@ class P1BerMessageParserTest {
         assertEquals("MTA1", parsed.transferEnvelope().traceInformation().orElseThrow().hops().get(0));
     }
 
+    @Test
+    void shouldParseConstructedUtf8FieldsFromContextTags() {
+        byte[] from = contextConstructed(0, utf8Universal("LIRRZQZX"));
+        byte[] to = contextConstructed(1, utf8Universal("LIIRYAYX"));
+        byte[] body = contextConstructed(2, utf8Universal("HELLO"));
+        byte[] subject = contextConstructed(5, utf8Universal("SUBJECT"));
+
+        byte[] content = concat(from, to, body, subject);
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, content.length, content));
+
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+
+        assertEquals("LIRRZQZX", parsed.from());
+        assertEquals("LIIRYAYX", parsed.to());
+        assertEquals("HELLO", parsed.body());
+        assertEquals("SUBJECT", parsed.subject());
+    }
 
     private static byte[] contextUtf8(int tag, String value) {
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
         return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
     }
-
-
 
     @Test
     void shouldParseEnvelopeSecurityParametersAndUnknownExtensions() {
@@ -167,6 +181,11 @@ class P1BerMessageParserTest {
         P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
 
         assertEquals("/C=380/ADMD= /PRMD=ROMA/O=ENAV/OU1=LIRRZQZX/EXT-CTX-22=OPS-EXT", parsed.from());
+    }
+
+    private static byte[] utf8Universal(String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        return BerCodec.encode(new BerTlv(0, false, 12, 0, bytes.length, bytes));
     }
 
     private static byte[] contextPrimitive(int tag, String value) {

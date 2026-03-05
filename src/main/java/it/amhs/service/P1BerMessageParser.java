@@ -1,6 +1,7 @@
 package it.amhs.service;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
@@ -145,8 +146,8 @@ public class P1BerMessageParser {
             .map(entry -> {
                 List<BerTlv> fields = BerCodec.decodeAll(entry.value());
                 String recipient = BerCodec.findOptional(fields, 2, 0)
-                    .map(value -> new String(value.value(), StandardCharsets.US_ASCII))
-                    .orElse("UNKNOWN");
+                    .map(this::mapOriginator)
+                    .orElse(null);
                 Optional<Integer> responsibility = BerCodec.findOptional(fields, 2, 1)
                     .map(this::parseIntegerValue);
                 Optional<Integer> deliveryFlags = BerCodec.findOptional(fields, 2, 2)
@@ -241,7 +242,7 @@ public class P1BerMessageParser {
 
     private Optional<String> optionalIa5(List<BerTlv> fields, int contextTag) {
         return BerCodec.findOptional(fields, 2, contextTag)
-            .map(value -> new String(value.value(), StandardCharsets.US_ASCII));
+            .map(value -> decodeTextValue(value, StandardCharsets.US_ASCII));
     }
 
     private String requiredUtf8(List<BerTlv> fields, int contextTag, String field) {
@@ -251,7 +252,29 @@ public class P1BerMessageParser {
 
     private Optional<String> optionalUtf8(List<BerTlv> fields, int contextTag) {
         return BerCodec.findOptional(fields, 2, contextTag)
-            .map(value -> new String(value.value(), StandardCharsets.UTF_8));
+            .map(value -> decodeTextValue(value, StandardCharsets.UTF_8));
+    }
+
+    private String decodeTextValue(BerTlv value, Charset fallbackCharset) {
+        if (!value.constructed()) {
+            return new String(value.value(), fallbackCharset);
+        }
+
+        List<BerTlv> nested = BerCodec.decodeAll(value.value());
+        if (nested.size() == 1 && !nested.get(0).constructed()) {
+            BerTlv nestedValue = nested.get(0);
+            if (!nestedValue.isUniversal()) {
+                return new String(nestedValue.value(), fallbackCharset);
+            }
+            return switch (nestedValue.tagNumber()) {
+                case 12 -> new String(nestedValue.value(), StandardCharsets.UTF_8);
+                case 19, 22, 25 -> new String(nestedValue.value(), StandardCharsets.US_ASCII);
+                case 20 -> new String(nestedValue.value(), StandardCharsets.ISO_8859_1);
+                default -> new String(nestedValue.value(), fallbackCharset);
+            };
+        }
+
+        return new String(value.value(), fallbackCharset);
     }
 
     private Optional<Integer> optionalEnumerated(List<BerTlv> fields, int contextTag) {
