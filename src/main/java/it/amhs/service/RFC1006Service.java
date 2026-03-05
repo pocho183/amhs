@@ -517,24 +517,8 @@ public class RFC1006Service {
             );
         }
 
-        Map<String, String> headers = new HashMap<>();
-        String body = "";
-
-        String[] parts = message.split(",|\\n");
-        for (String part : parts) {
-            if (!part.contains(":")) {
-                continue;
-            }
-            String[] kv = part.split(":", 2);
-            String key = kv[0].trim();
-            String value = kv[1].trim();
-
-            if (key.equalsIgnoreCase("Body")) {
-                body = value;
-            } else {
-                headers.put(key, value);
-            }
-        }
+        Map<String, String> headers = parseKeyValuePayload(message);
+        String body = firstNonBlank(headers.get("Body"), headers.get("Text"), message);
 
         String messageId = headers.getOrDefault("Message-ID", UUID.randomUUID().toString());
         String from = requiredHeader(headers, "From");
