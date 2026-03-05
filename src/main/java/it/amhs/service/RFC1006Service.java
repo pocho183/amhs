@@ -521,8 +521,8 @@ public class RFC1006Service {
         String body = firstNonBlank(headers.get("Body"), headers.get("Text"), message);
 
         String messageId = headers.getOrDefault("Message-ID", UUID.randomUUID().toString());
-        String from = resolveFrom(headers, identity);
-        String to = resolveTo(headers);
+        String from = requiredHeader(headers, "From");
+        String to = requiredHeader(headers, "To");
         AMHSProfile profile = parseProfile(headers.getOrDefault("Profile", "P3"));
         AMHSPriority priority = parsePriority(headers.getOrDefault("Priority", "GG"));
         String subject = headers.getOrDefault("Subject", "");
@@ -549,101 +549,8 @@ public class RFC1006Service {
         );
     }
 
-    private Map<String, String> parseKeyValuePayload(String message) {
-        Map<String, String> headers = new HashMap<>();
-        for (String line : message.split("\\n")) {
-            String trimmed = line.trim();
-            if (trimmed.isEmpty() || trimmed.startsWith(";") || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
-                continue;
-            }
-
-            String[] kv = null;
-            if (trimmed.contains(":")) {
-                kv = trimmed.split(":", 2);
-            } else if (trimmed.contains("=")) {
-                kv = trimmed.split("=", 2);
-            }
-
-            if (kv == null || kv.length != 2) {
-                continue;
-            }
-
-            String key = kv[0].trim();
-            String value = kv[1].trim();
-            if (!key.isEmpty()) {
-                headers.put(key, value);
-            }
-        }
-        return headers;
-    }
-
-    private String resolveFrom(Map<String, String> headers, CertificateIdentity identity) {
-        String from = firstNonBlank(
-            headers.get("From"),
-            buildLegacyAddress(headers, ""),
-            buildLegacyAddress(headers, "_Reader"),
-            identityAddress(identity)
-        );
-        return requireNonBlank(from, "from");
-    }
-
-    private String resolveTo(Map<String, String> headers) {
-        String to = firstNonBlank(
-            headers.get("To"),
-            headers.get("Recipient"),
-            buildLegacyAddress(headers, "_Recipient")
-        );
-        return requireNonBlank(to, "to");
-    }
-
-    private String identityAddress(CertificateIdentity identity) {
-        if (identity == null) {
-            return null;
-        }
-        return firstNonBlank(identity.cn(), identity.ou());
-    }
-
-    private String buildLegacyAddress(Map<String, String> headers, String suffix) {
-        String ou = headers.get("OU" + suffix);
-        String o = headers.get("O" + suffix);
-        String prmd = headers.get("PRMD" + suffix);
-        String admd = headers.get("ADMD" + suffix);
-        String c = headers.get("C" + suffix);
-
-        if (!StringUtils.hasText(ou) && !StringUtils.hasText(o) && !StringUtils.hasText(prmd)
-            && !StringUtils.hasText(admd) && !StringUtils.hasText(c)) {
-            return null;
-        }
-
-        StringBuilder value = new StringBuilder();
-        appendPart(value, "OU", ou);
-        appendPart(value, "O", o);
-        appendPart(value, "PRMD", prmd);
-        appendPart(value, "ADMD", admd);
-        appendPart(value, "C", c);
-        return value.toString();
-    }
-
-    private void appendPart(StringBuilder builder, String key, String value) {
-        if (!StringUtils.hasText(value)) {
-            return;
-        }
-        if (!builder.isEmpty()) {
-            builder.append(";");
-        }
-        builder.append(key).append("=").append(value.trim());
-    }
-
-    private String firstNonBlank(String... values) {
-        if (values == null) {
-            return null;
-        }
-        for (String value : values) {
-            if (StringUtils.hasText(value)) {
-                return value.trim();
-            }
-        }
-        return null;
+    private String requiredHeader(Map<String, String> headers, String key) {
+        return requireNonBlank(headers.get(key), key.toLowerCase());
     }
 
     private String requireNonBlank(String value, String fieldName) {
