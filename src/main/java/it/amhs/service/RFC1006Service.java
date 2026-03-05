@@ -483,6 +483,81 @@ public class RFC1006Service {
         }
     }
 
+    private IncomingMessage parseIncomingMessage(byte[] rawPayload, String message, CertificateIdentity identity) {
+        if (rawPayload.length > 0 && (rawPayload[0] & 0xFF) == 0x30) {
+            P1BerMessageParser.ParsedP1Message berMessage = p1BerMessageParser.parse(rawPayload);
+            return new IncomingMessage(
+                berMessage.messageId() == null ? UUID.randomUUID().toString() : berMessage.messageId(),
+                requireNonBlank(berMessage.from(), "from"),
+                requireNonBlank(berMessage.to(), "to"),
+                requireNonBlank(berMessage.body(), "body"),
+                berMessage.profile(),
+                berMessage.priority(),
+                berMessage.subject(),
+                AMHSChannelService.DEFAULT_CHANNEL_NAME,
+                identity.cn(),
+                identity.ou(),
+                berMessage.filingTime(),
+                berMessage.transferEnvelope().mtsIdentifier().flatMap(P1BerMessageParser.MTSIdentifier::localIdentifier).orElse(null),
+                berMessage.transferEnvelope().contentTypeOid().orElse(null),
+                appendTraceHop(
+                    berMessage.transferEnvelope().traceInformation().map(t -> String.join(">", t.hops())).orElse(null),
+                    Instant.now(),
+                    localMtaName,
+                    localRoutingDomain
+                ),
+                berMessage.transferEnvelope().perRecipientFields().isEmpty()
+                    ? null
+                    : berMessage.transferEnvelope().perRecipientFields().stream()
+                        .map(p -> p.recipient() + p.responsibility().map(r -> "(" + r + ")").orElse(""))
+                        .collect(java.util.stream.Collectors.joining(",")),
+                System.nanoTime()
+            );
+        }
+
+        Map<String, String> headers = parseKeyValuePayload(message);
+        String body = firstNonBlank(headers.get("Body"), headers.get("Text"), message);
+
+        String messageId = headers.getOrDefault("Message-ID", UUID.randomUUID().toString());
+        String from = requiredHeader(headers, "From");
+        String to = requiredHeader(headers, "To");
+        AMHSProfile profile = parseProfile(headers.getOrDefault("Profile", "P3"));
+        AMHSPriority priority = parsePriority(headers.getOrDefault("Priority", "GG"));
+        String subject = headers.getOrDefault("Subject", "");
+        String channel = headers.getOrDefault("Channel", AMHSChannelService.DEFAULT_CHANNEL_NAME);
+        Date filingTime = parseFilingTime(headers.get("Filing-Time"));
+
+        return new IncomingMessage(
+            messageId,
+            from,
+            to,
+            requireNonBlank(body, "body"),
+            profile,
+            priority,
+            subject,
+            channel,
+            identity.cn(),
+            identity.ou(),
+            filingTime,
+            null,
+            null,
+            null,
+            null,
+            System.nanoTime()
+        );
+    }
+
+    private String requiredHeader(Map<String, String> headers, String key) {
+        return requireNonBlank(headers.get(key), key.toLowerCase());
+    }
+
+    private String requireNonBlank(String value, String fieldName) {
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException("Missing or blank AMHS field '" + fieldName + "'");
+        }
+        return value.trim();
+    }
+
     static String appendTraceHop(String existingTrace, Instant arrivalInstant, String localMtaName, String routingDomain) {
         String arrival = arrivalInstant == null ? Instant.now().toString() : arrivalInstant.toString();
         String mta = StringUtils.hasText(localMtaName) ? localMtaName.trim() : "LOCAL-MTA";
