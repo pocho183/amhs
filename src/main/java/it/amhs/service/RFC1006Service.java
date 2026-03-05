@@ -9,16 +9,12 @@ import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -75,6 +71,7 @@ public class RFC1006Service {
     private final int idleTimeoutMillis;
     private final boolean requireAcseAuthentication;
     private final String expectedAcseAuthenticationValue;
+    private final IncomingMessageParser incomingMessageParser;
 
     public RFC1006Service(
         AMHSMessageRepository amhsMessagesRepository,
@@ -98,6 +95,7 @@ public class RFC1006Service {
         this.idleTimeoutMillis = idleTimeoutMillis;
         this.requireAcseAuthentication = requireAcseAuthentication;
         this.expectedAcseAuthenticationValue = expectedAcseAuthenticationValue == null ? "" : expectedAcseAuthenticationValue;
+        this.incomingMessageParser = new IncomingMessageParser(p1BerMessageParser, localMtaName, localRoutingDomain);
         this.priorityExecutor = new ThreadPoolExecutor(
             1,
             1,
@@ -183,7 +181,7 @@ public class RFC1006Service {
                     continue;
                 }
 
-                IncomingMessage incoming = parseIncomingMessage(payload, message, identity);
+                IncomingMessage incoming = incomingMessageParser.parse(payload, message, identity.cn(), identity.ou());
                 try {
                     storeWithStrictPriority(incoming);
                     String ack = "Message-ID: " + incoming.messageId + "\n"
@@ -610,44 +608,6 @@ public class RFC1006Service {
         sendRFC1006(out, response);
     }
 
-    private AMHSProfile parseProfile(String value) {
-        try {
-            return AMHSProfile.valueOf(value.trim().toUpperCase());
-        } catch (Exception ex) {
-            logger.warn("Unsupported profile '{}', defaulting to P3", value);
-            return AMHSProfile.P3;
-        }
-    }
-
-    private AMHSPriority parsePriority(String value) {
-        try {
-            return AMHSPriority.valueOf(value.trim().toUpperCase());
-        } catch (Exception ex) {
-            logger.warn("Unsupported priority '{}', defaulting to GG", value);
-            return AMHSPriority.GG;
-        }
-    }
-
-    private Date parseFilingTime(String filingTimeHeader) {
-        if (filingTimeHeader == null || filingTimeHeader.isBlank()) {
-            return Date.from(Instant.now());
-        }
-
-        try {
-            return Date.from(Instant.parse(filingTimeHeader.trim()));
-        } catch (Exception ignored) {
-        }
-
-        try {
-            SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss");
-            format.setTimeZone(TimeZone.getTimeZone("UTC"));
-            return format.parse(filingTimeHeader.trim());
-        } catch (ParseException ex) {
-            logger.warn("Invalid Filing-Time '{}', defaulting to now", filingTimeHeader);
-            return Date.from(Instant.now());
-        }
-    }
-
     private CertificateIdentity extractCertificateIdentity(Socket socket) {
         if (!(socket instanceof SSLSocket sslSocket)) {
             return new CertificateIdentity(null, null);
@@ -855,7 +815,7 @@ public class RFC1006Service {
     private record COTPFrame(byte type, boolean endOfTSDU, byte[] payload) {
     }
 
-    private record IncomingMessage(
+    static record IncomingMessage(
         String messageId,
         String from,
         String to,
