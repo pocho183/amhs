@@ -115,7 +115,7 @@ public class X411DeliveryReportApduCodec {
         byte[] value = concat(
             encodeRecipient(info.recipient()),
             encodeDeliveryStatus(info.deliveryStatus()),
-            encodeOptionalInteger(2, info.diagnosticCode())
+            encodeOptionalDiagnostic(2, info.diagnosticCode())
         );
         return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 16, 0, value.length, value));
     }
@@ -141,12 +141,11 @@ public class X411DeliveryReportApduCodec {
             return new byte[0];
         }
         byte[] content = concat(
-            encodeIa5(0, country),
-            encodeIa5(1, admd),
-            encodeIa5(2, prmd)
+            encodeExplicitPrintable(0, country),
+            encodeExplicitPrintable(1, admd),
+            encodeOptionalExplicitPrintable(2, prmd)
         );
-        byte[] gdiSequence = BerCodec.encode(new BerTlv(0, true, 16, 0, content.length, content));
-        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 0, 0, gdiSequence.length, gdiSequence));
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, 0, 0, content.length, content));
     }
 
     private byte[] encodeRecipient(String recipient) {
@@ -182,6 +181,10 @@ public class X411DeliveryReportApduCodec {
             case "OU3" -> 6;
             case "OU4" -> 7;
             case "CN" -> 8;
+            case "S" -> 9;
+            case "G" -> 10;
+            case "I" -> 11;
+            case "NUMUID" -> 12;
             default -> throw new IllegalArgumentException("Unsupported structured O/R attribute tag mapping: " + key);
         };
     }
@@ -216,6 +219,22 @@ public class X411DeliveryReportApduCodec {
     }
 
     private Integer decodeDiagnosticCode(BerTlv tlv) {
+        if (tlv.constructed()) {
+            List<BerTlv> components = BerCodec.decodeAll(tlv.value());
+            int reason = BerCodec.findOptional(components, X411TagMap.TAG_CLASS_CONTEXT, 0)
+                .map(value -> decodeInteger(value.value()))
+                .orElse(X411Diagnostic.ReasonCode.UNABLE_TO_TRANSFER.code());
+            int diagnostic = BerCodec.findOptional(components, X411TagMap.TAG_CLASS_CONTEXT, 1)
+                .map(value -> decodeInteger(value.value()))
+                .orElse(X411Diagnostic.DEFAULT_DIAGNOSTIC_CODE);
+            if (!X411Diagnostic.ReasonCode.fromCodeOptional(reason).isPresent()) {
+                throw new IllegalArgumentException("Unsupported X.411 reason-code " + reason);
+            }
+            if (!X411Diagnostic.isValidDiagnosticCode(diagnostic)) {
+                throw new IllegalArgumentException("Unsupported X.411 diagnostic-code " + diagnostic);
+            }
+            return diagnostic;
+        }
         if (looksLikeAscii(tlv.value())) {
             return ReportedRecipientInfo.parseDiagnosticCode(new String(tlv.value(), StandardCharsets.US_ASCII));
         }
@@ -237,22 +256,61 @@ public class X411DeliveryReportApduCodec {
 
     private int deliveryStatusToCode(String status) {
         return switch (status.trim().toUpperCase(Locale.ROOT)) {
-            case "DELIVERED" -> 0;
-            case "DEFERRED" -> 1;
-            case "EXPIRED" -> 2;
-            case "FAILED" -> 3;
+            case "SUCCESS", "DELIVERED" -> 0;
+            case "FAILURE", "FAILED", "EXPIRED" -> 1;
+            case "DELAYED", "DEFERRED" -> 2;
+            case "RELAYED" -> 3;
+            case "EXPANDED" -> 4;
+            case "REDIRECTED" -> 5;
             default -> throw new IllegalArgumentException("Unsupported deliveryStatus: " + status);
         };
     }
 
     private String deliveryStatusFromCode(int code) {
         return switch (code) {
-            case 0 -> "DELIVERED";
-            case 1 -> "DEFERRED";
-            case 2 -> "EXPIRED";
-            case 3 -> "FAILED";
+            case 0 -> "SUCCESS";
+            case 1 -> "FAILURE";
+            case 2 -> "DELAYED";
+            case 3 -> "RELAYED";
+            case 4 -> "EXPANDED";
+            case 5 -> "REDIRECTED";
             default -> throw new IllegalArgumentException("Unsupported delivery status code: " + code);
         };
+    }
+
+
+
+    private byte[] encodeOptionalDiagnostic(int tag, Integer diagnosticCode) {
+        if (diagnosticCode == null) {
+            return new byte[0];
+        }
+        int normalizedDiagnostic = X411Diagnostic.isValidDiagnosticCode(diagnosticCode)
+            ? diagnosticCode
+            : X411Diagnostic.DEFAULT_DIAGNOSTIC_CODE;
+        int reasonCode = X411Diagnostic.ReasonCode.UNABLE_TO_TRANSFER.code();
+        byte[] payload = concat(
+            encodeTaggedInteger(0, reasonCode),
+            encodeTaggedInteger(1, normalizedDiagnostic)
+        );
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, tag, 0, payload.length, payload));
+    }
+
+    private byte[] encodeTaggedInteger(int tag, int value) {
+        byte[] bytes = encodeInteger(value);
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, false, tag, 0, bytes.length, bytes));
+    }
+
+    private byte[] encodeExplicitPrintable(int tag, String value) {
+        byte[] bytes = value.trim().getBytes(StandardCharsets.US_ASCII);
+        byte[] printable = BerCodec.encode(new BerTlv(0, false, 19, 0, bytes.length, bytes));
+        return BerCodec.encode(new BerTlv(X411TagMap.TAG_CLASS_CONTEXT, true, tag, 0, printable.length, printable));
+    }
+
+    private byte[] encodeOptionalExplicitPrintable(int tag, String value) {
+        if (value == null || value.isBlank()) {
+            return new byte[0];
+        }
+        return encodeExplicitPrintable(tag, value);
     }
 
     private byte[] encodeIa5(int tag, String value) {

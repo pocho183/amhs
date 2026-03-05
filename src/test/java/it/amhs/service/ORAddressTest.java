@@ -38,6 +38,22 @@ class ORAddressTest {
         assertEquals(" ", parsed.get("ADMD"));
     }
 
+
+    @Test
+    void shouldAcceptAdditionalX402AttributesForInterop() {
+        ORAddress parsed = ORAddress.parse("C=IT/A=ICAO/P=ROMA/O=ENAV/S=ROSSI/G=MARIO/I=MR/NUMUID=12345");
+        assertEquals("ROSSI", parsed.get("S"));
+        assertEquals("MARIO", parsed.get("G"));
+        assertEquals("MR", parsed.get("I"));
+        assertEquals("12345", parsed.get("NUMUID"));
+    }
+
+    @Test
+    void shouldAcceptDomainDefinedAttributes() {
+        ORAddress parsed = ORAddress.parse("C=IT/A=ICAO/P=ROMA/O=ENAV/DDA-CALLSIGN=AZA123");
+        assertEquals("AZA123", parsed.get("DDA-CALLSIGN"));
+    }
+
     @Test
     void shouldAcceptExtensionAttributes() {
         ORAddress parsed = ORAddress.parse("C=IT/A=ICAO/P=ROMA/O=ENAV/OU1=LIRRZQZX/EXT-CALLSIGN=AZ123");

@@ -11,7 +11,8 @@ import org.springframework.util.StringUtils;
 
 public final class ORAddress {
 
-    private static final List<String> CANONICAL_ORDER = List.of("C", "ADMD", "PRMD", "O", "OU1", "OU2", "OU3", "OU4", "CN");
+    private static final List<String> CANONICAL_ORDER = List.of("C", "ADMD", "PRMD", "O", "OU1", "OU2", "OU3", "OU4", "CN", "S", "G", "I", "NUMUID");
+    private static final Pattern DOMAIN_DEFINED_KEY = Pattern.compile("^DDA-[A-Z0-9][A-Z0-9-]{0,31}$");
     private static final Pattern EXTENSION_KEY = Pattern.compile("^(EXT|X)-[A-Z0-9][A-Z0-9-]{0,31}$");
     private static final Pattern PRINTABLE_STRING = Pattern.compile("^[A-Z0-9 '(),\\-.:=?]*$");
     private static final Pattern IA5_STRING = Pattern.compile("^[\\x20-\\x7E]*$");
@@ -25,7 +26,11 @@ public final class ORAddress {
         "OU2", 32,
         "OU3", 32,
         "OU4", 32,
-        "CN", 64
+        "CN", 64,
+        "S", 40,
+        "G", 24,
+        "I", 5,
+        "NUMUID", 32
     );
 
     private final Map<String, String> attributes;
@@ -146,12 +151,18 @@ public final class ORAddress {
             case "A" -> "ADMD";
             case "P" -> "PRMD";
             case "OU" -> "OU1";
+            case "SURNAME" -> "S";
+            case "GIVENNAME" -> "G";
+            case "INITIALS" -> "I";
+            case "NUMERICUSERIDENTIFIER", "NUMERIC-USER-IDENTIFIER" -> "NUMUID";
             default -> key;
         };
     }
 
     private static void validateAttribute(String key, String rawValue) {
-        if (!CANONICAL_ORDER.contains(key) && !EXTENSION_KEY.matcher(key).matches()) {
+        if (!CANONICAL_ORDER.contains(key)
+            && !EXTENSION_KEY.matcher(key).matches()
+            && !DOMAIN_DEFINED_KEY.matcher(key).matches()) {
             throw new IllegalArgumentException("Unsupported O/R attribute: " + key);
         }
 
