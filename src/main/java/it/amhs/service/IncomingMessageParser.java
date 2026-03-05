@@ -90,7 +90,7 @@ final class IncomingMessageParser {
         );
     }
 
-    private Map<String, String> parseKeyValuePayload(String message) {
+    Map<String, String> parseKeyValuePayload(String message) {
         Map<String, String> headers = new HashMap<>();
         for (String line : message.split("\\n")) {
             String trimmed = line.trim();
@@ -168,7 +168,7 @@ final class IncomingMessageParser {
         builder.append(key).append("=").append(value.trim());
     }
 
-    private String firstNonBlank(String... values) {
+    String firstNonBlank(String... values) {
         if (values == null) {
             return null;
         }
@@ -187,7 +187,7 @@ final class IncomingMessageParser {
         return value.trim();
     }
 
-    private AMHSProfile parseProfile(String value) {
+    AMHSProfile parseProfile(String value) {
         try {
             return AMHSProfile.valueOf(value.trim().toUpperCase());
         } catch (Exception ignored) {
@@ -195,7 +195,7 @@ final class IncomingMessageParser {
         }
     }
 
-    private AMHSPriority parsePriority(String value) {
+    AMHSPriority parsePriority(String value) {
         try {
             return AMHSPriority.valueOf(value.trim().toUpperCase());
         } catch (Exception ignored) {
@@ -203,7 +203,7 @@ final class IncomingMessageParser {
         }
     }
 
-    private Date parseFilingTime(String filingTimeHeader) {
+    Date parseFilingTime(String filingTimeHeader) {
         if (!StringUtils.hasText(filingTimeHeader)) {
             return Date.from(Instant.now());
         }

@@ -515,17 +515,17 @@ public class RFC1006Service {
             );
         }
 
-        Map<String, String> headers = parseKeyValuePayload(message);
-        String body = firstNonBlank(headers.get("Body"), headers.get("Text"), message);
+        Map<String, String> headers = incomingMessageParser.parseKeyValuePayload(message);
+        String body = incomingMessageParser.firstNonBlank(headers.get("Body"), headers.get("Text"), message);
 
         String messageId = headers.getOrDefault("Message-ID", UUID.randomUUID().toString());
         String from = requiredHeader(headers, "From");
         String to = requiredHeader(headers, "To");
-        AMHSProfile profile = parseProfile(headers.getOrDefault("Profile", "P3"));
-        AMHSPriority priority = parsePriority(headers.getOrDefault("Priority", "GG"));
+        AMHSProfile profile = incomingMessageParser.parseProfile(headers.getOrDefault("Profile", "P3"));
+        AMHSPriority priority = incomingMessageParser.parsePriority(headers.getOrDefault("Priority", "GG"));
         String subject = headers.getOrDefault("Subject", "");
         String channel = headers.getOrDefault("Channel", AMHSChannelService.DEFAULT_CHANNEL_NAME);
-        Date filingTime = parseFilingTime(headers.get("Filing-Time"));
+        Date filingTime = incomingMessageParser.parseFilingTime(headers.get("Filing-Time"));
 
         return new IncomingMessage(
             messageId,

@@ -17,20 +17,20 @@ public final class ORAddress {
     private static final Pattern PRINTABLE_STRING = Pattern.compile("^[A-Z0-9 '(),\\-.:=?]*$");
     private static final Pattern IA5_STRING = Pattern.compile("^[\\x20-\\x7E]*$");
     private static final List<Character> DISALLOWED_VALUE_CHARS = List.of('/', '+', '"');
-    private static final Map<String, Integer> MAX_LENGTHS = Map.of(
-        "C", 3,
-        "ADMD", 16,
-        "PRMD", 16,
-        "O", 64,
-        "OU1", 32,
-        "OU2", 32,
-        "OU3", 32,
-        "OU4", 32,
-        "CN", 64,
-        "S", 40,
-        "G", 24,
-        "I", 5,
-        "NUMUID", 32
+    private static final Map<String, Integer> MAX_LENGTHS = Map.ofEntries(
+    	Map.entry("C", 3),
+        Map.entry("ADMD", 16),
+        Map.entry("PRMD", 16),
+        Map.entry("O", 64),
+        Map.entry("OU1", 32),
+        Map.entry("OU2", 32),
+        Map.entry("OU3", 32),
+        Map.entry("OU4", 32),
+        Map.entry("CN", 64),
+        Map.entry("S", 40),
+        Map.entry("G", 24),
+        Map.entry("I", 5),
+        Map.entry("NUMUID", 32)
     );
 
     private final Map<String, String> attributes;
