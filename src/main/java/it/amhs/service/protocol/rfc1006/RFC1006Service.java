@@ -745,6 +745,11 @@ public class RFC1006Service {
     }
 
     private void sendRFC1006(OutputStream out, byte[] msgBytes) throws Exception {
+        if (msgBytes == null) {
+            msgBytes = new byte[0];
+        }
+
+        logger.info("Sending RFC1006 response payload ({} bytes, preview={})", msgBytes.length, payloadPreview(msgBytes));
         int offset = 0;
 
         while (offset < msgBytes.length || msgBytes.length == 0) {
@@ -757,6 +762,47 @@ public class RFC1006Service {
             }
         }
         out.flush();
+    }
+
+    private String oneLinePreview(String message) {
+        if (message == null || message.isBlank()) {
+            return "<empty>";
+        }
+
+        String normalized = message.replace('\r', ' ').replace('\n', ' ').trim();
+        if (normalized.length() <= 200) {
+            return normalized;
+        }
+        return normalized.substring(0, 200) + "...";
+    }
+
+    private String payloadPreview(byte[] payload) {
+        if (payload == null || payload.length == 0) {
+            return "<empty>";
+        }
+
+        boolean mostlyText = true;
+        for (byte b : payload) {
+            int value = b & 0xFF;
+            if ((value < 0x20 || value > 0x7E) && value != '\n' && value != '\r' && value != '\t') {
+                mostlyText = false;
+                break;
+            }
+        }
+
+        if (mostlyText) {
+            return oneLinePreview(new String(payload, StandardCharsets.UTF_8));
+        }
+
+        int previewLen = Math.min(payload.length, 32);
+        StringBuilder hex = new StringBuilder(previewLen * 2);
+        for (int i = 0; i < previewLen; i++) {
+            hex.append(String.format("%02X", payload[i]));
+        }
+        if (payload.length > previewLen) {
+            hex.append("...");
+        }
+        return "hex:" + hex;
     }
 
     private void sendConnectionConfirm(OutputStream out, CotpConnectionTpdu requestTpdu) throws Exception {
