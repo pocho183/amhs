@@ -3,6 +3,9 @@ package it.amhs.network;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLServerSocket;
@@ -18,25 +21,34 @@ import it.amhs.service.protocol.rfc1006.RFC1006Service;
 public class RFC1006Server {
 	
 	private static final Logger logger = LoggerFactory.getLogger(RFC1006Server.class);
-	
-	private RFC1006Service rfc1006Service;
+
+    private final RFC1006Service rfc1006Service;
     private final String host;
     private final int port;
     private final SSLContext tls;
     private final boolean tlsEnabled;
     private final boolean needClientAuth;
+    private final ExecutorService clientExecutor;
 
     public RFC1006Server(@Value("${rfc1006.server.host:0.0.0.0}") String host,
                          @Value("${rfc1006.server.port:102}") int port,
+                         @Value("${rfc1006.server.max-clients:32}") int maxClients,
                          @Value("${rfc1006.tls.enabled:false}") boolean tlsEnabled,
                          @Value("${rfc1006.tls.need-client-auth:false}") boolean needClientAuth,
                          SSLContext tls, RFC1006Service rfc1006Service) {
+		if (port < 1 || port > 65_535) {
+			throw new IllegalArgumentException("rfc1006.server.port out of range: " + port);
+		}
+		if (maxClients < 1) {
+			throw new IllegalArgumentException("rfc1006.server.max-clients must be >= 1");
+		}
 		this.host = host;
 		this.port = port;
 		this.tls = tls;
 		this.tlsEnabled = tlsEnabled;
 		this.needClientAuth = needClientAuth;
 		this.rfc1006Service = rfc1006Service;
+        this.clientExecutor = Executors.newFixedThreadPool(maxClients, new NamedDaemonThreadFactory());
     }
 
     public void start() throws Exception {
@@ -58,7 +70,18 @@ public class RFC1006Server {
         while (true) {
             Socket socket = server.accept();
             logger.info("AMHS Connection from {}", socket.getInetAddress());
-            new Thread(() -> rfc1006Service.handleClient(socket)).start();
+            clientExecutor.execute(() -> rfc1006Service.handleClient(socket));
+        }
+    }
+
+    private static final class NamedDaemonThreadFactory implements ThreadFactory {
+        private int counter = 0;
+
+        @Override
+        public synchronized Thread newThread(Runnable runnable) {
+            Thread thread = new Thread(runnable, "amhs-rfc1006-client-" + (++counter));
+            thread.setDaemon(true);
+            return thread;
         }
     }
 
