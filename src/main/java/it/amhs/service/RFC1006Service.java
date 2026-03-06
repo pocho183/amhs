@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.PriorityBlockingQueue;
@@ -158,11 +159,12 @@ public class RFC1006Service {
 
                 byte[] payload = segmentedPayload.toByteArray();
                 segmentedPayload.reset();
+                byte[] normalizedPayload = stripUtf8Bom(payload);
 
-                String message = new String(payload, StandardCharsets.UTF_8).trim();
+                String message = new String(normalizedPayload, StandardCharsets.UTF_8).trim();
 
-                if (isLikelyP1AssociationPdu(payload)) {
-                    handleP1AssociationPdu(payload, out, associationState, identity);
+                if (isLikelyP1AssociationPdu(normalizedPayload)) {
+                    handleP1AssociationPdu(normalizedPayload, out, associationState, identity);
                     if (!associationState.active()) {
                         break;
                     }
@@ -174,14 +176,14 @@ public class RFC1006Service {
                     continue;
                 }
 
-                if (payload.length > 0 && (payload[0] & 0xFF) == 0x30) {
+                if (normalizedPayload.length > 0 && (normalizedPayload[0] & 0xFF) == 0x30) {
                     String diagnostic = "Raw BER message without P1 association is rejected; send P1 Bind and Transfer PDUs";
                     logger.warn(diagnostic);
                     sendRFC1006(out, diagnostic + "\n");
                     continue;
                 }
 
-                IncomingMessage incoming = incomingMessageParser.parse(payload, message, identity.cn(), identity.ou());
+                IncomingMessage incoming = incomingMessageParser.parse(normalizedPayload, message, identity.cn(), identity.ou());
                 try {
                     storeWithStrictPriority(incoming);
                     String ack = "Message-ID: " + incoming.messageId + "\n"
@@ -211,12 +213,22 @@ public class RFC1006Service {
         }
     }
 
-    private boolean isLikelyP1AssociationPdu(byte[] payload) {
+    boolean isLikelyP1AssociationPdu(byte[] payload) {
         if (payload.length == 0) {
             return false;
         }
         int first = payload[0] & 0xFF;
         return (first >= 0xA0 && first <= 0xAF) || (first >= 0x60 && first <= 0x64);
+    }
+
+    byte[] stripUtf8Bom(byte[] payload) {
+        if (payload == null || payload.length < 3) {
+            return payload;
+        }
+        if ((payload[0] & 0xFF) == 0xEF && (payload[1] & 0xFF) == 0xBB && (payload[2] & 0xFF) == 0xBF) {
+            return Arrays.copyOfRange(payload, 3, payload.length);
+        }
+        return payload;
     }
 
     private void handleP1AssociationPdu(
