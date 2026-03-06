@@ -72,6 +72,9 @@ class P3GatewaySessionServiceTest {
             "submission-id");
         assertEquals(firstSubmissionId, secondSubmissionId);
         assertEquals(firstSubmissionId, messageService.lastRequest.messageId());
+        assertEquals("LIMCZZZX", messageService.lastRequest.p3OrganizationUnit());
+        assertEquals("LIRRZZZX", messageService.lastRequest.p3OrganizationUnitRecipient());
+        assertEquals("ATFM", messageService.lastRequest.channel());
 
         assertEquals("OK code=release", sessionService.handleCommand(session, "UNBIND"));
     }
@@ -160,6 +163,84 @@ class P3GatewaySessionServiceTest {
         );
 
         assertEquals("ERR code=routing-policy detail=No route found for recipient", submitResponse);
+    }
+
+    @Test
+    void bindRejectsInvalidCredentialsWithExplicitDiagnostic() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        String bindResponse = sessionService.handleCommand(
+            sessionService.newSession(),
+            "BIND username=LIMCZZZX;password=wrong;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test"
+        );
+
+        assertEquals("ERR code=auth-failed detail=Invalid credentials", bindResponse);
+    }
+
+    @Test
+    void bindRejectsInvalidOrAddressWithExplicitDiagnostic() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            false,
+            "",
+            "",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        String bindResponse = sessionService.handleCommand(
+            sessionService.newSession(),
+            "BIND sender=/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test"
+        );
+
+        assertTrue(bindResponse.startsWith("ERR code=invalid-or-address detail="));
+    }
+
+    @Test
+    void unsupportedOperationReturnsExplicitDiagnostic() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            false,
+            "",
+            "",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        String response = sessionService.handleCommand(sessionService.newSession(), "DELETE submission-id=1");
+
+        assertEquals("ERR code=unsupported-operation detail=Unsupported operation DELETE", response);
     }
 
     @Test
