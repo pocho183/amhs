@@ -9,8 +9,10 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+import it.amhs.network.P3GatewayServer;
 import it.amhs.network.RFC1006Server;
 import it.amhs.security.TLSContextFactory;
 
@@ -89,10 +91,8 @@ public class AMHS {
     }
 
     @Bean
-    public CommandLineRunner startServer(RFC1006Server server) {
+    public CommandLineRunner startServer(RFC1006Server server, ObjectProvider<P3GatewayServer> p3GatewayServerProvider) {
         return args -> {
-            // Spring has already injected the port, SSLContext, and Service 
-            // into the 'server' object for you.
             new Thread(() -> {
                 try {
                     server.start();
@@ -100,6 +100,17 @@ public class AMHS {
                     e.printStackTrace();
                 }
             }).start();
+
+            P3GatewayServer p3GatewayServer = p3GatewayServerProvider.getIfAvailable();
+            if (p3GatewayServer != null) {
+                new Thread(() -> {
+                    try {
+                        p3GatewayServer.start();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }).start();
+            }
         };
     }
 }
