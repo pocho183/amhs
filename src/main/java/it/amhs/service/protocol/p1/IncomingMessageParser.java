@@ -10,6 +10,7 @@ import org.springframework.util.StringUtils;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import it.amhs.service.channel.AMHSChannelService;
@@ -35,54 +36,20 @@ public final class IncomingMessageParser {
                 message != null ? message.length() : 0,
                 certificateCn, certificateOu);
 
-        if (isBerEncoded(rawPayload)) {
-            int firstByte = rawPayload.length > 0 ? rawPayload[0] & 0xFF : -1;
-            LOGGER.info("Payload first byte=0x{}", firstByte >= 0 ? String.format("%02X", firstByte) : "none");
-
-            try {
-                P1BerMessageParser.ParsedP1Message berMessage = p1BerMessageParser.parse(rawPayload);
-
-                return new RFC1006Service.IncomingMessage(
-                        berMessage.messageId() != null ? berMessage.messageId() : UUID.randomUUID().toString(),
-                        firstNonBlank(berMessage.from(), "UNKNOWN_FROM"),
-                        firstNonBlank(berMessage.to(), "UNKNOWN_TO"),
-                        firstNonBlank(berMessage.body(), bytesToHex(rawPayload)),
-                        berMessage.profile(),
-                        berMessage.priority(),
-                        berMessage.subject(),
-                        AMHSChannelService.DEFAULT_CHANNEL_NAME,
-                        certificateCn,
-                        certificateOu,
-                        berMessage.filingTime(),
-                        berMessage.transferEnvelope().mtsIdentifier().flatMap(P1BerMessageParser.MTSIdentifier::localIdentifier).orElse(null),
-                        berMessage.transferEnvelope().contentTypeOid().orElse(null),
-                        RFC1006Service.appendTraceHop(
-                                berMessage.transferEnvelope().traceInformation()
-                                        .map(t -> String.join(">", t.hops())).orElse(null),
-                                Instant.now(),
-                                localMtaName,
-                                localRoutingDomain
-                        ),
-                        berMessage.transferEnvelope().perRecipientFields().isEmpty()
-                                ? null
-                                : berMessage.transferEnvelope().perRecipientFields().stream()
-                                        .map(p -> p.recipient() + p.responsibility().map(r -> "(" + r + ")").orElse(""))
-                                        .collect(java.util.stream.Collectors.joining(",")),
-                        System.nanoTime()
-                );
-            } catch (IllegalArgumentException e) {
-                LOGGER.warn("BER parsing failed: {}. Falling back to raw key-value parsing.", e.getMessage());
-            }
-        } else {
-            LOGGER.info("Payload not detected as BER, falling back to key-value parsing");
+        Optional<RFC1006Service.IncomingMessage> berParsed = tryParseBerPayload(rawPayload, certificateCn, certificateOu);
+        if (berParsed.isPresent()) {
+            return berParsed.get();
         }
+
+        LOGGER.info("Payload not detected as BER, falling back to key-value parsing");
 
         Map<String, String> headers = parseKeyValuePayload(message);
         LOGGER.info("Parsed headers: {}", headers);
 
         String from = resolveFrom(headers, certificateCn, certificateOu);
         String to = resolveTo(headers);
-        String body = firstNonBlank(headers.get("Body"), headers.get("Text"), message, bytesToHex(rawPayload));
+        String textBody = isLikelyTextPayload(rawPayload) ? message : null;
+        String body = firstNonBlank(headers.get("Body"), headers.get("Text"), textBody, bytesToHex(rawPayload));
 
         if (!StringUtils.hasText(from)) {
             LOGGER.warn("Cannot resolve 'from': using placeholder");
@@ -139,6 +106,96 @@ public final class IncomingMessageParser {
         if (payload == null || payload.length == 0) return false;
         int first = payload[0] & 0xFF;
         return first == 0x30 || (first >= 0x60 && first <= 0x65) || (first >= 0xA0 && first <= 0xAF);
+    }
+
+    private Optional<RFC1006Service.IncomingMessage> tryParseBerPayload(byte[] rawPayload, String certificateCn, String certificateOu) {
+        if (rawPayload == null || rawPayload.length == 0) {
+            return Optional.empty();
+        }
+
+        List<Integer> berOffsets = candidateBerOffsets(rawPayload);
+        for (int offset : berOffsets) {
+            byte[] candidate = offset == 0 ? rawPayload : Arrays.copyOfRange(rawPayload, offset, rawPayload.length);
+            int firstByte = candidate[0] & 0xFF;
+            LOGGER.info("Attempting BER parse at payload offset {} (first byte=0x{})", offset, String.format("%02X", firstByte));
+
+            try {
+                P1BerMessageParser.ParsedP1Message berMessage = p1BerMessageParser.parse(candidate);
+                return Optional.of(toIncomingMessage(berMessage, candidate, certificateCn, certificateOu));
+            } catch (IllegalArgumentException e) {
+                LOGGER.debug("BER parsing failed at offset {}: {}", offset, e.getMessage());
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private List<Integer> candidateBerOffsets(byte[] rawPayload) {
+        List<Integer> offsets = new ArrayList<>();
+        if (isBerEncoded(rawPayload)) {
+            offsets.add(0);
+        }
+
+        int scanLimit = Math.min(rawPayload.length - 1, 16);
+        for (int i = 1; i <= scanLimit; i++) {
+            int tag = rawPayload[i] & 0xFF;
+            if (tag == 0x30 || (tag >= 0x60 && tag <= 0x65) || (tag >= 0xA0 && tag <= 0xAF)) {
+                offsets.add(i);
+            }
+        }
+
+        return offsets;
+    }
+
+    private RFC1006Service.IncomingMessage toIncomingMessage(
+            P1BerMessageParser.ParsedP1Message berMessage,
+            byte[] parsedPayload,
+            String certificateCn,
+            String certificateOu) {
+        return new RFC1006Service.IncomingMessage(
+                berMessage.messageId() != null ? berMessage.messageId() : UUID.randomUUID().toString(),
+                firstNonBlank(berMessage.from(), "UNKNOWN_FROM"),
+                firstNonBlank(berMessage.to(), "UNKNOWN_TO"),
+                firstNonBlank(berMessage.body(), bytesToHex(parsedPayload)),
+                berMessage.profile(),
+                berMessage.priority(),
+                berMessage.subject(),
+                AMHSChannelService.DEFAULT_CHANNEL_NAME,
+                certificateCn,
+                certificateOu,
+                berMessage.filingTime(),
+                berMessage.transferEnvelope().mtsIdentifier().flatMap(P1BerMessageParser.MTSIdentifier::localIdentifier).orElse(null),
+                berMessage.transferEnvelope().contentTypeOid().orElse(null),
+                RFC1006Service.appendTraceHop(
+                        berMessage.transferEnvelope().traceInformation()
+                                .map(t -> String.join(">", t.hops())).orElse(null),
+                        Instant.now(),
+                        localMtaName,
+                        localRoutingDomain
+                ),
+                berMessage.transferEnvelope().perRecipientFields().isEmpty()
+                        ? null
+                        : berMessage.transferEnvelope().perRecipientFields().stream()
+                                .map(p -> p.recipient() + p.responsibility().map(r -> "(" + r + ")").orElse(""))
+                                .collect(java.util.stream.Collectors.joining(",")),
+                System.nanoTime()
+        );
+    }
+
+    private boolean isLikelyTextPayload(byte[] payload) {
+        if (payload == null || payload.length == 0) {
+            return false;
+        }
+
+        String decoded = new String(payload, StandardCharsets.UTF_8);
+        int suspicious = 0;
+        for (int i = 0; i < decoded.length(); i++) {
+            char c = decoded.charAt(i);
+            if (c == '\uFFFD' || (Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t')) {
+                suspicious++;
+            }
+        }
+        return suspicious * 5 <= decoded.length();
     }
 
     private String resolveFrom(Map<String, String> headers, String certificateCn, String certificateOu) {
