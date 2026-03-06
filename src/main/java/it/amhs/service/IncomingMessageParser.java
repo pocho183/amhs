@@ -9,12 +9,16 @@ import java.util.Map;
 import java.util.TimeZone;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 
 import it.amhs.domain.AMHSPriority;
 import it.amhs.domain.AMHSProfile;
 
 final class IncomingMessageParser {
+	
+	 private static final Logger logger = LoggerFactory.getLogger(IncomingMessageParser.class);
 
     private final P1BerMessageParser p1BerMessageParser;
     private final String localMtaName;
@@ -27,7 +31,12 @@ final class IncomingMessageParser {
     }
 
     RFC1006Service.IncomingMessage parse(byte[] rawPayload, String message, String certificateCn, String certificateOu) {
-        if (rawPayload.length > 0 && (rawPayload[0] & 0xFF) == 0x30) {
+    	if (isBerEncoded(rawPayload)) {
+    		
+    		int firstByte = rawPayload.length > 0 ? rawPayload[0] & 0xFF : -1;
+
+    		LoggerFactory.getLogger(getClass()).info("Incoming payload {} bytes, first byte=0x{}", rawPayload.length, firstByte >= 0 ? String.format("%02X", firstByte) : "none");
+    		
             P1BerMessageParser.ParsedP1Message berMessage = p1BerMessageParser.parse(rawPayload);
             return new RFC1006Service.IncomingMessage(
                 berMessage.messageId() == null ? UUID.randomUUID().toString() : berMessage.messageId(),
@@ -116,6 +125,16 @@ final class IncomingMessageParser {
             }
         }
         return headers;
+    }
+    
+    private boolean isBerEncoded(byte[] payload) {
+        if (payload == null || payload.length == 0) {
+            return false;
+        }
+        int first = payload[0] & 0xFF;
+        return first == 0x30 ||              // BER SEQUENCE
+               (first >= 0x60 && first <= 0x65) ||   // ACSE PDUs
+               (first >= 0xA0 && first <= 0xAF);     // Context-specific
     }
 
     private String resolveFrom(Map<String, String> headers, String certificateCn, String certificateOu) {
