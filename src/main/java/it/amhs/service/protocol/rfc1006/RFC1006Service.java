@@ -103,7 +103,7 @@ public class RFC1006Service {
         this.idleTimeoutMillis = idleTimeoutMillis;
         this.requireAcseAuthentication = requireAcseAuthentication;
         this.expectedAcseAuthenticationValue = expectedAcseAuthenticationValue == null ? "" : expectedAcseAuthenticationValue;
-        this.incomingMessageParser = new IncomingMessageParser(p1BerMessageParser, localMtaName, localRoutingDomain);
+        this.incomingMessageParser = new IncomingMessageParser(p1BerMessageParser, p1AssociationProtocol, localMtaName, localRoutingDomain);
         this.priorityExecutor = new ThreadPoolExecutor(
             1,
             1,
