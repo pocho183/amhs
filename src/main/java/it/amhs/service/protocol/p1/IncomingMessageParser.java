@@ -114,6 +114,7 @@ public final class IncomingMessageParser {
         }
 
         List<Integer> berOffsets = candidateBerOffsets(rawPayload);
+        LOGGER.info("BER candidate scan found {} offsets in payload of {} bytes", berOffsets.size(), rawPayload.length);
         for (int offset : berOffsets) {
             byte[] candidate = offset == 0 ? rawPayload : Arrays.copyOfRange(rawPayload, offset, rawPayload.length);
             int firstByte = candidate[0] & 0xFF;
