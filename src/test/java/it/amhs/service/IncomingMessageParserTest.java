@@ -11,11 +11,12 @@ import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
 import it.amhs.service.protocol.p1.IncomingMessageParser;
 import it.amhs.service.protocol.p1.P1BerMessageParser;
+import it.amhs.service.protocol.p1.P1AssociationProtocol;
 import it.amhs.service.protocol.rfc1006.RFC1006Service;
 
 class IncomingMessageParserTest {
 
-    private final IncomingMessageParser parser = new IncomingMessageParser(new P1BerMessageParser(), "LOCAL-MTA", "LOCAL");
+    private final IncomingMessageParser parser = new IncomingMessageParser(new P1BerMessageParser(), new P1AssociationProtocol(), "LOCAL-MTA", "LOCAL");
 
     @Test
     void shouldParseBerPayloadEvenWhenPrefixedByGarbageBytes() {
@@ -56,6 +57,23 @@ class IncomingMessageParserTest {
         prefixed[15] = 0x31;
         prefixed[16] = 0x30;
         System.arraycopy(ber, 0, prefixed, 17, ber.length);
+
+        RFC1006Service.IncomingMessage parsed = parser.parse(prefixed, new String(prefixed, StandardCharsets.UTF_8), null, null);
+
+        assertEquals("LIRRZQZX", parsed.from());
+        assertEquals("LIIRYAYX", parsed.to());
+        assertEquals("HELLO-BER", parsed.body());
+    }
+
+
+    @Test
+    void shouldParseBerPayloadWhenWrappedInP1TransferApdu() {
+        byte[] ber = sampleBerPayload("LIRRZQZX", "LIIRYAYX", "HELLO-BER");
+        byte[] transferApdu = BerCodec.encode(new BerTlv(2, true, 1, 0, ber.length, ber));
+        byte[] prefixed = new byte[transferApdu.length + 2];
+        prefixed[0] = 0x11;
+        prefixed[1] = 0x22;
+        System.arraycopy(transferApdu, 0, prefixed, 2, transferApdu.length);
 
         RFC1006Service.IncomingMessage parsed = parser.parse(prefixed, new String(prefixed, StandardCharsets.UTF_8), null, null);
 

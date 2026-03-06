@@ -21,11 +21,17 @@ public final class IncomingMessageParser {
     private static final Logger LOGGER = LoggerFactory.getLogger(IncomingMessageParser.class);
 
     private final P1BerMessageParser p1BerMessageParser;
+    private final P1AssociationProtocol p1AssociationProtocol;
     private final String localMtaName;
     private final String localRoutingDomain;
 
-    public IncomingMessageParser(P1BerMessageParser p1BerMessageParser, String localMtaName, String localRoutingDomain) {
+    public IncomingMessageParser(
+            P1BerMessageParser p1BerMessageParser,
+            P1AssociationProtocol p1AssociationProtocol,
+            String localMtaName,
+            String localRoutingDomain) {
         this.p1BerMessageParser = p1BerMessageParser;
+        this.p1AssociationProtocol = p1AssociationProtocol;
         this.localMtaName = localMtaName;
         this.localRoutingDomain = localRoutingDomain;
     }
@@ -129,7 +135,18 @@ public final class IncomingMessageParser {
                 P1BerMessageParser.ParsedP1Message berMessage = p1BerMessageParser.parse(candidate);
                 return Optional.of(toIncomingMessage(berMessage, candidate, certificateCn, certificateOu));
             } catch (IllegalArgumentException e) {
-                LOGGER.debug("BER parsing failed at offset {}: {}", offset, e.getMessage());
+                LOGGER.debug("Direct BER parsing failed at offset {}: {}", offset, e.getMessage());
+            }
+
+            try {
+                P1AssociationProtocol.Pdu pdu = p1AssociationProtocol.decode(candidate);
+                if (pdu instanceof P1AssociationProtocol.TransferPdu transferPdu) {
+                    byte[] transferPayload = transferPdu.messagePayload();
+                    P1BerMessageParser.ParsedP1Message berMessage = p1BerMessageParser.parse(transferPayload);
+                    return Optional.of(toIncomingMessage(berMessage, transferPayload, certificateCn, certificateOu));
+                }
+            } catch (IllegalArgumentException e) {
+                LOGGER.debug("Association BER parsing failed at offset {}: {}", offset, e.getMessage());
             }
         }
 
