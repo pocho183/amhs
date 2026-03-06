@@ -1,10 +1,15 @@
 package it.amhs.service.protocol.p3;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,7 +20,11 @@ import org.springframework.util.StringUtils;
 import it.amhs.api.X400MessageRequest;
 import it.amhs.compliance.AMHSComplianceValidator;
 import it.amhs.domain.AMHSChannel;
+import it.amhs.domain.AMHSDeliveryReport;
 import it.amhs.domain.AMHSMessage;
+import it.amhs.domain.AMHSMessageState;
+import it.amhs.repository.AMHSDeliveryReportRepository;
+import it.amhs.repository.AMHSMessageRepository;
 import it.amhs.service.address.ORAddress;
 import it.amhs.service.channel.AMHSChannelService;
 import it.amhs.service.message.X400MessageService;
@@ -31,18 +40,27 @@ public class P3GatewaySessionService {
     private final AMHSComplianceValidator complianceValidator;
     private final AMHSChannelService channelService;
     private final RelayRoutingService relayRoutingService;
+    private final AMHSMessageRepository messageRepository;
+    private final AMHSDeliveryReportRepository deliveryReportRepository;
+    private final long defaultStatusWaitTimeoutMs;
+    private final long defaultStatusRetryIntervalMs;
     private final boolean authRequired;
     private final String expectedUsername;
     private final String expectedPassword;
     private final String defaultProtocolIndex;
     private final String defaultProtocolAddress;
     private final String defaultServerAddress;
+    private final ConcurrentMap<String, Long> submissionCorrelationTable = new ConcurrentHashMap<>();
 
     public P3GatewaySessionService(
         X400MessageService x400MessageService,
         AMHSComplianceValidator complianceValidator,
         AMHSChannelService channelService,
         RelayRoutingService relayRoutingService,
+        AMHSMessageRepository messageRepository,
+        AMHSDeliveryReportRepository deliveryReportRepository,
+        @Value("${amhs.p3.gateway.status.wait-timeout-ms:10000}") long defaultStatusWaitTimeoutMs,
+        @Value("${amhs.p3.gateway.status.retry-interval-ms:1000}") long defaultStatusRetryIntervalMs,
         @Value("${amhs.p3.gateway.auth.required:true}") boolean authRequired,
         @Value("${amhs.p3.gateway.auth.username:}") String expectedUsername,
         @Value("${amhs.p3.gateway.auth.password:}") String expectedPassword,
@@ -54,6 +72,10 @@ public class P3GatewaySessionService {
         this.complianceValidator = complianceValidator;
         this.channelService = channelService;
         this.relayRoutingService = relayRoutingService;
+        this.messageRepository = messageRepository;
+        this.deliveryReportRepository = deliveryReportRepository;
+        this.defaultStatusWaitTimeoutMs = Math.max(0L, defaultStatusWaitTimeoutMs);
+        this.defaultStatusRetryIntervalMs = Math.max(1L, defaultStatusRetryIntervalMs);
         this.authRequired = authRequired;
         this.expectedUsername = expectedUsername;
         this.expectedPassword = expectedPassword;
@@ -79,6 +101,7 @@ public class P3GatewaySessionService {
         return switch (operation) {
             case "BIND" -> bind(state, attributes);
             case "SUBMIT" -> submit(state, attributes);
+            case "RETRIEVE", "REPORT", "STATUS" -> retrieveStatus(state, attributes);
             case "UNBIND", "RELEASE", "QUIT" -> unbind(state);
             default -> "ERR code=unsupported-operation detail=Unsupported operation " + operation;
         };
@@ -210,6 +233,7 @@ public class P3GatewaySessionService {
         );
 
         AMHSMessage storedMessage = x400MessageService.storeFromP3(request);
+        submissionCorrelationTable.put(submissionId, storedMessage.getId());
         logger.info(
             "P3 submit accepted sender={} recipient={} channel={} submissionId={} messageId={}",
             state.senderOrAddress,
@@ -219,6 +243,100 @@ public class P3GatewaySessionService {
             storedMessage.getId()
         );
         return "OK code=submitted submission-id=" + submissionId + " message-id=" + storedMessage.getId();
+    }
+
+    private String retrieveStatus(SessionState state, Map<String, String> attributes) {
+        if (!state.bound) {
+            logger.warn("P3 status rejected: operation before bind");
+            return "ERR code=association detail=Status operation received before bind";
+        }
+
+        String submissionId = attributes.getOrDefault("submission-id", "").trim();
+        if (!StringUtils.hasText(submissionId)) {
+            logger.warn("P3 status rejected: missing submission-id");
+            return "ERR code=invalid-command detail=Missing submission-id";
+        }
+
+        long waitTimeoutMs = parseLong(attributes.get("wait-timeout-ms"), defaultStatusWaitTimeoutMs);
+        long retryIntervalMs = Math.max(1L, parseLong(attributes.get("retry-interval-ms"), defaultStatusRetryIntervalMs));
+        Instant deadline = Instant.now().plusMillis(Math.max(0L, waitTimeoutMs));
+
+        StatusSnapshot snapshot = loadStatus(submissionId);
+        while (snapshot != null && snapshot.drStatus.equals("PENDING") && waitTimeoutMs > 0 && Instant.now().isBefore(deadline)) {
+            long remainingMs = Math.max(1L, Duration.between(Instant.now(), deadline).toMillis());
+            try {
+                Thread.sleep(Math.min(retryIntervalMs, remainingMs));
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                return "ERR code=interrupted detail=Status wait interrupted";
+            }
+            snapshot = loadStatus(submissionId);
+        }
+
+        if (snapshot == null) {
+            return "ERR code=unknown-submission detail=Unknown submission-id";
+        }
+
+        StringBuilder response = new StringBuilder("OK code=status")
+            .append(" submission-id=").append(submissionId)
+            .append(" message-id=").append(snapshot.message.getId())
+            .append(" state=").append(snapshot.message.getLifecycleState())
+            .append(" dr-status=").append(snapshot.drStatus)
+            .append(" ipn-status=").append(snapshot.ipnStatus);
+
+        if (snapshot.message.getNextRetryAt() != null) {
+            response.append(" next-retry-at=").append(snapshot.message.getNextRetryAt().toInstant());
+        }
+        if (snapshot.message.getDrExpirationAt() != null) {
+            response.append(" timeout-at=").append(snapshot.message.getDrExpirationAt().toInstant());
+        }
+        if (snapshot.latestReport != null && StringUtils.hasText(snapshot.latestReport.getX411DiagnosticCode())) {
+            response.append(" diagnostic=").append(snapshot.latestReport.getX411DiagnosticCode());
+        }
+        return response.toString();
+    }
+
+    private StatusSnapshot loadStatus(String submissionId) {
+        Long internalMessageId = submissionCorrelationTable.get(submissionId);
+        Optional<AMHSMessage> maybeMessage = internalMessageId != null
+            ? messageRepository.findById(internalMessageId)
+            : Optional.empty();
+        if (maybeMessage.isEmpty()) {
+            maybeMessage = messageRepository.findByMessageId(submissionId);
+        }
+        if (maybeMessage.isEmpty()) {
+            return null;
+        }
+
+        AMHSMessage message = maybeMessage.get();
+        submissionCorrelationTable.put(submissionId, message.getId());
+        Optional<AMHSDeliveryReport> latestReport = deliveryReportRepository.findByMessage(message).stream()
+            .max((left, right) -> left.getGeneratedAt().compareTo(right.getGeneratedAt()));
+
+        String drStatus = latestReport.map(report -> report.getDeliveryStatus().name()).orElse("PENDING");
+        String ipnStatus = resolveIpnStatus(message, latestReport.isPresent());
+        return new StatusSnapshot(message, latestReport.orElse(null), drStatus, ipnStatus);
+    }
+
+    private String resolveIpnStatus(AMHSMessage message, boolean hasReport) {
+        if (message.getIpnRequest() == null || message.getIpnRequest() <= 0) {
+            return "NOT-REQUESTED";
+        }
+        if (hasReport || message.getLifecycleState() == AMHSMessageState.REPORTED) {
+            return "REPORTED";
+        }
+        return "PENDING";
+    }
+
+    private long parseLong(String maybeNumber, long fallback) {
+        if (!StringUtils.hasText(maybeNumber)) {
+            return fallback;
+        }
+        try {
+            return Long.parseLong(maybeNumber.trim());
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
     }
 
     private String unbind(SessionState state) {
@@ -260,5 +378,8 @@ public class P3GatewaySessionService {
         public boolean isClosed() {
             return closed;
         }
+    }
+
+    private record StatusSnapshot(AMHSMessage message, AMHSDeliveryReport latestReport, String drStatus, String ipnStatus) {
     }
 }
