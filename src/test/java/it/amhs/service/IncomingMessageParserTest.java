@@ -33,6 +33,37 @@ class IncomingMessageParserTest {
         assertEquals("HELLO-BER", parsed.body());
     }
 
+
+    @Test
+    void shouldParseBerPayloadWhenBerStartsAfterExtendedIsoHeader() {
+        byte[] ber = sampleBerPayload("LIRRZQZX", "LIIRYAYX", "HELLO-BER");
+        byte[] prefixed = new byte[ber.length + 17];
+        prefixed[0] = 0x0D;
+        prefixed[1] = (byte) 0xFF;
+        prefixed[2] = 0x01;
+        prefixed[3] = 0x02;
+        prefixed[4] = 0x01;
+        prefixed[5] = 0x28;
+        prefixed[6] = 0x0A;
+        prefixed[7] = 0x15;
+        prefixed[8] = 0x04;
+        prefixed[9] = 0x13;
+        prefixed[10] = 0x54;
+        prefixed[11] = 0x53;
+        prefixed[12] = 0x4E;
+        prefixed[13] = 0x42;
+        prefixed[14] = 0x4B;
+        prefixed[15] = 0x31;
+        prefixed[16] = 0x30;
+        System.arraycopy(ber, 0, prefixed, 17, ber.length);
+
+        RFC1006Service.IncomingMessage parsed = parser.parse(prefixed, new String(prefixed, StandardCharsets.UTF_8), null, null);
+
+        assertEquals("LIRRZQZX", parsed.from());
+        assertEquals("LIIRYAYX", parsed.to());
+        assertEquals("HELLO-BER", parsed.body());
+    }
+
     @Test
     void shouldPreferHexBodyForBinaryPayloadWhenHeadersAreMissing() {
         byte[] binary = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xA2, 0x00, 0x11, (byte) 0xFF};
