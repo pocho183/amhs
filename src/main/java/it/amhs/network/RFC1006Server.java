@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import it.amhs.service.RFC1006Service;
+import it.amhs.service.protocol.rfc1006.RFC1006Service;
 
 @Component
 public class RFC1006Server {
