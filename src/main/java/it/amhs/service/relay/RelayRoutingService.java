@@ -35,6 +35,10 @@ public class RelayRoutingService {
         return Optional.empty();
     }
 
+    public boolean hasRoutesConfigured() {
+        return !routeEntries.isEmpty();
+    }
+
     private List<RouteEntry> parse(String routingTable) {
         if (!StringUtils.hasText(routingTable)) {
             return List.of();
