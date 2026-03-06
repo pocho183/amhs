@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
 
@@ -150,5 +151,23 @@ class RFC1006ServiceTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> service.validateAarqForAmhsP1(aarq, "LIMMZQZX", null));
         assertTrue(ex.getMessage().contains("must not contain duplicates"));
+    }
+
+    @Test
+    void shouldStripUtf8BomBeforePayloadInspection() {
+        byte[] raw = "\uFEFFFrom:ABC".getBytes(StandardCharsets.UTF_8);
+
+        byte[] normalized = service.stripUtf8Bom(raw);
+
+        assertEquals("From:ABC", new String(normalized, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void shouldRecognizeP1AssociationAfterBomRemoval() {
+        byte[] payload = new byte[] {(byte) 0xA1, 0x01, 0x00};
+        byte[] withBom = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF, (byte) 0xA1, 0x01, 0x00};
+
+        assertTrue(service.isLikelyP1AssociationPdu(payload));
+        assertTrue(service.isLikelyP1AssociationPdu(service.stripUtf8Bom(withBom)));
     }
 }
