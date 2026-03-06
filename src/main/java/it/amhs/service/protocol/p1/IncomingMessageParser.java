@@ -116,7 +116,12 @@ public final class IncomingMessageParser {
         List<Integer> berOffsets = candidateBerOffsets(rawPayload);
         LOGGER.info("BER candidate scan found {} offsets in payload of {} bytes", berOffsets.size(), rawPayload.length);
         for (int offset : berOffsets) {
-            byte[] candidate = offset == 0 ? rawPayload : Arrays.copyOfRange(rawPayload, offset, rawPayload.length);
+            Optional<Integer> candidateLength = berTlvTotalLengthAtOffset(rawPayload, offset);
+            if (candidateLength.isEmpty()) {
+                continue;
+            }
+
+            byte[] candidate = Arrays.copyOfRange(rawPayload, offset, offset + candidateLength.get());
             int firstByte = candidate[0] & 0xFF;
             LOGGER.info("Attempting BER parse at payload offset {} (first byte=0x{})", offset, String.format("%02X", firstByte));
 
@@ -150,13 +155,17 @@ public final class IncomingMessageParser {
     }
 
     private boolean isCompleteBerTlvAtOffset(byte[] payload, int offset) {
+        return berTlvTotalLengthAtOffset(payload, offset).isPresent();
+    }
+
+    private Optional<Integer> berTlvTotalLengthAtOffset(byte[] payload, int offset) {
         if (payload == null || offset < 0 || offset >= payload.length) {
-            return false;
+            return Optional.empty();
         }
 
         int lengthOffset = offset + 1;
         if (lengthOffset >= payload.length) {
-            return false;
+            return Optional.empty();
         }
 
         int lengthByte = payload[lengthOffset] & 0xFF;
@@ -169,7 +178,7 @@ public final class IncomingMessageParser {
         } else {
             int lengthBytesCount = lengthByte & 0x7F;
             if (lengthBytesCount == 0 || lengthBytesCount > 4 || lengthOffset + lengthBytesCount >= payload.length) {
-                return false;
+                return Optional.empty();
             }
 
             contentLength = 0;
@@ -180,11 +189,15 @@ public final class IncomingMessageParser {
         }
 
         if (contentLength < 0 || contentOffset > payload.length) {
-            return false;
+            return Optional.empty();
         }
 
-        int totalLength = contentOffset + contentLength - offset;
-        return totalLength == payload.length - offset;
+        int berEnd = contentOffset + contentLength;
+        if (berEnd > payload.length) {
+            return Optional.empty();
+        }
+
+        return Optional.of(berEnd - offset);
     }
 
     private RFC1006Service.IncomingMessage toIncomingMessage(

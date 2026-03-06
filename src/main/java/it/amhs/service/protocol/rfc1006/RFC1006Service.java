@@ -193,11 +193,14 @@ public class RFC1006Service {
                 IncomingMessage incoming = incomingMessageParser.parse(normalizedPayload, message, identity.cn(), identity.ou());
                 try {
                     storeWithStrictPriority(incoming);
-                    String ack = "Message-ID: " + incoming.messageId + "\n"
+                    String ackWithDeliveryReport = "Message-ID: " + incoming.messageId + "\n"
                         + "From: " + incoming.from + "\n"
                         + "To: " + incoming.to + "\n"
-                        + "Status: RECEIVED\n";
-                    sendRFC1006(out, ack);
+                        + "Status: RECEIVED\n"
+                        + "Report-Type: DR\n"
+                        + "Delivery-Status: DELIVERED\n"
+                        + "Original-Message-ID: " + incoming.messageId + "\n";
+                    sendRFC1006(out, ackWithDeliveryReport);
                 } catch (IllegalArgumentException ex) {
                     logger.warn("AMHS message rejected: {}", ex.getMessage());
                     String nack = "Message-ID: " + incoming.messageId + "\n"
