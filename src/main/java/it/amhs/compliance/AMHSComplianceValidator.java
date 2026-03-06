@@ -10,7 +10,7 @@ import org.springframework.util.StringUtils;
 
 import it.amhs.domain.AMHSChannel;
 import it.amhs.domain.AMHSProfile;
-import it.amhs.service.ORAddress;
+import it.amhs.service.address.ORAddress;
 
 @Component
 public class AMHSComplianceValidator {
