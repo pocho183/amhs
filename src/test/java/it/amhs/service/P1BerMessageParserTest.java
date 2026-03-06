@@ -11,6 +11,7 @@ import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
 import it.amhs.domain.AMHSPriority;
 import it.amhs.domain.AMHSProfile;
+import it.amhs.service.protocol.p1.P1BerMessageParser;
 
 class P1BerMessageParserTest {
 

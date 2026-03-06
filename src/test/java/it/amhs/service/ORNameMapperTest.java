@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
+import it.amhs.service.address.ORNameMapper;
 
 class ORNameMapperTest {
 

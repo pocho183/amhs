@@ -7,6 +7,8 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import it.amhs.service.protocol.acse.PresentationContext;
+
 class PresentationContextTest {
 
     @Test

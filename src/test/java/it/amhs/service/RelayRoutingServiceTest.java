@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+import it.amhs.service.address.ORAddress;
+import it.amhs.service.relay.RelayRoutingService;
+
 class RelayRoutingServiceTest {
 
     @Test

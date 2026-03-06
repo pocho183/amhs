@@ -21,6 +21,11 @@ import it.amhs.domain.AMHSMessageState;
 import it.amhs.domain.AMHSProfile;
 import it.amhs.repository.AMHSDeliveryReportRepository;
 import it.amhs.repository.AMHSMessageRepository;
+import it.amhs.service.protocol.p1.X411TagMap;
+import it.amhs.service.relay.OutboundP1Client;
+import it.amhs.service.report.AMHSDeliveryReportService;
+import it.amhs.service.state.AMHSMessageStateMachine;
+import it.amhs.service.x411.X411DiagnosticMapper;
 
 class AMHSDeliveryReportServiceTest {
 

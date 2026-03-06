@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+import it.amhs.service.x411.X411Diagnostic;
+import it.amhs.service.x411.X411DiagnosticMapper;
+
 class X411DiagnosticMapperTest {
 
     private final X411DiagnosticMapper mapper = new X411DiagnosticMapper();

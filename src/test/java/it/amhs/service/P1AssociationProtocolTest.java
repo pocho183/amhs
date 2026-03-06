@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
+import it.amhs.service.protocol.p1.P1AssociationProtocol;
 
 class P1AssociationProtocolTest {
 

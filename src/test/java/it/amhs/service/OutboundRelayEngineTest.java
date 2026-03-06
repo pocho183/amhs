@@ -3,9 +3,9 @@ package it.amhs.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
@@ -14,6 +14,10 @@ import it.amhs.domain.AMHSDeliveryStatus;
 import it.amhs.domain.AMHSMessage;
 import it.amhs.domain.AMHSMessageState;
 import it.amhs.repository.AMHSMessageRepository;
+import it.amhs.service.relay.OutboundP1Client;
+import it.amhs.service.relay.OutboundRelayEngine;
+import it.amhs.service.relay.RelayRoutingService;
+import it.amhs.service.report.AMHSDeliveryReportService;
 
 class OutboundRelayEngineTest {
 

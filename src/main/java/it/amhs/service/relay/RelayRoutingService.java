@@ -20,7 +20,7 @@ public class RelayRoutingService {
         this.routeEntries = parse(routingTable);
     }
 
-    Optional<RelayNextHop> findNextHop(AMHSMessageEnvelope envelope, int attempt) {
+    public Optional<RelayNextHop> findNextHop(AMHSMessageEnvelope envelope, int attempt) {
         ORAddress recipient = envelope.recipient();
         for (RouteEntry entry : routeEntries) {
             if (!entry.matches(recipient.attributes())) {

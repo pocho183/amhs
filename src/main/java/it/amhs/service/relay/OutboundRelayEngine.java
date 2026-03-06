@@ -69,7 +69,7 @@ public class OutboundRelayEngine {
         }
     }
 
-    void relaySingle(AMHSMessage message) {
+    public void relaySingle(AMHSMessage message) {
         String existingTrace = message.getTransferTrace();
         if (hasLoop(existingTrace, localMtaName, localRoutingDomain)) {
             deadLetter(message, "loop-detected");
@@ -126,7 +126,7 @@ public class OutboundRelayEngine {
         }
     }
 
-    static boolean hasLoop(String trace, String localMtaName, String routingDomain) {
+    public static boolean hasLoop(String trace, String localMtaName, String routingDomain) {
         if (!StringUtils.hasText(trace)) {
             return false;
         }

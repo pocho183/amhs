@@ -64,7 +64,7 @@ public class RFC1006Service {
     private static final int MAX_TPKT_LENGTH = 65_535;
     private static final int MAX_DT_USER_DATA_PER_FRAME = 16_384;
     private static final int MAX_ACSE_USER_INFORMATION_SIZE = 4_096;
-    static final String ICAO_AMHS_P1_OID = "2.6.0.1.6.1";
+    public static final String ICAO_AMHS_P1_OID = "2.6.0.1.6.1";
     static final int RFC1006_CLASS_0 = 0;
     static final int RFC1006_CLASS_0_LEGACY_OPTIONS = 0x0A;
 
@@ -220,7 +220,7 @@ public class RFC1006Service {
         }
     }
 
-    boolean isLikelyP1AssociationPdu(byte[] payload) {
+    public boolean isLikelyP1AssociationPdu(byte[] payload) {
         if (payload.length == 0) {
             return false;
         }
@@ -228,7 +228,7 @@ public class RFC1006Service {
         return (first >= 0xA0 && first <= 0xAF) || (first >= 0x60 && first <= 0x64);
     }
 
-    byte[] stripUtf8Bom(byte[] payload) {
+    public byte[] stripUtf8Bom(byte[] payload) {
         if (payload == null || payload.length < 3) {
             return payload;
         }
@@ -365,7 +365,7 @@ public class RFC1006Service {
         logger.info("Received ACSE {} while waiting for P1 transfer PDUs", apdu.getClass().getSimpleName());
     }
 
-    void validateClassNegotiation(int tpduClass) {
+    public void validateClassNegotiation(int tpduClass) {
         if (tpduClass == RFC1006_CLASS_0_LEGACY_OPTIONS) {
             logger.debug("Accepting legacy COTP class/options value 0x0A for class 0 interoperability");
             return;
@@ -375,7 +375,7 @@ public class RFC1006Service {
         }
     }
 
-    void validateAarqForAmhsP1(AcseModels.AARQApdu aarq, String certificateCn, String certificateOu) {
+    public void validateAarqForAmhsP1(AcseModels.AARQApdu aarq, String certificateCn, String certificateOu) {
         if (!ICAO_AMHS_P1_OID.equals(aarq.applicationContextName())) {
             throw new IllegalArgumentException("Unsupported ACSE application-context OID " + aarq.applicationContextName());
         }
@@ -577,7 +577,7 @@ public class RFC1006Service {
         return value.trim();
     }
 
-    static String appendTraceHop(String existingTrace, Instant arrivalInstant, String localMtaName, String routingDomain) {
+    public static String appendTraceHop(String existingTrace, Instant arrivalInstant, String localMtaName, String routingDomain) {
         String arrival = arrivalInstant == null ? Instant.now().toString() : arrivalInstant.toString();
         String mta = StringUtils.hasText(localMtaName) ? localMtaName.trim() : "LOCAL-MTA";
         String domain = StringUtils.hasText(routingDomain) ? routingDomain.trim() : "LOCAL";
@@ -834,7 +834,7 @@ public class RFC1006Service {
     private record COTPFrame(byte type, boolean endOfTSDU, byte[] payload) {
     }
 
-    static record IncomingMessage(
+    public static record IncomingMessage(
         String messageId,
         String from,
         String to,

@@ -11,6 +11,9 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import it.amhs.service.protocol.acse.AcseAssociationProtocol;
+import it.amhs.service.protocol.acse.AcseModels;
+
 class AcseAssociationProtocolTest {
 
     private final AcseAssociationProtocol protocol = new AcseAssociationProtocol();

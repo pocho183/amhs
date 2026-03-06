@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+import it.amhs.service.protocol.p1.X411TagMap;
+
 class X411TagMapTest {
 
     @Test

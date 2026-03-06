@@ -7,6 +7,8 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import it.amhs.service.protocol.acse.AcseModels;
+
 class AcseModelsTest {
 
     @Test

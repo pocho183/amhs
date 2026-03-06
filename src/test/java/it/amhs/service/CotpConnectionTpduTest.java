@@ -8,6 +8,8 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import it.amhs.service.protocol.rfc1006.CotpConnectionTpdu;
+
 class CotpConnectionTpduTest {
 
     @Test
