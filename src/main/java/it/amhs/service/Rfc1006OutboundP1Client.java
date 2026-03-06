@@ -37,7 +37,8 @@ public class Rfc1006OutboundP1Client implements OutboundP1Client {
     private static final byte COTP_PDU_CR = (byte) 0xE0;
     private static final byte COTP_PDU_CC = (byte) 0xD0;
     private static final byte COTP_PDU_DT = (byte) 0xF0;
-    private static final byte COTP_TPDU_SIZE_65531 = 0x0A;
+    private static final int COTP_CLASS_0 = 0;
+    private static final int COTP_NEGOTIATED_MAX_USER_DATA = 16_384;
 
     @Override
     public RelayTransferOutcome relay(String endpoint, AMHSMessage message) {
@@ -131,15 +132,14 @@ public class Rfc1006OutboundP1Client implements OutboundP1Client {
     }
 
     private byte[] buildConnectionRequestTpdu() {
-        byte[] tpdu = new byte[7];
-        tpdu[0] = 0x06;
-        tpdu[1] = COTP_PDU_CR;
-        tpdu[2] = 0x00;
-        tpdu[3] = 0x01;
-        tpdu[4] = 0x00;
-        tpdu[5] = 0x00;
-        tpdu[6] = COTP_TPDU_SIZE_65531;
-        return tpdu;
+        return new CotpConnectionTpdu(
+            COTP_PDU_CR,
+            0,
+            1,
+            COTP_CLASS_0,
+            Optional.of(COTP_NEGOTIATED_MAX_USER_DATA),
+            List.of()
+        ).serialize();
     }
 
     private byte[] encodeMessage(AMHSMessage message) {
