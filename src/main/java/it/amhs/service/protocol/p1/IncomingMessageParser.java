@@ -131,12 +131,12 @@ public final class IncomingMessageParser {
     }
 
     private List<Integer> candidateBerOffsets(byte[] rawPayload) {
-        List<Integer> offsets = new ArrayList<>();
+        Set<Integer> offsets = new LinkedHashSet<>();
         if (isBerEncoded(rawPayload)) {
             offsets.add(0);
         }
 
-        int scanLimit = Math.min(rawPayload.length - 1, 16);
+        int scanLimit = Math.min(rawPayload.length - 1, 512);
         for (int i = 1; i <= scanLimit; i++) {
             int tag = rawPayload[i] & 0xFF;
             if (tag == 0x30 || (tag >= 0x60 && tag <= 0x65) || (tag >= 0xA0 && tag <= 0xAF)) {
@@ -144,7 +144,7 @@ public final class IncomingMessageParser {
             }
         }
 
-        return offsets;
+        return new ArrayList<>(offsets);
     }
 
     private RFC1006Service.IncomingMessage toIncomingMessage(
