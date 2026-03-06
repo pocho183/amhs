@@ -32,6 +32,10 @@ public class AMHSComplianceValidator {
         }
     }
 
+    public void validateIcaoOrAddress(String address, String fieldName) {
+        validateAddress(address, fieldName);
+    }
+
     public void validateCertificateIdentity(AMHSChannel channel, String certificateCn, String certificateOu) {
         if (!StringUtils.hasText(certificateCn) && !StringUtils.hasText(certificateOu)) {
             return;
@@ -61,6 +65,24 @@ public class AMHSComplianceValidator {
 
         if (!icaoUnit.equals(normalizedCn) && !icaoUnit.equals(normalizedOu)) {
             throw new IllegalArgumentException("Certificate subject is not bound to sender O/R address ICAO unit");
+        }
+    }
+
+    public void validateAuthenticatedIdentityBinding(String from, String authenticatedIdentity) {
+        if (!StringUtils.hasText(authenticatedIdentity)) {
+            return;
+        }
+
+        String normalizedIdentity = normalized(authenticatedIdentity);
+        String senderIcaoUnit = extractIcaoUnit(from);
+        String senderCn = "";
+        String normalizedAddress = from.trim().toUpperCase(Locale.ROOT);
+        if (!ICAO_8_CHAR.matcher(normalizedAddress).matches()) {
+            senderCn = normalized(ORAddress.parse(normalizedAddress).get("CN"));
+        }
+
+        if (!normalizedIdentity.equals(senderIcaoUnit) && !normalizedIdentity.equals(senderCn)) {
+            throw new IllegalArgumentException("Authenticated identity is not bound to sender O/R address");
         }
     }
 
