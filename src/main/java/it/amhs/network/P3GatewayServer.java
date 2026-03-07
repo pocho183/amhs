@@ -2,6 +2,7 @@ package it.amhs.network;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -29,12 +30,22 @@ import org.springframework.stereotype.Component;
 
 import it.amhs.service.protocol.p3.P3Asn1GatewayProtocol;
 import it.amhs.service.protocol.p3.P3GatewaySessionService;
+import it.amhs.service.protocol.rfc1006.CotpConnectionTpdu;
 
 @Component
 @ConditionalOnProperty(prefix = "amhs.p3.gateway", name = "enabled", havingValue = "true")
 public class P3GatewayServer {
 
     private static final Logger logger = LoggerFactory.getLogger(P3GatewayServer.class);
+    private static final byte TPKT_VERSION = 0x03;
+    private static final byte TPKT_RESERVED = 0x00;
+    private static final int MAX_TPKT_LENGTH = 65_535;
+    private static final byte COTP_PDU_CR = (byte) 0xE0;
+    private static final byte COTP_PDU_CC = (byte) 0xD0;
+    private static final byte COTP_PDU_DT = (byte) 0xF0;
+    private static final byte COTP_PDU_DR = (byte) 0x80;
+    private static final byte COTP_PDU_DC = (byte) 0xC0;
+    private static final byte[] COTP_DT_HEADER = new byte[] { 0x02, (byte) 0xF0 };
 
     private final String host;
     private final int port;
@@ -131,7 +142,13 @@ public class P3GatewayServer {
                 return;
             }
 
-            if (protocolKind == ProtocolKind.RFC1006_TPKT || protocolKind == ProtocolKind.TLS_CLIENT_HELLO) {
+            if (protocolKind == ProtocolKind.RFC1006_TPKT) {
+                logger.info("P3 gateway protocol=rfc1006-tpkt remote={}", socket.getInetAddress());
+                handleRfc1006Session(connectionId, session, input, output);
+                return;
+            }
+
+            if (protocolKind == ProtocolKind.TLS_CLIENT_HELLO) {
                 logger.info(
                     "P3 gateway connection #{} rejected protocol={} (this endpoint expects text command or BER APDU over raw transport)",
                     connectionId,
@@ -201,6 +218,145 @@ public class P3GatewayServer {
                 return;
             }
         }
+    }
+
+    private void handleRfc1006Session(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
+        throws Exception {
+        ByteArrayOutputStream segmentedPayload = new ByteArrayOutputStream();
+        int pduIndex = 0;
+        while (true) {
+            CotpFrame frame = readRfc1006Frame(input);
+            if (frame == null) {
+                logger.info("P3 gateway connection #{} RFC1006 session closed by peer after {} APDU(s)", connectionId, pduIndex);
+                return;
+            }
+
+            if (frame.type == COTP_PDU_CR) {
+                CotpConnectionTpdu request = CotpConnectionTpdu.parse(frame.payload);
+                CotpConnectionTpdu confirm = new CotpConnectionTpdu(
+                    CotpConnectionTpdu.PDU_CC,
+                    request.sourceReference(),
+                    request.destinationReference(),
+                    request.tpduClass(),
+                    request.tpduSize(),
+                    request.unknownParameters()
+                );
+                sendTpktFrame(output, confirm.serialize());
+                output.flush();
+                logger.info("P3 gateway connection #{} RFC1006 COTP connection confirmed", connectionId);
+                continue;
+            }
+
+            if (frame.type == COTP_PDU_DR) {
+                sendTpktFrame(output, new byte[] {0x06, COTP_PDU_DC, 0x00, 0x00, 0x00, 0x00, 0x00});
+                output.flush();
+                logger.info("P3 gateway connection #{} RFC1006 disconnect requested by peer", connectionId);
+                return;
+            }
+
+            if (frame.type != COTP_PDU_DT) {
+                logger.warn(
+                    "P3 gateway connection #{} ignoring unsupported RFC1006 TPDU type=0x{}",
+                    connectionId,
+                    toHexByte(frame.type)
+                );
+                continue;
+            }
+
+            segmentedPayload.writeBytes(frame.userData);
+            if (!frame.endOfTsdu) {
+                continue;
+            }
+
+            byte[] pdu = segmentedPayload.toByteArray();
+            segmentedPayload.reset();
+            if (pdu.length == 0) {
+                continue;
+            }
+
+            pduIndex++;
+            logger.info("P3 gateway connection #{} RFC1006 BER APDU #{} len={} first-byte=0x{}", connectionId, pduIndex, pdu.length, toHexByte(pdu[0]));
+            byte[] response = asn1GatewayProtocol.handle(session, pdu);
+            sendRfc1006Dt(output, response);
+            logger.debug("P3 gateway connection #{} RFC1006 BER APDU #{} response-len={}", connectionId, pduIndex, response.length);
+            if (session.isClosed()) {
+                logger.info("P3 gateway connection #{} RFC1006 BER session closed by release after {} APDU(s)", connectionId, pduIndex);
+                return;
+            }
+        }
+    }
+
+    private CotpFrame readRfc1006Frame(PushbackInputStream input) throws Exception {
+        int version = input.read();
+        if (version < 0) {
+            return null;
+        }
+        int reserved = input.read();
+        int lenHi = input.read();
+        int lenLo = input.read();
+        if (reserved < 0 || lenHi < 0 || lenLo < 0) {
+            throw new EOFException("Connection closed while reading TPKT header");
+        }
+        if (version != TPKT_VERSION || reserved != TPKT_RESERVED) {
+            throw new IllegalArgumentException("Invalid TPKT header");
+        }
+
+        int tpktLength = ((lenHi & 0xFF) << 8) | (lenLo & 0xFF);
+        if (tpktLength < 7 || tpktLength > MAX_TPKT_LENGTH) {
+            throw new IllegalArgumentException("Invalid TPKT frame length: " + tpktLength);
+        }
+
+        byte[] cotpTpdu = input.readNBytes(tpktLength - 4);
+        if (cotpTpdu.length != tpktLength - 4) {
+            throw new EOFException("Truncated TPKT payload");
+        }
+        int lengthIndicator = cotpTpdu[0] & 0xFF;
+        if (lengthIndicator + 1 > cotpTpdu.length || lengthIndicator < 1) {
+            throw new IllegalArgumentException("Invalid COTP length indicator: " + lengthIndicator);
+        }
+
+        byte type = (byte) (cotpTpdu[1] & 0xF0);
+        if (type == COTP_PDU_CR || type == COTP_PDU_CC || type == COTP_PDU_DR || type == COTP_PDU_DC) {
+            return new CotpFrame(type, true, new byte[0], cotpTpdu);
+        }
+        if (type != COTP_PDU_DT) {
+            return new CotpFrame(type, true, new byte[0], cotpTpdu);
+        }
+        if (lengthIndicator < 2 || cotpTpdu[1] != COTP_DT_HEADER[1]) {
+            throw new IllegalArgumentException("Unsupported COTP DT header");
+        }
+        boolean eot = (cotpTpdu[2] & 0x80) != 0;
+        int dataOffset = lengthIndicator + 1;
+        byte[] userData = new byte[cotpTpdu.length - dataOffset];
+        if (userData.length > 0) {
+            System.arraycopy(cotpTpdu, dataOffset, userData, 0, userData.length);
+        }
+        return new CotpFrame(type, eot, userData, cotpTpdu);
+    }
+
+    private void sendRfc1006Dt(OutputStream output, byte[] payload) throws Exception {
+        byte[] response = payload == null ? new byte[0] : payload;
+        byte[] tpdu = new byte[3 + response.length];
+        tpdu[0] = 0x02;
+        tpdu[1] = COTP_PDU_DT;
+        tpdu[2] = (byte) 0x80;
+        if (response.length > 0) {
+            System.arraycopy(response, 0, tpdu, 3, response.length);
+        }
+        sendTpktFrame(output, tpdu);
+        output.flush();
+    }
+
+    private void sendTpktFrame(OutputStream output, byte[] tpdu) throws Exception {
+        int length = 4 + tpdu.length;
+        if (length > MAX_TPKT_LENGTH) {
+            throw new IllegalArgumentException("TPKT frame exceeds maximum allowed length: " + length);
+        }
+        output.write(TPKT_VERSION);
+        output.write(TPKT_RESERVED);
+        output.write((length >> 8) & 0xFF);
+        output.write(length & 0xFF);
+        output.write(tpdu);
     }
 
     private ProtocolKind detectProtocol(byte[] preview) {
@@ -287,6 +443,9 @@ public class P3GatewayServer {
         RFC1006_TPKT,
         TLS_CLIENT_HELLO,
         UNKNOWN_BINARY
+    }
+
+    private record CotpFrame(byte type, boolean endOfTsdu, byte[] userData, byte[] payload) {
     }
 
     private static final class NamedDaemonThreadFactory implements ThreadFactory {
