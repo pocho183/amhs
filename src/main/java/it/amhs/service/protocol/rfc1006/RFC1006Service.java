@@ -13,7 +13,9 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.Arrays;
@@ -351,7 +353,17 @@ public class RFC1006Service {
         }
 
         if (apdu instanceof AcseModels.AARQApdu aarq) {
-            validateAarqForAmhsP1(aarq, identity.cn(), identity.ou());
+            try {
+                validateAarqForAmhsP1(aarq, identity.cn(), identity.ou());
+            } catch (IllegalArgumentException ex) {
+                logger.warn("Rejected ACSE AARQ: {}", ex.getMessage());
+                associationState.bound = false;
+                associationState.active = false;
+                AcseModels.AAREApdu reject = buildRejectedAare(ex.getMessage());
+                associationState.acseStateMachine.onOutbound(reject);
+                sendRFC1006(out, acseAssociationProtocol.encode(reject));
+                return;
+            }
             associationState.bound = true;
             associationState.active = true;
             logger.info("Accepted ACSE AARQ for application context {}", aarq.applicationContextName());
@@ -384,6 +396,28 @@ public class RFC1006Service {
         }
 
         logger.info("Received ACSE {} while waiting for P1 transfer PDUs", apdu.getClass().getSimpleName());
+    }
+
+    AcseModels.AAREApdu buildRejectedAare(String diagnosticText) {
+        AcseModels.ResultSourceDiagnostic resultSourceDiagnostic = mapAarqDiagnostic(diagnosticText);
+        return new AcseModels.AAREApdu(
+            false,
+            Optional.ofNullable(diagnosticText).filter(StringUtils::hasText),
+            Optional.of(resultSourceDiagnostic),
+            Optional.empty(),
+            List.of(ICAO_AMHS_P1_OID)
+        );
+    }
+
+    AcseModels.ResultSourceDiagnostic mapAarqDiagnostic(String diagnosticText) {
+        String normalized = diagnosticText == null ? "" : diagnosticText.toLowerCase(Locale.ROOT);
+        if (normalized.contains("application-context") || normalized.contains("presentation")) {
+            return new AcseModels.ResultSourceDiagnostic(1, 2); // no-reason-given/provider diagnostic bucket
+        }
+        if (normalized.contains("authentication") || normalized.contains("certificate") || normalized.contains("identity")) {
+            return new AcseModels.ResultSourceDiagnostic(2, 1); // authentication-required/requestor diagnostic bucket
+        }
+        return new AcseModels.ResultSourceDiagnostic(1, 1); // provider no-common-acse-version fallback
     }
 
     public void validateClassNegotiation(int tpduClass) {
