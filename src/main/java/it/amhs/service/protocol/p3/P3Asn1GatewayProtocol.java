@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -24,6 +26,8 @@ import it.amhs.asn1.BerTlv;
  */
 @Component
 public class P3Asn1GatewayProtocol {
+
+    private static final Logger logger = LoggerFactory.getLogger(P3Asn1GatewayProtocol.class);
 
     private static final int TAG_CLASS_CONTEXT = 2;
     private static final int TAG_CLASS_UNIVERSAL = 0;
@@ -46,6 +50,7 @@ public class P3Asn1GatewayProtocol {
 
     public byte[] handle(P3GatewaySessionService.SessionState session, byte[] encodedPdu) {
         BerTlv apdu = BerCodec.decodeSingle(encodedPdu);
+        logger.info("P3 ASN.1 incoming APDU tagClass={} constructed={} tagNumber={} len={}", apdu.tagClass(), apdu.constructed(), apdu.tagNumber(), apdu.length());
         if (apdu.tagClass() != TAG_CLASS_CONTEXT || !apdu.constructed()) {
             return error("invalid-apdu", "Expected context-specific constructed APDU");
         }
@@ -103,12 +108,20 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] mapBind(P3GatewaySessionService.SessionState session, byte[] payload) {
         Map<Integer, String> fields = decodeContextUtf8Fields(payload);
+        logger.info(
+            "P3 ASN.1 bind request fields username={} sender={} channel={} password-present={}",
+            safe(fields.get(0)),
+            safe(fields.get(2)),
+            safe(fields.get(3)),
+            StringUtils.hasText(fields.get(1))
+        );
         String command = "BIND"
             + " username=" + value(fields.get(0))
             + ";password=" + value(fields.get(1))
             + ";sender=" + value(fields.get(2))
             + ";channel=" + value(fields.get(3));
         String response = sessionService.handleCommand(session, command);
+        logger.info("P3 ASN.1 bind gateway-response={}", response);
 
         if (response.startsWith("OK")) {
             return envelope(APDU_BIND_RESPONSE, encodeKeyValuePayload(parseResponse(response)));
@@ -118,11 +131,18 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] mapSubmit(P3GatewaySessionService.SessionState session, byte[] payload) {
         Map<Integer, String> fields = decodeContextUtf8Fields(payload);
+        logger.info(
+            "P3 ASN.1 submit request fields recipient={} subject={} body-bytes={}",
+            safe(fields.get(0)),
+            safe(fields.get(1)),
+            value(fields.get(2)).getBytes(StandardCharsets.UTF_8).length
+        );
         String command = "SUBMIT"
             + " recipient=" + value(fields.get(0))
             + ";subject=" + value(fields.get(1))
             + ";body=" + value(fields.get(2));
         String response = sessionService.handleCommand(session, command);
+        logger.info("P3 ASN.1 submit gateway-response={}", response);
 
         if (response.startsWith("OK")) {
             return envelope(APDU_SUBMIT_RESPONSE, encodeKeyValuePayload(parseResponse(response)));
@@ -132,11 +152,18 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] mapStatus(P3GatewaySessionService.SessionState session, byte[] payload) {
         Map<Integer, String> fields = decodeContextUtf8Fields(payload);
+        logger.info(
+            "P3 ASN.1 status request fields submission-id={} wait-timeout-ms={} retry-interval-ms={}",
+            safe(fields.get(0)),
+            safe(fields.get(1)),
+            safe(fields.get(2))
+        );
         String command = "STATUS"
             + " submission-id=" + value(fields.get(0))
             + ";wait-timeout-ms=" + value(fields.get(1))
             + ";retry-interval-ms=" + value(fields.get(2));
         String response = sessionService.handleCommand(session, command);
+        logger.info("P3 ASN.1 status gateway-response={}", response);
 
         if (response.startsWith("OK")) {
             return envelope(APDU_STATUS_RESPONSE, encodeKeyValuePayload(parseResponse(response)));
@@ -146,6 +173,7 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] mapRelease(P3GatewaySessionService.SessionState session) {
         String response = sessionService.handleCommand(session, "UNBIND");
+        logger.info("P3 ASN.1 release gateway-response={}", response);
         if (response.startsWith("OK")) {
             return envelope(APDU_RELEASE_RESPONSE, new byte[0]);
         }
@@ -242,5 +270,9 @@ public class P3Asn1GatewayProtocol {
             out.writeBytes(chunk);
         }
         return out.toByteArray();
+    }
+
+    private String safe(String value) {
+        return StringUtils.hasText(value) ? value : "<empty>";
     }
 }

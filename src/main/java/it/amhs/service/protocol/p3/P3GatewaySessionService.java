@@ -97,8 +97,14 @@ public class P3GatewaySessionService {
         String[] segments = trimmed.split("\\s+", 2);
         String operation = segments[0].toUpperCase();
         Map<String, String> attributes = segments.length > 1 ? parseAttributes(segments[1]) : Map.of();
+        logger.info(
+            "P3 command op={} bound={} attrs={}",
+            operation,
+            state.bound,
+            redactSensitiveAttributes(attributes)
+        );
 
-        return switch (operation) {
+        String response = switch (operation) {
             case "BIND" -> bind(state, attributes);
             case "SUBMIT" -> submit(state, attributes);
             case "RETRIEVE", "REPORT", "STATUS" -> retrieveStatus(state, attributes);
@@ -106,6 +112,8 @@ public class P3GatewaySessionService {
             case "UNBIND", "RELEASE", "QUIT" -> unbind(state);
             default -> "ERR code=unsupported-operation detail=Unsupported operation " + operation;
         };
+        logger.info("P3 command op={} result={}", operation, response);
+        return response;
     }
 
     private String bind(SessionState state, Map<String, String> attributes) {
@@ -414,6 +422,14 @@ public class P3GatewaySessionService {
                 }
             });
         return attributes;
+    }
+
+    private Map<String, String> redactSensitiveAttributes(Map<String, String> attributes) {
+        Map<String, String> redacted = new LinkedHashMap<>(attributes);
+        if (redacted.containsKey("password")) {
+            redacted.put("password", "***");
+        }
+        return redacted;
     }
 
     static String deterministicSubmissionId(String sender, String recipient, String body, String subject) {
