@@ -7,9 +7,10 @@ This matrix is intended to close the "documentation layer" gap by mapping expect
 | Domain | Test objective | Current evidence | Gap to close |
 |---|---|---|---|
 | RFC1006/COTP | Validate CR/CC, segmentation, DR/ER, limits | `CotpConnectionTpduTest`, `RFC1006ServiceTest` | Add high-volume soak + malformed TPDU corpus results |
-| ACSE (X.227) | Validate AARQ/AARE, context handling, diagnostics | `AcseAssociationProtocolTest`, `AcseModelsTest`, `PresentationContextTest` | Add strict ATN ACSE profile vectors and negative diagnostics matrix |
+| ACSE (X.227) | Validate AARQ/AARE, context handling, diagnostics | `AcseAssociationProtocolTest`, `AcseModelsTest`, `PresentationContextTest` | Add strict ATN ACSE profile vectors and negative diagnostics matrix, including unsupported/partial behavior declarations |
 | ASN.1/BER | Validate tag/length/value robustness | `BerCodecTest`, `P1BerMessageParserTest` | Add official X.411 module tag traceability table |
-| P1 handling | Validate envelope/content, recipient and trace behaviors | `P1AssociationProtocolTest`, parser tests | Add interoperability captures against certified MTA |
+| ROSE/RTSE upper layers | Validate full operation/error semantics and transfer/session behavior | Gateway-focused APDU/session tests | Implement full profile-complete ROSE/RTSE coverage or maintain explicit non-claim |
+| P1/P3 gateway handling | Validate envelope/content, recipient and trace behaviors in gateway profile | `P1AssociationProtocolTest`, parser tests | Add interoperability captures against certified MTA and evidence of unsupported full P3 service semantics |
 | O/R Address | Validate address grammar and policy checks | `ORAddressTest`, `AMHSComplianceValidatorTest` | Expand to full ORName CHOICE and legacy string variants |
 | Security/PKI | Validate identity binding and TLS behavior | `AMHSComplianceValidatorTest`, TLS runtime config | Add CRL/OCSP tests and ATN PKI profile statement |
 | Routing/S&F | Validate route selection, retries, fallback, loop detect | `RelayRoutingServiceTest`, `OutboundRelayEngineTest` | Add sustained-load and recovery tests |

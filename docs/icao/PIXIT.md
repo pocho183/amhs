@@ -1,6 +1,6 @@
 # AMHS PIXIT (Protocol Implementation eXtra Information for Testing)
 
-Document status: **working baseline**.
+Document status: **working gateway-profile baseline**.
 
 This PIXIT captures implementation-specific parameters required by a conformance/interoperability lab when executing test campaigns.
 
@@ -23,7 +23,7 @@ This PIXIT captures implementation-specific parameters required by a conformance
   - Segmentation/reassembly
   - DR/ER handling
 
-## 3. Association and ACSE PIXIT values
+## 3. Association and ACSE PIXIT values (profile-limited)
 
 - Expected ACSE flow: AARQ request followed by AARE response
 - Application context: checked against configured/expected OID policy
@@ -84,10 +84,13 @@ Behavior:
 
 ## 7. Test limitations to declare to lab
 
-1. No formal claim of full X.411 ASN.1 module conformance.
-2. No complete security label enforcement profile.
-3. CRL/OCSP behavior not implemented as explicit AMHS policy module.
-4. Full certified-node interoperability evidence not yet available.
+1. No formal claim of a complete external P3 stack (including full ROSE/RTSE behavior).
+2. Presentation/session handling includes wrapper-preservation/rewrap strategies for supported gateway paths.
+3. ACSE support is implementation-focused and profile-limited, not a broad complete ACSE conformance claim.
+4. No formal claim of full X.411 ASN.1 module conformance.
+5. No complete security label enforcement profile.
+6. CRL/OCSP behavior is not declared as full profile-complete enforcement for all deployments.
+7. Full certified-node interoperability evidence not yet available.
 
 ## 8. Proposed lab execution profile
 
