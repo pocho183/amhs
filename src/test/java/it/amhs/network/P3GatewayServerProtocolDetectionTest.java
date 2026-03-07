@@ -176,6 +176,21 @@ class P3GatewayServerProtocolDetectionTest {
     }
 
     @Test
+    void multiProtocolProfileRejectsTextButAllowsBerAndRfc1006() throws Exception {
+        P3GatewayServer gatewayServer = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "GATEWAY_MULTI_PROTOCOL", null, null, null);
+        Method isProtocolAllowed = P3GatewayServer.class.getDeclaredMethod("isProtocolAllowed", Class.forName("it.amhs.network.P3GatewayServer$ProtocolKind"));
+        isProtocolAllowed.setAccessible(true);
+
+        Object text = detectProtocol.invoke(gatewayServer, (Object) new byte[] { 'B', 'I', 'N', 'D' });
+        Object ber = detectProtocol.invoke(gatewayServer, (Object) new byte[] { (byte) 0xA0, 0x03, 0x0C, 0x01, 0x41 });
+        Object rfc1006 = detectProtocol.invoke(gatewayServer, (Object) new byte[] { 0x03, 0x00, 0x00, 0x13, 0x0E });
+
+        assertEquals(false, isProtocolAllowed.invoke(gatewayServer, text));
+        assertEquals(true, isProtocolAllowed.invoke(gatewayServer, ber));
+        assertEquals(true, isProtocolAllowed.invoke(gatewayServer, rfc1006));
+    }
+
+    @Test
     void rejectsInvalidListenerProfile() {
         try {
             new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "bad-profile", null, null, null);
