@@ -103,12 +103,10 @@ public class P3GatewayServer {
             input.unread(first);
 
             if (isAsciiCommand(first)) {
-                logger.info("P3 gateway session protocol=text-command");
                 handleTextSession(session, input, output);
                 return;
             }
 
-            logger.info("P3 gateway session protocol=ber-apdu");
             handleAsn1Session(session, input, output);
         } catch (Exception ex) {
             logger.warn("P3 gateway client session closed with error: {}", ex.getMessage());
