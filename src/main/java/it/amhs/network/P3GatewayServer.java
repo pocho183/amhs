@@ -573,6 +573,8 @@ public class P3GatewayServer {
             return null;
         }
 
+        byte[] original = candidate;
+
         if ("OSI_PRESENTATION_PPDU".equals(payloadKind)) {
             candidate = unwrapPresentation(candidate);
             if (candidate == null) {
@@ -585,13 +587,17 @@ public class P3GatewayServer {
             || (candidate.length > 0 && (candidate[0] & 0xFF) == 0x61)) {
             byte[] acseUserData = unwrapAcse(candidate);
             if (acseUserData == null) {
-                return null;
+                return findGatewayApdu(original);
             }
             byte[] appPdu = findGatewayApdu(acseUserData);
             return appPdu != null ? appPdu : acseUserData;
         }
 
-        return findGatewayApdu(candidate);
+        byte[] appPdu = findGatewayApdu(candidate);
+        if (appPdu != null) {
+            return appPdu;
+        }
+        return findGatewayApdu(original);
     }
 
     private byte[] unwrapPresentation(byte[] ppdu) {
@@ -667,6 +673,10 @@ public class P3GatewayServer {
         if (data == null) {
             return null;
         }
+        byte[] direct = findGatewayApduRecursive(data);
+        if (direct != null) {
+            return direct;
+        }
         try {
             BerTlv tlv = BerCodec.decodeSingle(data);
             if (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() <= 8) {
@@ -688,9 +698,35 @@ public class P3GatewayServer {
         }
     }
 
+    private byte[] findGatewayApduRecursive(byte[] data) {
+        try {
+            BerTlv tlv = BerCodec.decodeSingle(data);
+            if (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() <= 8) {
+                return BerCodec.encode(tlv);
+            }
+            if (!tlv.constructed()) {
+                return null;
+            }
+            for (BerTlv nested : BerCodec.decodeAll(tlv.value())) {
+                byte[] found = findGatewayApduRecursive(BerCodec.encode(nested));
+                if (found != null) {
+                    return found;
+                }
+            }
+            return null;
+        } catch (RuntimeException ex) {
+            logger.debug("Failed to recurse gateway APDU search: {}", ex.getMessage());
+            return null;
+        }
+    }
+
     private byte[] rewrapApplicationPduForRfc1006Response(byte[] applicationResponse, String inboundKind, byte[] inboundPayload) {
         if (applicationResponse == null) {
             return new byte[0];
+        }
+        byte[] preserved = replaceInboundGatewayApdu(inboundPayload, applicationResponse);
+        if (preserved != null) {
+            return preserved;
         }
         if ("BER_APDU".equals(inboundKind)) {
             return applicationResponse;
@@ -706,6 +742,73 @@ public class P3GatewayServer {
             return wrapSessionEnvelope(applicationResponse, inboundPayload);
         }
         return applicationResponse;
+    }
+
+    private byte[] replaceInboundGatewayApdu(byte[] inboundPayload, byte[] applicationResponse) {
+        if (inboundPayload == null || inboundPayload.length == 0) {
+            return null;
+        }
+        if ("OSI_SESSION_SPDU".equals(classifyRfc1006Payload(inboundPayload))) {
+            int berOffset = findFirstBerOffset(inboundPayload);
+            if (berOffset < 0) {
+                return null;
+            }
+            byte[] prefix = Arrays.copyOfRange(inboundPayload, 0, berOffset);
+            byte[] nested = Arrays.copyOfRange(inboundPayload, berOffset, inboundPayload.length);
+            byte[] replaced = replaceGatewayApduInBer(nested, applicationResponse);
+            if (replaced == null) {
+                return null;
+            }
+            byte[] wrapped = new byte[prefix.length + replaced.length];
+            System.arraycopy(prefix, 0, wrapped, 0, prefix.length);
+            System.arraycopy(replaced, 0, wrapped, prefix.length, replaced.length);
+            return wrapped;
+        }
+        return replaceGatewayApduInBer(inboundPayload, applicationResponse);
+    }
+
+    private byte[] replaceGatewayApduInBer(byte[] berData, byte[] replacement) {
+        if (berData == null || berData.length == 0) {
+            return null;
+        }
+        try {
+            BerTlv root = BerCodec.decodeSingle(berData);
+            BerTlv rewritten = replaceGatewayApduInTlv(root, replacement);
+            if (rewritten == null) {
+                return null;
+            }
+            return BerCodec.encode(rewritten);
+        } catch (RuntimeException ex) {
+            logger.debug("Failed to replace inbound gateway APDU: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private BerTlv replaceGatewayApduInTlv(BerTlv tlv, byte[] replacement) {
+        if (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() <= 8) {
+            return BerCodec.decodeSingle(replacement);
+        }
+        if (!tlv.constructed()) {
+            return null;
+        }
+        List<BerTlv> nested = BerCodec.decodeAll(tlv.value());
+        for (int i = 0; i < nested.size(); i++) {
+            BerTlv updatedChild = replaceGatewayApduInTlv(nested.get(i), replacement);
+            if (updatedChild == null) {
+                continue;
+            }
+            nested.set(i, updatedChild);
+            byte[] encodedChildren = BerCodec.encodeAll(nested);
+            return new BerTlv(
+                tlv.tagClass(),
+                tlv.constructed(),
+                tlv.tagNumber(),
+                tlv.tagByteCount(),
+                encodedChildren.length,
+                encodedChildren
+            );
+        }
+        return null;
     }
 
     private byte[] wrapSessionEnvelope(byte[] applicationResponse, byte[] inboundPayload) {
