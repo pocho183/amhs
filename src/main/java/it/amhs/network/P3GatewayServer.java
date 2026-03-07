@@ -110,6 +110,7 @@ public class P3GatewayServer {
             }
             input.unread(preview);
 
+            int first = preview[0] & 0xFF;
             ProtocolKind protocolKind = detectProtocol(preview);
             logger.info(
                 "P3 gateway connection #{} protocol-detect kind={} first-octets={}",
