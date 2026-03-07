@@ -32,6 +32,50 @@ class P3Asn1GatewayProtocolTest {
         assertEquals(P3Asn1GatewayProtocol.APDU_STATUS_RESPONSE, status.tagNumber());
     }
 
+
+    @Test
+    void unwrapsRtseRtorqAndReturnsRtoacWithGatewayPayload() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+
+        byte[] bind = bindRequest("amhsuser", "changeit", "/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice", "ATFM");
+        byte[] rtorq = rtseEnvelope(16, bind);
+
+        byte[] response = protocol.handle(session, rtorq);
+        BerTlv rtse = BerCodec.decodeSingle(response);
+        assertEquals(1, rtse.tagClass());
+        assertEquals(17, rtse.tagNumber());
+
+        BerTlv any = BerCodec.decodeSingle(rtse.value());
+        BerTlv bindResponse = BerCodec.decodeSingle(any.value());
+        assertEquals(P3Asn1GatewayProtocol.APDU_BIND_RESPONSE, bindResponse.tagNumber());
+    }
+
+    @Test
+    void unwrapsRtseRttdAndReturnsRttrWithRosePayload() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+
+        byte[] roseBind = roseInvoke(
+            9,
+            P3Asn1GatewayProtocol.APDU_BIND_REQUEST,
+            bindPayload("amhsuser", "changeit", "/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice", "ATFM")
+        );
+        byte[] rttd = rtseEnvelope(22, roseBind);
+
+        byte[] response = protocol.handle(session, rttd);
+        BerTlv rtse = BerCodec.decodeSingle(response);
+        assertEquals(1, rtse.tagClass());
+        assertEquals(21, rtse.tagNumber());
+
+        BerTlv any = BerCodec.decodeSingle(rtse.value());
+        BerTlv roseResponse = BerCodec.decodeSingle(any.value());
+        assertEquals(1, roseResponse.tagClass());
+        assertEquals(2, roseResponse.tagNumber());
+    }
+
     @Test
     void readPduReturnsNullAtEof() throws Exception {
         StubSessionService sessionService = new StubSessionService();
@@ -83,6 +127,12 @@ class P3Asn1GatewayProtocolTest {
         BerTlv responseTlv = BerCodec.decodeSingle(response);
         assertEquals(1, responseTlv.tagClass());
         assertEquals(3, responseTlv.tagNumber());
+    }
+
+
+    private static byte[] rtseEnvelope(int tagNumber, byte[] payload) {
+        byte[] any = BerCodec.encode(new BerTlv(2, true, 0, 0, payload.length, payload));
+        return BerCodec.encode(new BerTlv(1, true, tagNumber, 0, any.length, any));
     }
 
     private static byte[] roseInvoke(int invokeId, int operationCode, byte[] argumentApdu) {
