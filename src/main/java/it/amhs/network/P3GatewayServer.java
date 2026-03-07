@@ -110,8 +110,7 @@ public class P3GatewayServer {
             }
             input.unread(preview);
 
-            int first = preview[0] & 0xFF;
-            ProtocolKind protocolKind = detectProtocol(first);
+            ProtocolKind protocolKind = detectProtocol(preview);
             logger.info(
                 "P3 gateway connection #{} protocol-detect kind={} first-octets={}",
                 connectionId,
@@ -119,22 +118,23 @@ public class P3GatewayServer {
                 toHex(preview)
             );
 
-            if (protocolKind == ProtocolKind.RFC1006_TPKT || protocolKind == ProtocolKind.TLS_CLIENT_HELLO || protocolKind == ProtocolKind.UNKNOWN_BINARY) {
-                logger.warn(
-                    "P3 gateway connection #{} unexpected protocol={} (this endpoint expects text command or BER APDU over raw transport)",
-                    connectionId,
-                    protocolKind
-                );
-            }
-
-            if (isAsciiCommand(first)) {
+            if (protocolKind == ProtocolKind.TEXT_COMMAND) {
                 logger.info("P3 gateway protocol=text-command remote={}", socket.getInetAddress());
                 handleTextSession(connectionId, session, input, output);
                 return;
             }
 
-            logger.info("P3 gateway protocol=ber-apdu remote={}", socket.getInetAddress());
-            handleAsn1Session(connectionId, session, input, output);
+            if (protocolKind == ProtocolKind.BER_APDU) {
+                logger.info("P3 gateway protocol=ber-apdu remote={}", socket.getInetAddress());
+                handleAsn1Session(connectionId, session, input, output);
+                return;
+            }
+
+            logger.warn(
+                "P3 gateway connection #{} unexpected protocol={} (this endpoint expects text command or BER APDU over raw transport)",
+                connectionId,
+                protocolKind
+            );
         } catch (Exception ex) {
             if (isExpectedDisconnect(ex)) {
                 logger.debug("P3 gateway connection #{} ended before a complete request was received: {}", connectionId, ex.getMessage());
@@ -193,17 +193,18 @@ public class P3GatewayServer {
         }
     }
 
-    private ProtocolKind detectProtocol(int firstOctet) {
+    private ProtocolKind detectProtocol(byte[] preview) {
+        int firstOctet = preview[0] & 0xFF;
         if (isAsciiCommand(firstOctet)) {
             return ProtocolKind.TEXT_COMMAND;
         }
-        if ((firstOctet & 0xFF) == 0x03) {
+        if (looksLikeRfc1006Tpkt(preview)) {
             return ProtocolKind.RFC1006_TPKT;
         }
-        if ((firstOctet & 0xFF) == 0x16) {
+        if (looksLikeTlsClientHello(preview)) {
             return ProtocolKind.TLS_CLIENT_HELLO;
         }
-        if (isBerApduStart(firstOctet)) {
+        if (looksLikeBerApdu(preview)) {
             return ProtocolKind.BER_APDU;
         }
         return ProtocolKind.UNKNOWN_BINARY;
@@ -213,8 +214,37 @@ public class P3GatewayServer {
         return firstOctet >= 0x20 && firstOctet <= 0x7E;
     }
 
-    private boolean isBerApduStart(int firstOctet) {
-        return (firstOctet & 0xE0) == 0xA0;
+    private boolean looksLikeBerApdu(byte[] preview) {
+        if (preview.length < 2) {
+            return false;
+        }
+
+        int firstOctet = preview[0] & 0xFF;
+        if (firstOctet == 0x00 || firstOctet == 0xFF) {
+            return false;
+        }
+
+        int lengthOctet = preview[1] & 0xFF;
+        if ((lengthOctet & 0x80) == 0) {
+            return true;
+        }
+
+        int lengthByteCount = lengthOctet & 0x7F;
+        return lengthByteCount > 0 && lengthByteCount <= 4 && preview.length >= (2 + lengthByteCount);
+    }
+
+    private boolean looksLikeRfc1006Tpkt(byte[] preview) {
+        return preview.length >= 4
+            && (preview[0] & 0xFF) == 0x03
+            && (preview[1] & 0xFF) == 0x00
+            && (((preview[2] & 0xFF) << 8) | (preview[3] & 0xFF)) >= 4;
+    }
+
+    private boolean looksLikeTlsClientHello(byte[] preview) {
+        return preview.length >= 3
+            && (preview[0] & 0xFF) == 0x16
+            && (preview[1] & 0xFF) == 0x03
+            && ((preview[2] & 0xFF) >= 0x01 && (preview[2] & 0xFF) <= 0x04);
     }
 
     private String commandName(String line) {
