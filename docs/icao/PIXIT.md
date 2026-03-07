@@ -45,7 +45,7 @@ This PIXIT captures implementation-specific parameters required by a conformance
 
 Accepted sender/recipient formats:
 
-1. ICAO 8-char shorthand (e.g. `LIRRAAAA`)
+1. ICAO 8-letter shorthand (e.g. `LIRRAAAA`)
 2. Structured O/R address containing at minimum:
    - `C`
    - `ADMD=ICAO`
@@ -57,7 +57,7 @@ Validation constraints:
 
 - Country `C` must be ISO alpha-2 or numeric 3-digit
 - OU hierarchy must not skip levels (`OU2` cannot exist without `OU1`, etc.)
-- At least one ICAO 8-char unit must appear in OU/O/CN fields
+- At least one ICAO 8-letter unit must appear in OU/O/CN fields
 
 ## 5. Routing and store-and-forward PIXIT values
 
