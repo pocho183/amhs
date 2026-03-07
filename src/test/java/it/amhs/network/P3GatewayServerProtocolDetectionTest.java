@@ -18,7 +18,7 @@ class P3GatewayServerProtocolDetectionTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        server = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, null, null, null);
+        server = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "GATEWAY_MULTI_PROTOCOL", null, null, null);
         detectProtocol = P3GatewayServer.class.getDeclaredMethod("detectProtocol", byte[].class);
         detectProtocol.setAccessible(true);
         classifyRfc1006Payload = P3GatewayServer.class.getDeclaredMethod("classifyRfc1006Payload", byte[].class);
@@ -43,6 +43,19 @@ class P3GatewayServerProtocolDetectionTest {
         assertEquals("BER_APDU", protocol.toString());
     }
 
+
+    @Test
+    void prioritizesBerDetectionForPrintableAcseTags() throws Exception {
+        Object aarq = detectProtocol.invoke(server, (Object) new byte[] { 0x60, 0x03, 0x01, 0x01, 0x00 });
+        Object aareOrPpdu = detectProtocol.invoke(server, (Object) new byte[] { 0x61, 0x03, 0x01, 0x01, 0x00 });
+        Object tag62 = detectProtocol.invoke(server, (Object) new byte[] { 0x62, 0x03, 0x01, 0x01, 0x00 });
+        Object tag64 = detectProtocol.invoke(server, (Object) new byte[] { 0x64, 0x03, 0x01, 0x01, 0x00 });
+
+        assertEquals("BER_APDU", aarq.toString());
+        assertEquals("BER_APDU", aareOrPpdu.toString());
+        assertEquals("BER_APDU", tag62.toString());
+        assertEquals("BER_APDU", tag64.toString());
+    }
     @Test
     void classifiesSessionSpduByLeadingOctet() throws Exception {
         Object kind = classifyRfc1006Payload.invoke(server, (Object) new byte[] { 0x0D, 0x10, 0x00 });
@@ -113,6 +126,79 @@ class P3GatewayServerProtocolDetectionTest {
         byte[] extracted = (byte[]) extractApplicationPduFromRfc1006Payload.invoke(server, sessionWrapped, "OSI_SESSION_SPDU");
 
         assertArrayEquals(gatewayApdu, extracted);
+    }
+
+
+    @Test
+    void rewrapsAcsePayloadForRfc1006Response() throws Exception {
+        Method rewrap = P3GatewayServer.class.getDeclaredMethod("rewrapApplicationPduForRfc1006Response", byte[].class, String.class, byte[].class);
+        rewrap.setAccessible(true);
+        byte[] gatewayResponse = new byte[] {(byte) 0xA1, 0x03, 0x0C, 0x01, 0x42};
+        byte[] inboundAcse = new byte[] {0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xA0, 0x03, 0x0C, 0x01, 0x41};
+
+        byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "ACSE_APDU", inboundAcse);
+
+        assertEquals(0x61, wrapped[0] & 0xFF);
+        assertEquals((byte) 0xBE, wrapped[2]);
+    }
+
+    @Test
+    void rewrapsSessionEnvelopeForRfc1006Response() throws Exception {
+        Method rewrap = P3GatewayServer.class.getDeclaredMethod("rewrapApplicationPduForRfc1006Response", byte[].class, String.class, byte[].class);
+        rewrap.setAccessible(true);
+        byte[] gatewayResponse = new byte[] {(byte) 0xA1, 0x03, 0x0C, 0x01, 0x42};
+        byte[] acse = new byte[] {0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xA0, 0x03, 0x0C, 0x01, 0x41};
+        byte[] sessionWrapped = new byte[3 + acse.length];
+        sessionWrapped[0] = 0x0D;
+        sessionWrapped[1] = 0x01;
+        sessionWrapped[2] = 0x00;
+        System.arraycopy(acse, 0, sessionWrapped, 3, acse.length);
+
+        byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "OSI_SESSION_SPDU", sessionWrapped);
+
+        assertEquals(0x0D, wrapped[0] & 0xFF);
+        assertEquals(0x61, wrapped[3] & 0xFF);
+    }
+
+    @Test
+    void standardProfileRejectsTextAndBer() throws Exception {
+        P3GatewayServer strictServer = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "STANDARD_P3", null, null, null);
+        Method isProtocolAllowed = P3GatewayServer.class.getDeclaredMethod("isProtocolAllowed", Class.forName("it.amhs.network.P3GatewayServer$ProtocolKind"));
+        isProtocolAllowed.setAccessible(true);
+
+        Object text = detectProtocol.invoke(strictServer, (Object) new byte[] { 'B', 'I', 'N', 'D' });
+        Object ber = detectProtocol.invoke(strictServer, (Object) new byte[] { (byte) 0xA0, 0x03, 0x0C, 0x01, 0x41 });
+        Object rfc1006 = detectProtocol.invoke(strictServer, (Object) new byte[] { 0x03, 0x00, 0x00, 0x13, 0x0E });
+
+        assertEquals(false, isProtocolAllowed.invoke(strictServer, text));
+        assertEquals(false, isProtocolAllowed.invoke(strictServer, ber));
+        assertEquals(true, isProtocolAllowed.invoke(strictServer, rfc1006));
+    }
+
+    @Test
+    void multiProtocolProfileRejectsTextButAllowsBerAndRfc1006() throws Exception {
+        P3GatewayServer gatewayServer = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "GATEWAY_MULTI_PROTOCOL", null, null, null);
+        Method isProtocolAllowed = P3GatewayServer.class.getDeclaredMethod("isProtocolAllowed", Class.forName("it.amhs.network.P3GatewayServer$ProtocolKind"));
+        isProtocolAllowed.setAccessible(true);
+
+        Object text = detectProtocol.invoke(gatewayServer, (Object) new byte[] { 'B', 'I', 'N', 'D' });
+        Object ber = detectProtocol.invoke(gatewayServer, (Object) new byte[] { (byte) 0xA0, 0x03, 0x0C, 0x01, 0x41 });
+        Object rfc1006 = detectProtocol.invoke(gatewayServer, (Object) new byte[] { 0x03, 0x00, 0x00, 0x13, 0x0E });
+
+        assertEquals(false, isProtocolAllowed.invoke(gatewayServer, text));
+        assertEquals(true, isProtocolAllowed.invoke(gatewayServer, ber));
+        assertEquals(true, isProtocolAllowed.invoke(gatewayServer, rfc1006));
+    }
+
+    @Test
+    void rejectsInvalidListenerProfile() {
+        try {
+            new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "bad-profile", null, null, null);
+        } catch (IllegalArgumentException ex) {
+            assertEquals(true, ex.getMessage().contains("listener-profile"));
+            return;
+        }
+        throw new AssertionError("Expected IllegalArgumentException");
     }
 
 }
