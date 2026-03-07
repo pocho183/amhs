@@ -99,6 +99,5 @@ After startup, verify logs include:
   - `protocol=text-command` or
   - `protocol=ber-apdu`
 - Repeated immediate reconnects with logs like `protocol=ber-apdu` and no successful bind usually indicate protocol/profile mismatch (for example, sending RFC1006/P1 traffic to the P3 gateway port).
-- New diagnostics include `connection #`, `first-octet`, and BER APDU counters (`BER APDU #n len=...`) to help identify whether the client is actually exchanging valid P3 gateway APDUs.
 
 If your ISODE client connects but fails during bind/read semantics, this typically indicates expectation mismatch vs full native P3 behavior.
