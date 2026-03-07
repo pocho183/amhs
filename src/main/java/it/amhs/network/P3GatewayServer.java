@@ -58,6 +58,7 @@ public class P3GatewayServer {
     private final boolean tlsEnabled;
     private final boolean needClientAuth;
     private final boolean textWelcomeEnabled;
+    private final ListenerProfile listenerProfile;
     private final SSLContext tls;
     private final P3GatewaySessionService sessionService;
     private final P3Asn1GatewayProtocol asn1GatewayProtocol;
@@ -71,6 +72,7 @@ public class P3GatewayServer {
         @Value("${amhs.p3.gateway.tls.enabled:false}") boolean tlsEnabled,
         @Value("${amhs.p3.gateway.tls.need-client-auth:false}") boolean needClientAuth,
         @Value("${amhs.p3.gateway.text.welcome-enabled:false}") boolean textWelcomeEnabled,
+        @Value("${amhs.p3.gateway.listener-profile:STANDARD_P3}") String listenerProfile,
         SSLContext tls,
         P3GatewaySessionService sessionService,
         P3Asn1GatewayProtocol asn1GatewayProtocol
@@ -86,6 +88,7 @@ public class P3GatewayServer {
         this.tlsEnabled = tlsEnabled;
         this.needClientAuth = needClientAuth;
         this.textWelcomeEnabled = textWelcomeEnabled;
+        this.listenerProfile = ListenerProfile.from(listenerProfile);
         this.tls = tls;
         this.sessionService = sessionService;
         this.asn1GatewayProtocol = asn1GatewayProtocol;
@@ -135,6 +138,17 @@ public class P3GatewayServer {
                 protocolKind,
                 toHex(preview)
             );
+
+            if (!isProtocolAllowed(protocolKind)) {
+                logger.warn(
+                    "P3 gateway connection #{} rejected protocol={} for listener-profile={} (supported={})",
+                    connectionId,
+                    protocolKind,
+                    listenerProfile,
+                    listenerProfile.supportedProtocolsSummary()
+                );
+                return;
+            }
 
             if (protocolKind == ProtocolKind.TEXT_COMMAND) {
                 logger.info("P3 gateway protocol=text-command remote={}", socket.getInetAddress());
@@ -446,6 +460,10 @@ public class P3GatewayServer {
             && ((preview[2] & 0xFF) >= 0x01 && (preview[2] & 0xFF) <= 0x04);
     }
 
+    private boolean isProtocolAllowed(ProtocolKind protocolKind) {
+        return listenerProfile.supports(protocolKind);
+    }
+
     private String commandName(String line) {
         String trimmed = line == null ? "" : line.trim();
         if (trimmed.isEmpty()) {
@@ -668,6 +686,42 @@ public class P3GatewayServer {
         RFC1006_TPKT,
         TLS_CLIENT_HELLO,
         UNKNOWN_BINARY
+    }
+
+    private enum ListenerProfile {
+        STANDARD_P3,
+        GATEWAY_MULTI_PROTOCOL;
+
+        private static ListenerProfile from(String value) {
+            if (value == null || value.isBlank()) {
+                return STANDARD_P3;
+            }
+            try {
+                return ListenerProfile.valueOf(value.trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException(
+                    "Invalid amhs.p3.gateway.listener-profile value '" + value
+                        + "'. Supported values: STANDARD_P3, GATEWAY_MULTI_PROTOCOL"
+                );
+            }
+        }
+
+        private boolean supports(ProtocolKind protocolKind) {
+            if (this == GATEWAY_MULTI_PROTOCOL) {
+                return protocolKind == ProtocolKind.TEXT_COMMAND
+                    || protocolKind == ProtocolKind.BER_APDU
+                    || protocolKind == ProtocolKind.RFC1006_TPKT;
+            }
+
+            return protocolKind == ProtocolKind.RFC1006_TPKT;
+        }
+
+        private String supportedProtocolsSummary() {
+            if (this == GATEWAY_MULTI_PROTOCOL) {
+                return "TEXT_COMMAND, BER_APDU, RFC1006_TPKT";
+            }
+            return "RFC1006_TPKT";
+        }
     }
 
     private record CotpFrame(byte type, boolean endOfTsdu, byte[] userData, byte[] payload) {

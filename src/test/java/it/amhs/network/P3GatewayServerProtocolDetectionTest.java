@@ -18,7 +18,7 @@ class P3GatewayServerProtocolDetectionTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        server = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, null, null, null);
+        server = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "GATEWAY_MULTI_PROTOCOL", null, null, null);
         detectProtocol = P3GatewayServer.class.getDeclaredMethod("detectProtocol", byte[].class);
         detectProtocol.setAccessible(true);
         classifyRfc1006Payload = P3GatewayServer.class.getDeclaredMethod("classifyRfc1006Payload", byte[].class);
@@ -113,6 +113,32 @@ class P3GatewayServerProtocolDetectionTest {
         byte[] extracted = (byte[]) extractApplicationPduFromRfc1006Payload.invoke(server, sessionWrapped, "OSI_SESSION_SPDU");
 
         assertArrayEquals(gatewayApdu, extracted);
+    }
+
+    @Test
+    void standardProfileRejectsTextAndBer() throws Exception {
+        P3GatewayServer strictServer = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "STANDARD_P3", null, null, null);
+        Method isProtocolAllowed = P3GatewayServer.class.getDeclaredMethod("isProtocolAllowed", Class.forName("it.amhs.network.P3GatewayServer$ProtocolKind"));
+        isProtocolAllowed.setAccessible(true);
+
+        Object text = detectProtocol.invoke(strictServer, (Object) new byte[] { 'B', 'I', 'N', 'D' });
+        Object ber = detectProtocol.invoke(strictServer, (Object) new byte[] { (byte) 0xA0, 0x03, 0x0C, 0x01, 0x41 });
+        Object rfc1006 = detectProtocol.invoke(strictServer, (Object) new byte[] { 0x03, 0x00, 0x00, 0x13, 0x0E });
+
+        assertEquals(false, isProtocolAllowed.invoke(strictServer, text));
+        assertEquals(false, isProtocolAllowed.invoke(strictServer, ber));
+        assertEquals(true, isProtocolAllowed.invoke(strictServer, rfc1006));
+    }
+
+    @Test
+    void rejectsInvalidListenerProfile() {
+        try {
+            new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "bad-profile", null, null, null);
+        } catch (IllegalArgumentException ex) {
+            assertEquals(true, ex.getMessage().contains("listener-profile"));
+            return;
+        }
+        throw new AssertionError("Expected IllegalArgumentException");
     }
 
 }

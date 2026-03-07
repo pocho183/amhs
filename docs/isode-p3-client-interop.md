@@ -4,12 +4,16 @@ This document explains how to run this AMHS server when your sender/reader code 
 
 ## 1) Important scope note
 
-The P3 listener in this repository is a **gateway profile**, not a complete ICAO-certified end-to-end X.411/P3 stack.
+The P3 listener can be run in two profiles.
 
-- Supported on the P3 port:
-  - legacy text commands (`BIND`, `SUBMIT`, `STATUS`, `UNBIND`)
-  - BER APDU gateway profile (`bind/submit/status/release` APDUs)
-  - RFC1006 COTP DT payloads carrying OSI Session/Presentation/ACSE envelopes when those envelopes contain gateway BER APDUs
+- `STANDARD_P3` (default): accepts only RFC1006/TPKT traffic for a standards-aligned external P3 exposure.
+- `GATEWAY_MULTI_PROTOCOL`: legacy admin/gateway mode that also accepts text commands and raw BER APDUs on the same endpoint.
+
+The gateway semantics are still not a complete ICAO-certified end-to-end X.411/P3 stack.
+
+- Supported operations depend on profile:
+  - `STANDARD_P3`: RFC1006 COTP DT payloads carrying OSI Session/Presentation/ACSE envelopes when those envelopes contain gateway BER APDUs
+  - `GATEWAY_MULTI_PROTOCOL`: adds line text commands (`BIND`, `SUBMIT`, `STATUS`, `UNBIND`) and raw BER APDUs
 - Not yet supported:
   - full native ISODE P3 mailbox/read protocol semantics as expected by `P3BindSession` + `ReceiveMsg/readMsg(...)`.
 
@@ -35,6 +39,7 @@ amhs.p3.gateway.enabled=true
 amhs.p3.gateway.host=0.0.0.0
 amhs.p3.gateway.port=1988
 amhs.p3.gateway.tls.enabled=false
+amhs.p3.gateway.listener-profile=STANDARD_P3
 amhs.p3.gateway.text.welcome-enabled=false
 amhs.p3.gateway.auth.required=true
 amhs.p3.gateway.auth.username=amhsuser
@@ -54,7 +59,7 @@ Run with a non-privileged RFC1006 port if needed:
 ./gradlew bootRun --args='--rfc1006.server.port=1102 --amhs.p3.gateway.enabled=true --amhs.p3.gateway.port=1988'
 ```
 
-### Note for line-oriented clients
+### Note for line-oriented clients (only `GATEWAY_MULTI_PROTOCOL`)
 
 - The gateway parses text commands line-by-line (`BIND`, `SUBMIT`, `STATUS`, `UNBIND`).
 - Ensure each command is terminated with `\n` (or `\r\n`).
