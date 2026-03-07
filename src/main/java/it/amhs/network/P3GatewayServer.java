@@ -101,14 +101,31 @@ public class P3GatewayServer {
 
     private void handleClient(long connectionId, Socket socket) {
         try (socket;
-             PushbackInputStream input = new PushbackInputStream(socket.getInputStream(), 1);
+             PushbackInputStream input = new PushbackInputStream(socket.getInputStream(), 16);
              OutputStream output = socket.getOutputStream()) {
             P3GatewaySessionService.SessionState session = sessionService.newSession();
-            int first = input.read();
-            if (first < 0) {
+            byte[] preview = input.readNBytes(8);
+            if (preview.length == 0) {
                 return;
             }
-            input.unread(first);
+            input.unread(preview);
+
+            int first = preview[0] & 0xFF;
+            ProtocolKind protocolKind = detectProtocol(first);
+            logger.info(
+                "P3 gateway connection #{} protocol-detect kind={} first-octets={}",
+                connectionId,
+                protocolKind,
+                toHex(preview)
+            );
+
+            if (protocolKind == ProtocolKind.RFC1006_TPKT || protocolKind == ProtocolKind.TLS_CLIENT_HELLO || protocolKind == ProtocolKind.UNKNOWN_BINARY) {
+                logger.warn(
+                    "P3 gateway connection #{} unexpected protocol={} (this endpoint expects text command or BER APDU over raw transport)",
+                    connectionId,
+                    protocolKind
+                );
+            }
 
             if (isAsciiCommand(first)) {
                 logger.info("P3 gateway protocol=text-command remote={}", socket.getInetAddress());
@@ -211,6 +228,17 @@ public class P3GatewayServer {
 
     private String toHexByte(byte value) {
         return String.format("%02X", value & 0xFF);
+    }
+
+    private String toHex(byte[] bytes) {
+        StringBuilder value = new StringBuilder();
+        for (int i = 0; i < bytes.length; i++) {
+            if (i > 0) {
+                value.append(' ');
+            }
+            value.append(String.format("%02X", bytes[i] & 0xFF));
+        }
+        return value.toString();
     }
 
     private enum ProtocolKind {
