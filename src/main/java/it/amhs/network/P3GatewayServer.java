@@ -119,22 +119,23 @@ public class P3GatewayServer {
                 toHex(preview)
             );
 
-            if (protocolKind == ProtocolKind.RFC1006_TPKT || protocolKind == ProtocolKind.TLS_CLIENT_HELLO || protocolKind == ProtocolKind.UNKNOWN_BINARY) {
-                logger.warn(
-                    "P3 gateway connection #{} unexpected protocol={} (this endpoint expects text command or BER APDU over raw transport)",
-                    connectionId,
-                    protocolKind
-                );
-            }
-
-            if (isAsciiCommand(first)) {
+            if (protocolKind == ProtocolKind.TEXT_COMMAND) {
                 logger.info("P3 gateway protocol=text-command remote={}", socket.getInetAddress());
                 handleTextSession(connectionId, session, input, output);
                 return;
             }
 
-            logger.info("P3 gateway protocol=ber-apdu remote={}", socket.getInetAddress());
-            handleAsn1Session(connectionId, session, input, output);
+            if (protocolKind == ProtocolKind.BER_APDU) {
+                logger.info("P3 gateway protocol=ber-apdu remote={}", socket.getInetAddress());
+                handleAsn1Session(connectionId, session, input, output);
+                return;
+            }
+
+            logger.warn(
+                "P3 gateway connection #{} unexpected protocol={} (this endpoint expects text command or BER APDU over raw transport)",
+                connectionId,
+                protocolKind
+            );
         } catch (Exception ex) {
             if (isExpectedDisconnect(ex)) {
                 logger.debug("P3 gateway connection #{} ended before a complete request was received: {}", connectionId, ex.getMessage());
