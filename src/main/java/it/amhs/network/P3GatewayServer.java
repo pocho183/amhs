@@ -14,6 +14,8 @@ import java.net.ServerSocket;
 import java.net.SocketException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -31,6 +33,8 @@ import org.springframework.stereotype.Component;
 import it.amhs.service.protocol.p3.P3Asn1GatewayProtocol;
 import it.amhs.service.protocol.p3.P3GatewaySessionService;
 import it.amhs.service.protocol.rfc1006.CotpConnectionTpdu;
+import it.amhs.asn1.BerCodec;
+import it.amhs.asn1.BerTlv;
 
 @Component
 @ConditionalOnProperty(prefix = "amhs.p3.gateway", name = "enabled", havingValue = "true")
@@ -46,6 +50,8 @@ public class P3GatewayServer {
     private static final byte COTP_PDU_DR = (byte) 0x80;
     private static final byte COTP_PDU_DC = (byte) 0xC0;
     private static final byte[] COTP_DT_HEADER = new byte[] { 0x02, (byte) 0xF0 };
+    private static final int TAG_CLASS_CONTEXT = 2;
+    private static final int TAG_CLASS_UNIVERSAL = 0;
 
     private final String host;
     private final int port;
@@ -286,9 +292,10 @@ public class P3GatewayServer {
                 toHexPreview(pdu, 64)
             );
 
-            if (!isRfc1006PayloadSupportedByAsn1(payloadKind)) {
+            byte[] applicationPdu = extractApplicationPduFromRfc1006Payload(pdu, payloadKind);
+            if (applicationPdu == null) {
                 logger.warn(
-                    "P3 gateway connection #{} RFC1006 payload #{} kind={} is not supported by the ASN.1 gateway handler (expected BER APDU); closing connection",
+                    "P3 gateway connection #{} RFC1006 payload #{} kind={} is not supported by the ASN.1 gateway handler (expected BER APDU or OSI Session/Presentation/ACSE envelope); closing connection",
                     connectionId,
                     pduIndex,
                     payloadKind
@@ -297,7 +304,7 @@ public class P3GatewayServer {
                 return;
             }
 
-            byte[] response = asn1GatewayProtocol.handle(session, pdu);
+            byte[] response = asn1GatewayProtocol.handle(session, applicationPdu);
             sendRfc1006Dt(output, response);
             logger.debug("P3 gateway connection #{} RFC1006 payload #{} response-len={}", connectionId, pduIndex, response.length);
             if (session.isClosed()) {
@@ -493,7 +500,158 @@ public class P3GatewayServer {
     }
 
     private boolean isRfc1006PayloadSupportedByAsn1(String payloadKind) {
-        return "BER_APDU".equals(payloadKind);
+        return "BER_APDU".equals(payloadKind)
+            || "OSI_SESSION_SPDU".equals(payloadKind)
+            || "OSI_PRESENTATION_PPDU".equals(payloadKind)
+            || "ACSE_APDU".equals(payloadKind);
+    }
+
+    private byte[] extractApplicationPduFromRfc1006Payload(byte[] payload, String payloadKind) {
+        if (payload == null || payload.length == 0) {
+            return null;
+        }
+        if ("BER_APDU".equals(payloadKind)) {
+            return payload;
+        }
+
+        byte[] candidate = payload;
+        if ("OSI_SESSION_SPDU".equals(payloadKind)) {
+            candidate = extractPotentialBerTlv(payload);
+            if (candidate == null) {
+                return null;
+            }
+        }
+
+        if ("OSI_PRESENTATION_PPDU".equals(payloadKind) || "OSI_SESSION_SPDU".equals(payloadKind)) {
+            candidate = unwrapPresentation(candidate);
+            if (candidate == null) {
+                return null;
+            }
+        }
+
+        if ("ACSE_APDU".equals(payloadKind)
+            || (candidate.length > 0 && (candidate[0] & 0xFF) == 0x60)
+            || (candidate.length > 0 && (candidate[0] & 0xFF) == 0x61)) {
+            byte[] acseUserData = unwrapAcse(candidate);
+            if (acseUserData == null) {
+                return null;
+            }
+            byte[] appPdu = findGatewayApdu(acseUserData);
+            return appPdu != null ? appPdu : acseUserData;
+        }
+
+        return findGatewayApdu(candidate);
+    }
+
+    private byte[] extractPotentialBerTlv(byte[] payload) {
+        for (int i = 0; i < payload.length - 1; i++) {
+            byte[] slice = Arrays.copyOfRange(payload, i, payload.length);
+            if (!looksLikeBerApdu(slice)) {
+                continue;
+            }
+            try {
+                BerTlv tlv = BerCodec.decodeSingle(slice);
+                int totalLength = tlv.headerLength() + tlv.length();
+                return Arrays.copyOfRange(slice, 0, totalLength);
+            } catch (RuntimeException ignored) {
+                // continue scanning for the first valid BER TLV candidate
+            }
+        }
+        return null;
+    }
+
+    private byte[] unwrapPresentation(byte[] ppdu) {
+        try {
+            BerTlv root = BerCodec.decodeSingle(ppdu);
+            if (root.tagClass() != TAG_CLASS_UNIVERSAL || !root.constructed()) {
+                return null;
+            }
+            List<BerTlv> fields = BerCodec.decodeAll(root.value());
+            for (BerTlv field : fields) {
+                if (field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 30) {
+                    byte[] nested = findAnyBerValue(field.value());
+                    if (nested != null) {
+                        return nested;
+                    }
+                }
+                if (field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 0) {
+                    byte[] nested = findAnyBerValue(field.value());
+                    if (nested != null) {
+                        return nested;
+                    }
+                }
+            }
+            return findAnyBerValue(root.value());
+        } catch (RuntimeException ex) {
+            logger.debug("Failed to unwrap presentation PPDU: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private byte[] unwrapAcse(byte[] acseApdu) {
+        try {
+            BerTlv acse = BerCodec.decodeSingle(acseApdu);
+            if (acse.tagClass() != TAG_CLASS_UNIVERSAL || !acse.constructed()) {
+                return null;
+            }
+            for (BerTlv field : BerCodec.decodeAll(acse.value())) {
+                if (field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 30) {
+                    byte[] nested = findAnyBerValue(field.value());
+                    if (nested != null) {
+                        return nested;
+                    }
+                }
+            }
+            return null;
+        } catch (RuntimeException ex) {
+            logger.debug("Failed to unwrap ACSE APDU: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private byte[] findAnyBerValue(byte[] data) {
+        if (data == null || data.length < 2) {
+            return null;
+        }
+        for (int i = 0; i < data.length - 1; i++) {
+            byte[] slice = Arrays.copyOfRange(data, i, data.length);
+            if (!looksLikeBerApdu(slice)) {
+                continue;
+            }
+            try {
+                BerTlv tlv = BerCodec.decodeSingle(slice);
+                int totalLength = tlv.headerLength() + tlv.length();
+                return Arrays.copyOfRange(slice, 0, totalLength);
+            } catch (RuntimeException ignored) {
+                // continue scanning
+            }
+        }
+        return null;
+    }
+
+    private byte[] findGatewayApdu(byte[] data) {
+        if (data == null) {
+            return null;
+        }
+        try {
+            BerTlv tlv = BerCodec.decodeSingle(data);
+            if (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() <= 8) {
+                int totalLength = tlv.headerLength() + tlv.length();
+                return Arrays.copyOfRange(data, 0, totalLength);
+            }
+            if (!tlv.constructed()) {
+                return null;
+            }
+            for (BerTlv nested : BerCodec.decodeAll(tlv.value())) {
+                if (nested.tagClass() == TAG_CLASS_CONTEXT && nested.constructed() && nested.tagNumber() <= 8) {
+                    return BerCodec.encode(nested);
+                }
+            }
+            return null;
+        } catch (RuntimeException ex) {
+            logger.debug("Failed to find gateway APDU: {}", ex.getMessage());
+            return null;
+        }
     }
 
     private enum ProtocolKind {
