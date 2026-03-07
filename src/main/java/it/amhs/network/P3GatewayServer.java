@@ -514,15 +514,40 @@ public class P3GatewayServer {
             return payload;
         }
 
-        byte[] candidate = payload;
         if ("OSI_SESSION_SPDU".equals(payloadKind)) {
-            candidate = extractPotentialBerTlv(payload);
-            if (candidate == null) {
-                return null;
-            }
+            return extractApplicationPduFromSessionEnvelope(payload);
         }
 
-        if ("OSI_PRESENTATION_PPDU".equals(payloadKind) || "OSI_SESSION_SPDU".equals(payloadKind)) {
+        return extractApplicationPduFromAsn1Envelope(payload, payloadKind);
+    }
+
+    private byte[] extractApplicationPduFromSessionEnvelope(byte[] payload) {
+        for (int i = 0; i < payload.length - 1; i++) {
+            byte[] slice = Arrays.copyOfRange(payload, i, payload.length);
+            if (!looksLikeBerApdu(slice)) {
+                continue;
+            }
+            try {
+                BerTlv tlv = BerCodec.decodeSingle(slice);
+                int totalLength = tlv.headerLength() + tlv.length();
+                byte[] candidate = Arrays.copyOfRange(slice, 0, totalLength);
+                byte[] appPdu = extractApplicationPduFromAsn1Envelope(candidate, classifyRfc1006Payload(candidate));
+                if (appPdu != null) {
+                    return appPdu;
+                }
+            } catch (RuntimeException ignored) {
+                // continue scanning for the first valid BER envelope that yields a gateway APDU
+            }
+        }
+        return null;
+    }
+
+    private byte[] extractApplicationPduFromAsn1Envelope(byte[] candidate, String payloadKind) {
+        if (candidate == null || candidate.length == 0) {
+            return null;
+        }
+
+        if ("OSI_PRESENTATION_PPDU".equals(payloadKind)) {
             candidate = unwrapPresentation(candidate);
             if (candidate == null) {
                 return null;
@@ -541,23 +566,6 @@ public class P3GatewayServer {
         }
 
         return findGatewayApdu(candidate);
-    }
-
-    private byte[] extractPotentialBerTlv(byte[] payload) {
-        for (int i = 0; i < payload.length - 1; i++) {
-            byte[] slice = Arrays.copyOfRange(payload, i, payload.length);
-            if (!looksLikeBerApdu(slice)) {
-                continue;
-            }
-            try {
-                BerTlv tlv = BerCodec.decodeSingle(slice);
-                int totalLength = tlv.headerLength() + tlv.length();
-                return Arrays.copyOfRange(slice, 0, totalLength);
-            } catch (RuntimeException ignored) {
-                // continue scanning for the first valid BER TLV candidate
-            }
-        }
-        return null;
     }
 
     private byte[] unwrapPresentation(byte[] ppdu) {

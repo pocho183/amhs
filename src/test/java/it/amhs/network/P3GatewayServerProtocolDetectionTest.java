@@ -95,4 +95,24 @@ class P3GatewayServerProtocolDetectionTest {
         assertArrayEquals(gatewayApdu, extracted);
     }
 
+    @Test
+    void extractsGatewayApduFromSessionEnvelopeAfterNonEnvelopeBerTlv() throws Exception {
+        byte[] gatewayApdu = new byte[] {(byte) 0xA0, 0x03, 0x0C, 0x01, 0x41};
+        byte[] acse = new byte[] {0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xA0, 0x03, 0x0C, 0x01, 0x41};
+        byte[] sessionWrapped = new byte[3 + 12 + acse.length];
+        sessionWrapped[0] = 0x0D;
+        sessionWrapped[1] = (byte) 0xFF;
+        sessionWrapped[2] = 0x01;
+        sessionWrapped[3] = 0x28;
+        sessionWrapped[4] = 0x0A;
+        for (int i = 0; i < 10; i++) {
+            sessionWrapped[5 + i] = (byte) (i + 1);
+        }
+        System.arraycopy(acse, 0, sessionWrapped, 15, acse.length);
+
+        byte[] extracted = (byte[]) extractApplicationPduFromRfc1006Payload.invoke(server, sessionWrapped, "OSI_SESSION_SPDU");
+
+        assertArrayEquals(gatewayApdu, extracted);
+    }
+
 }
