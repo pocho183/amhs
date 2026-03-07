@@ -30,7 +30,14 @@ public class P3Asn1GatewayProtocol {
     private static final Logger logger = LoggerFactory.getLogger(P3Asn1GatewayProtocol.class);
 
     private static final int TAG_CLASS_CONTEXT = 2;
+    private static final int TAG_CLASS_APPLICATION = 1;
     private static final int TAG_CLASS_UNIVERSAL = 0;
+    private static final int TAG_UNIVERSAL_SEQUENCE = 16;
+
+    private static final int ROSE_INVOKE = 1;
+    private static final int ROSE_RETURN_RESULT = 2;
+    private static final int ROSE_RETURN_ERROR = 3;
+    private static final int ROSE_REJECT = 4;
 
     static final int APDU_BIND_REQUEST = 0;
     static final int APDU_BIND_RESPONSE = 1;
@@ -51,6 +58,11 @@ public class P3Asn1GatewayProtocol {
     public byte[] handle(P3GatewaySessionService.SessionState session, byte[] encodedPdu) {
         BerTlv apdu = BerCodec.decodeSingle(encodedPdu);
         logger.info("P3 ASN.1 incoming APDU tagClass={} constructed={} tagNumber={} len={}", apdu.tagClass(), apdu.constructed(), apdu.tagNumber(), apdu.length());
+
+        if (isRoseInvoke(apdu)) {
+            return handleRoseInvoke(session, apdu);
+        }
+
         if (apdu.tagClass() != TAG_CLASS_CONTEXT || !apdu.constructed()) {
             return error("invalid-apdu", "Expected context-specific constructed APDU");
         }
@@ -62,6 +74,120 @@ public class P3Asn1GatewayProtocol {
             case APDU_RELEASE_REQUEST -> mapRelease(session);
             default -> error("unsupported-operation", "Unsupported APDU " + apdu.tagNumber());
         };
+    }
+
+    private boolean isRoseInvoke(BerTlv apdu) {
+        return apdu.constructed()
+            && apdu.tagNumber() == ROSE_INVOKE
+            && (apdu.tagClass() == TAG_CLASS_APPLICATION || apdu.tagClass() == TAG_CLASS_CONTEXT);
+    }
+
+    private byte[] handleRoseInvoke(P3GatewaySessionService.SessionState session, BerTlv invoke) {
+        try {
+            RoseInvoke decodedInvoke = decodeRoseInvoke(invoke);
+            byte[] operationResponse = handleGatewayOperation(session, decodedInvoke.operationCode(), decodedInvoke.argument());
+            BerTlv responseTlv = BerCodec.decodeSingle(operationResponse);
+            if (responseTlv.tagClass() == TAG_CLASS_CONTEXT && responseTlv.tagNumber() == APDU_ERROR) {
+                return roseReturnError(decodedInvoke.invokeId(), operationResponse);
+            }
+            return roseReturnResult(decodedInvoke.invokeId(), operationResponse);
+        } catch (RuntimeException ex) {
+            logger.info("P3 ASN.1 ROSE invoke decode failed: {}", ex.getMessage());
+            return roseReject(0, "malformed-rose-invoke");
+        }
+    }
+
+    private RoseInvoke decodeRoseInvoke(BerTlv invoke) {
+        List<BerTlv> fields = decodeRoseInvokeFields(invoke.value());
+        Integer invokeId = null;
+        Integer operationCode = null;
+        byte[] argument = new byte[0];
+
+        for (BerTlv field : fields) {
+            if (!field.constructed() && field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 0) {
+                invokeId = decodeInteger(field.value());
+                continue;
+            }
+            if (!field.constructed() && field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 1) {
+                operationCode = decodeInteger(field.value());
+                continue;
+            }
+            if (field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 2) {
+                argument = field.constructed() ? unwrapConstructedAny(field) : field.value();
+                continue;
+            }
+
+            if (!field.constructed() && field.tagClass() == TAG_CLASS_UNIVERSAL && field.tagNumber() == 2 && invokeId == null) {
+                invokeId = decodeInteger(field.value());
+                continue;
+            }
+            if (!field.constructed() && field.tagClass() == TAG_CLASS_UNIVERSAL && field.tagNumber() == 2 && operationCode == null) {
+                operationCode = decodeInteger(field.value());
+                continue;
+            }
+            if (argument.length == 0) {
+                argument = BerCodec.encode(field);
+            }
+        }
+
+        if (invokeId == null || operationCode == null) {
+            throw new IllegalArgumentException("ROSE invoke-id or operation-code missing");
+        }
+        return new RoseInvoke(invokeId, operationCode, argument);
+    }
+
+    private List<BerTlv> decodeRoseInvokeFields(byte[] value) {
+        try {
+            BerTlv maybeSequence = BerCodec.decodeSingle(value);
+            if (maybeSequence.tagClass() == TAG_CLASS_UNIVERSAL
+                && maybeSequence.constructed()
+                && maybeSequence.tagNumber() == TAG_UNIVERSAL_SEQUENCE) {
+                return BerCodec.decodeAll(maybeSequence.value());
+            }
+        } catch (RuntimeException ignored) {
+            // fallback to decoding as direct field list
+        }
+        return BerCodec.decodeAll(value);
+    }
+
+    private byte[] unwrapConstructedAny(BerTlv constructedAny) {
+        List<BerTlv> nested = BerCodec.decodeAll(constructedAny.value());
+        if (nested.isEmpty()) {
+            return new byte[0];
+        }
+        return BerCodec.encode(nested.get(0));
+    }
+
+    private byte[] handleGatewayOperation(P3GatewaySessionService.SessionState session, int operationCode, byte[] argument) {
+        return switch (operationCode) {
+            case APDU_BIND_REQUEST -> mapBind(session, argument);
+            case APDU_SUBMIT_REQUEST -> mapSubmit(session, argument);
+            case APDU_STATUS_REQUEST -> mapStatus(session, argument);
+            case APDU_RELEASE_REQUEST -> mapRelease(session);
+            default -> error("unsupported-operation", "Unsupported ROSE operation " + operationCode);
+        };
+    }
+
+    private byte[] roseReturnResult(int invokeId, byte[] payload) {
+        byte[] sequence = BerCodec.encode(new BerTlv(
+            TAG_CLASS_UNIVERSAL,
+            true,
+            TAG_UNIVERSAL_SEQUENCE,
+            0,
+            concat(List.of(encodeIntegerUniversal(invokeId), payload)).length,
+            concat(List.of(encodeIntegerUniversal(invokeId), payload))
+        ));
+        return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, ROSE_RETURN_RESULT, 0, sequence.length, sequence));
+    }
+
+    private byte[] roseReturnError(int invokeId, byte[] payload) {
+        byte[] body = concat(List.of(encodeIntegerUniversal(invokeId), encodeIntegerUniversal(1), payload));
+        return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, ROSE_RETURN_ERROR, 0, body.length, body));
+    }
+
+    private byte[] roseReject(int invokeId, String reason) {
+        byte[] body = concat(List.of(encodeIntegerUniversal(invokeId), encodeUtf8ContextField(0, reason)));
+        return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, ROSE_REJECT, 0, body.length, body));
     }
 
     public byte[] readPdu(InputStream inputStream) throws IOException {
@@ -235,14 +361,35 @@ public class P3Asn1GatewayProtocol {
     }
 
     private String decodeIntegerAsString(byte[] value) {
+        return Integer.toString(decodeInteger(value));
+    }
+
+    private int decodeInteger(byte[] value) {
         if (value.length == 0) {
-            return "0";
+            return 0;
         }
         int number = 0;
         for (byte b : value) {
             number = (number << 8) | (b & 0xFF);
         }
-        return Integer.toString(number);
+        return number;
+    }
+
+    private byte[] encodeIntegerUniversal(int value) {
+        if (value == 0) {
+            return BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, 2, 0, 1, new byte[] { 0x00 }));
+        }
+        int remaining = value;
+        byte[] buf = new byte[4];
+        int index = buf.length;
+        while (remaining > 0) {
+            buf[--index] = (byte) (remaining & 0xFF);
+            remaining >>>= 8;
+        }
+        int len = buf.length - index;
+        byte[] bytes = new byte[len];
+        System.arraycopy(buf, index, bytes, 0, len);
+        return BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, 2, 0, bytes.length, bytes));
     }
 
     private Map<String, String> parseResponse(String response) {
@@ -274,5 +421,8 @@ public class P3Asn1GatewayProtocol {
 
     private String safe(String value) {
         return StringUtils.hasText(value) ? value : "<empty>";
+    }
+
+    private record RoseInvoke(int invokeId, int operationCode, byte[] argument) {
     }
 }

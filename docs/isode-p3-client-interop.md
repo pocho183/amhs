@@ -14,6 +14,7 @@ The gateway semantics are still not a complete ICAO-certified end-to-end X.411/P
 - Supported operations depend on profile:
   - `STANDARD_P3`: RFC1006 COTP DT payloads carrying OSI Session/Presentation/ACSE envelopes when those envelopes contain gateway BER APDUs
   - `GATEWAY_MULTI_PROTOCOL`: allows raw BER APDUs in addition to RFC1006/TPKT
+- The gateway now accepts ROSE `Invoke` wrappers for bind/submit/status/release and returns ROSE `returnResult`/`returnError` mapped to gateway APDU outcomes.
 - Not yet supported:
   - full native ISODE P3 mailbox/read protocol semantics as expected by `P3BindSession` + `ReceiveMsg/readMsg(...)`.
 
