@@ -67,18 +67,68 @@ Legend:
 | D-01 | Negative diagnostic mapping completeness | Y | Dedicated X.411 diagnostic mapper covers timeout, routing, loop, security/auth and validation failure classes with explicit/fallback code selection. |
 | O-01 | Operational HA/failover profile | P | Operational guidance exists; formal evidence pack for external oversight remains required. |
 
-## 4. External deployment readiness gaps (including EU/Italy oversight contexts)
+## 4. Protocol P3 section (profile declaration)
 
-Open closure items before declaring operational external conformance:
+This implementation exposes a **gateway-oriented P3 profile** and does not currently claim full ICAO-certifiable end-to-end P3 conformance.
 
-1. Formal conformance matrix against applicable AMHS/P3 profiles and national oversight expectations.
-2. Interoperability campaign evidence versus representative external peers.
-3. Safety/security assessment records and traceable residual-risk acceptance.
-4. Performance and resilience evidence under sustained operational load.
-5. Operational hardening evidence (runbooks, failover drills, backup/restore, monitoring SLOs).
-6. Formal ASN.1/compiler-backed traceability package against official X.411-related module definitions.
+### 4.1 Supported P3 behaviors
 
-## 5. Evidence pointers in this repository
+- ACSE association establishment/release for the constrained gateway profile.
+- Bind lifecycle guards:
+  - single active bind per association,
+  - re-bind rejection while bound,
+  - explicit diagnostics for operations attempted before bind or after release.
+- Submission-oriented message ingress mapped into the internal AMHS canonical message model.
+- O/R Name and O/R Address normalization with ICAO-oriented validation hooks.
+- Delivery/Non-delivery report persistence with protocol-level correlation fields (`related_mts_identifier`, `correlation_token`).
+
+### 4.2 Declared limitations for P3
+
+- No claim of complete ROSE operation set and error mapping required for a full external P3 service.
+- No claim of complete RTSE/session behavior as required by fully profile-complete peers.
+- Presentation/ACSE negotiation semantics are implemented for supported paths only, not as a universal full interoperability surface.
+- Security label behavior (Doc 9880-style policy semantics) is not fully implemented.
+
+### 4.3 Interoperability posture
+
+- Intended for controlled integration and gateway scenarios where peer expectations are aligned with the declared profile.
+- External operational declaration as a fully conformant P3 endpoint requires closure of all items in Section 5.
+
+## 5. Missing points for ICAO compliance closure
+
+The following items are currently open and should be treated as mandatory closure points before claiming ICAO-oriented external compliance.
+
+### 5.1 Standards/profile conformance evidence
+
+1. Formal requirement-by-requirement mapping from applicable ICAO/ATN AMHS profiles to implementation/test evidence.
+2. Full P3 service matrix with explicit supported/unsupported operation and error semantics, signed off for external declaration.
+3. ASN.1 traceability package proving canonical X.411 module/tag alignment (beyond runtime profile-table checks).
+
+### 5.2 Interoperability campaign evidence
+
+4. Multi-peer interoperability campaign (including at least one certified AMHS implementation) with reproducible logs and pcaps.
+5. Negative-scenario campaign pack (malformed TPDU, ACSE rejection vectors, unsupported P3 operations) with deterministic verdicts.
+6. Evidence of behavior with legacy peer encodings for O/R and DirectoryName variants observed in operational networks.
+
+### 5.3 Security and PKI compliance
+
+7. ATN PKI profile statement with objective evidence for certificate path validation behavior.
+8. CRL/OCSP enforcement tests and operational proof (including stale/unreachable responder handling).
+9. Formal security-label policy treatment aligned with applicable Doc 9880 expectations (or formally approved non-claim/risk acceptance).
+
+### 5.4 Operational assurance
+
+10. Performance/resilience qualification under sustained load, including retry/fallback and recovery behavior.
+11. Operational readiness package: SLOs, monitoring/alerting thresholds, failover drills, backup/restore verification.
+12. Safety/security assessment records with residual-risk acceptance by accountable authority.
+
+### 5.5 Governance and declaration artifacts
+
+13. Completed PICS/PIXIT set tied to a specific release baseline and configuration fingerprint.
+14. Conformance test matrix verdict completion with artifact references per row.
+15. National oversight packaging (including any EU/Italy-specific authority expectations) with traceable approval records.
+
+## 6. Evidence pointers in this repository
 
 - Transport and parser tests under `src/test/java/it/amhs/service/`.
 - BER codec tests under `src/test/java/it/amhs/asn1/`.
