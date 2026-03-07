@@ -26,7 +26,7 @@ If your ISODE runtime expects full P3 wire compatibility, you need either:
 Use separate endpoints:
 
 - `rfc1006.server.port` (default 102): P1/RFC1006 listener
-- `amhs.p3.gateway.port` (default 1988): P3 gateway listener
+- `amhs.p3.gateway.port` (default 102): P3 gateway listener (RFC 1006 reserved TCP port)
 
 There is no automatic redirection from `:102` to the P3 gateway.
 
@@ -37,7 +37,7 @@ Set at least:
 ```properties
 amhs.p3.gateway.enabled=true
 amhs.p3.gateway.host=0.0.0.0
-amhs.p3.gateway.port=1988
+amhs.p3.gateway.port=102
 amhs.p3.gateway.tls.enabled=false
 amhs.p3.gateway.listener-profile=STANDARD_P3
 amhs.p3.gateway.auth.required=true
@@ -55,7 +55,7 @@ amhs.p3.gateway.status.retry-interval-ms=1000
 Run with a non-privileged RFC1006 port if needed:
 
 ```bash
-./gradlew bootRun --args='--rfc1006.server.port=1102 --amhs.p3.gateway.enabled=true --amhs.p3.gateway.port=1988'
+./gradlew bootRun --args='--rfc1006.server.port=1102 --amhs.p3.gateway.enabled=true --amhs.p3.gateway.port=1103'
 ```
 
 ## 4) How DR works in this gateway
