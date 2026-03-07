@@ -9,6 +9,7 @@ The P3 listener in this repository is a **gateway profile**, not a complete ICAO
 - Supported on the P3 port:
   - legacy text commands (`BIND`, `SUBMIT`, `STATUS`, `UNBIND`)
   - BER APDU gateway profile (`bind/submit/status/release` APDUs)
+  - RFC1006 COTP DT payloads carrying OSI Session/Presentation/ACSE envelopes when those envelopes contain gateway BER APDUs
 - Not yet supported:
   - full native ISODE P3 mailbox/read protocol semantics as expected by `P3BindSession` + `ReceiveMsg/readMsg(...)`.
 
