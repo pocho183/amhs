@@ -115,6 +115,50 @@ class P3Asn1GatewayProtocolTest {
         assertEquals(P3Asn1GatewayProtocol.APDU_BIND_RESPONSE, fields.get(1).tagNumber());
     }
 
+
+    @Test
+    void releaseReturnsGatewayErrorWhenAssociationIsNotBound() {
+        StubSessionService sessionService = new StubSessionService() {
+            @Override
+            public String handleCommand(SessionState state, String rawCommand) {
+                String op = rawCommand.split("\\s+", 2)[0].toUpperCase();
+                if ("UNBIND".equals(op)) {
+                    return "ERR code=association detail=Release received before bind";
+                }
+                return super.handleCommand(state, rawCommand);
+            }
+        };
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+
+        byte[] release = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_RELEASE_REQUEST, 0, 0, new byte[0]));
+        byte[] response = protocol.handle(sessionService.newSession(), release);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(P3Asn1GatewayProtocol.APDU_ERROR, responseTlv.tagNumber());
+    }
+
+    @Test
+    void roseReleaseReturnsReturnErrorWhenAssociationIsNotBound() {
+        StubSessionService sessionService = new StubSessionService() {
+            @Override
+            public String handleCommand(SessionState state, String rawCommand) {
+                String op = rawCommand.split("\\s+", 2)[0].toUpperCase();
+                if ("UNBIND".equals(op)) {
+                    return "ERR code=association detail=Release received before bind";
+                }
+                return super.handleCommand(state, rawCommand);
+            }
+        };
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+
+        byte[] roseRelease = roseInvoke(11, P3Asn1GatewayProtocol.APDU_RELEASE_REQUEST, new byte[0]);
+        byte[] response = protocol.handle(sessionService.newSession(), roseRelease);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(1, responseTlv.tagClass());
+        assertEquals(3, responseTlv.tagNumber());
+    }
+
     @Test
     void returnsRoseReturnErrorForUnsupportedRoseOperation() {
         StubSessionService sessionService = new StubSessionService();
