@@ -39,6 +39,11 @@ public class P3Asn1GatewayProtocol {
     private static final int ROSE_RETURN_ERROR = 3;
     private static final int ROSE_REJECT = 4;
 
+    private static final int RTSE_RTORQ = 16;
+    private static final int RTSE_RTOAC = 17;
+    private static final int RTSE_RTTR = 21;
+    private static final int RTSE_RTTD = 22;
+
     static final int APDU_BIND_REQUEST = 0;
     static final int APDU_BIND_RESPONSE = 1;
     static final int APDU_SUBMIT_REQUEST = 2;
@@ -59,6 +64,10 @@ public class P3Asn1GatewayProtocol {
         BerTlv apdu = BerCodec.decodeSingle(encodedPdu);
         logger.info("P3 ASN.1 incoming APDU tagClass={} constructed={} tagNumber={} len={}", apdu.tagClass(), apdu.constructed(), apdu.tagNumber(), apdu.length());
 
+        if (isRtseApdu(apdu)) {
+            return handleRtse(session, apdu);
+        }
+
         if (isRoseInvoke(apdu)) {
             return handleRoseInvoke(session, apdu);
         }
@@ -74,6 +83,49 @@ public class P3Asn1GatewayProtocol {
             case APDU_RELEASE_REQUEST -> mapRelease(session);
             default -> error("unsupported-operation", "Unsupported APDU " + apdu.tagNumber());
         };
+    }
+
+    private boolean isRtseApdu(BerTlv apdu) {
+        return apdu.constructed()
+            && apdu.tagClass() == TAG_CLASS_APPLICATION
+            && apdu.tagNumber() >= RTSE_RTORQ
+            && apdu.tagNumber() <= RTSE_RTTD;
+    }
+
+    private byte[] handleRtse(P3GatewaySessionService.SessionState session, BerTlv rtseApdu) {
+        byte[] nestedApdu = findGatewayOrRoseApdu(rtseApdu);
+        if (nestedApdu == null) {
+            return wrapRtseResponse(rtseApdu.tagNumber(), error("unsupported-operation", "RTSE APDU did not contain a supported gateway operation"));
+        }
+        byte[] nestedResponse = handle(session, nestedApdu);
+        return wrapRtseResponse(rtseApdu.tagNumber(), nestedResponse);
+    }
+
+    private byte[] findGatewayOrRoseApdu(BerTlv tlv) {
+        if (isRoseInvoke(tlv)
+            || (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() >= APDU_BIND_REQUEST && tlv.tagNumber() <= APDU_ERROR)) {
+            return BerCodec.encode(tlv);
+        }
+        if (!tlv.constructed()) {
+            return null;
+        }
+        for (BerTlv nested : BerCodec.decodeAll(tlv.value())) {
+            byte[] found = findGatewayOrRoseApdu(nested);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private byte[] wrapRtseResponse(int inboundRtseTag, byte[] nestedResponse) {
+        int responseTag = switch (inboundRtseTag) {
+            case RTSE_RTORQ -> RTSE_RTOAC;
+            case RTSE_RTTD -> RTSE_RTTR;
+            default -> inboundRtseTag;
+        };
+        byte[] any = BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, 0, 0, nestedResponse.length, nestedResponse));
+        return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, responseTag, 0, any.length, any));
     }
 
     private boolean isRoseInvoke(BerTlv apdu) {
