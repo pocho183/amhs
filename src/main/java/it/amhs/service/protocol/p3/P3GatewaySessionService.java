@@ -102,6 +102,7 @@ public class P3GatewaySessionService {
             case "BIND" -> bind(state, attributes);
             case "SUBMIT" -> submit(state, attributes);
             case "RETRIEVE", "REPORT", "STATUS" -> retrieveStatus(state, attributes);
+            case "READ" -> readMailbox(state, attributes);
             case "UNBIND", "RELEASE", "QUIT" -> unbind(state);
             default -> "ERR code=unsupported-operation detail=Unsupported operation " + operation;
         };
@@ -157,6 +158,7 @@ public class P3GatewaySessionService {
         state.username = username;
         state.senderOrAddress = parsedSender.toCanonicalString();
         state.channelName = channel.getName();
+        state.lastReadReportId = null;
         logger.info("P3 bind accepted sender={} username={} channel={}", state.senderOrAddress, state.username, state.channelName);
         return "OK code=bind-accepted sender=" + state.senderOrAddress;
     }
@@ -339,11 +341,62 @@ public class P3GatewaySessionService {
         }
     }
 
+
+    private String readMailbox(SessionState state, Map<String, String> attributes) {
+        if (!state.bound) {
+            logger.warn("P3 read rejected: operation before bind");
+            return "ERR code=association detail=Read operation received before bind";
+        }
+
+        String recipient = attributes.getOrDefault("recipient", state.senderOrAddress);
+        if (!StringUtils.hasText(recipient)) {
+            logger.warn("P3 read rejected: missing recipient");
+            return "ERR code=invalid-or-address detail=Missing recipient address";
+        }
+
+        long waitTimeoutMs = parseLong(attributes.get("wait-timeout-ms"), defaultStatusWaitTimeoutMs);
+        long retryIntervalMs = Math.max(1L, parseLong(attributes.get("retry-interval-ms"), defaultStatusRetryIntervalMs));
+        Instant deadline = Instant.now().plusMillis(Math.max(0L, waitTimeoutMs));
+
+        AMHSDeliveryReport report = loadNextReport(recipient, state.lastReadReportId);
+        while (report == null && waitTimeoutMs > 0 && Instant.now().isBefore(deadline)) {
+            long remainingMs = Math.max(1L, Duration.between(Instant.now(), deadline).toMillis());
+            try {
+                Thread.sleep(Math.min(retryIntervalMs, remainingMs));
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                return "ERR code=interrupted detail=Read wait interrupted";
+            }
+            report = loadNextReport(recipient, state.lastReadReportId);
+        }
+
+        if (report == null) {
+            return "OK code=read-empty recipient=" + recipient;
+        }
+
+        state.lastReadReportId = report.getId();
+        return "OK code=read"
+            + " report-id=" + report.getId()
+            + " message-id=" + report.getMessage().getMessageId()
+            + " recipient=" + report.getRecipient()
+            + " report-type=" + report.getReportType()
+            + " dr-status=" + report.getDeliveryStatus()
+            + (StringUtils.hasText(report.getX411DiagnosticCode()) ? " diagnostic=" + report.getX411DiagnosticCode() : "");
+    }
+
+    private AMHSDeliveryReport loadNextReport(String recipient, Long afterId) {
+        long cursor = afterId == null ? 0L : Math.max(0L, afterId);
+        return deliveryReportRepository.findByRecipientIgnoreCaseAndIdGreaterThanOrderByIdAsc(recipient, cursor).stream()
+            .findFirst()
+            .orElse(null);
+    }
+
     private String unbind(SessionState state) {
         state.bound = false;
         state.username = null;
         state.senderOrAddress = null;
         state.channelName = null;
+        state.lastReadReportId = null;
         state.closed = true;
         logger.info("P3 release completed");
         return "OK code=release";
@@ -374,6 +427,7 @@ public class P3GatewaySessionService {
         private String senderOrAddress;
         private String channelName;
         private boolean closed;
+        private Long lastReadReportId;
 
         public boolean isClosed() {
             return closed;
