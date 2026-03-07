@@ -791,8 +791,7 @@ public class P3GatewayServer {
 
         private boolean supports(ProtocolKind protocolKind) {
             if (this == GATEWAY_MULTI_PROTOCOL) {
-                return protocolKind == ProtocolKind.TEXT_COMMAND
-                    || protocolKind == ProtocolKind.BER_APDU
+                return protocolKind == ProtocolKind.BER_APDU
                     || protocolKind == ProtocolKind.RFC1006_TPKT;
             }
 
@@ -801,7 +800,7 @@ public class P3GatewayServer {
 
         private String supportedProtocolsSummary() {
             if (this == GATEWAY_MULTI_PROTOCOL) {
-                return "TEXT_COMMAND, BER_APDU, RFC1006_TPKT";
+                return "BER_APDU, RFC1006_TPKT";
             }
             return "RFC1006_TPKT";
         }

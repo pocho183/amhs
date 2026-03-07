@@ -7,13 +7,13 @@ This document explains how to run this AMHS server when your sender/reader code 
 The P3 listener can be run in two profiles.
 
 - `STANDARD_P3` (default): accepts only RFC1006/TPKT traffic for a standards-aligned external P3 exposure.
-- `GATEWAY_MULTI_PROTOCOL`: legacy admin/gateway mode that also accepts text commands and raw BER APDUs on the same endpoint.
+- `GATEWAY_MULTI_PROTOCOL`: legacy gateway mode that accepts raw BER APDUs and RFC1006/TPKT on the same endpoint (no line text command console).
 
 The gateway semantics are still not a complete ICAO-certified end-to-end X.411/P3 stack.
 
 - Supported operations depend on profile:
   - `STANDARD_P3`: RFC1006 COTP DT payloads carrying OSI Session/Presentation/ACSE envelopes when those envelopes contain gateway BER APDUs
-  - `GATEWAY_MULTI_PROTOCOL`: adds line text commands (`BIND`, `SUBMIT`, `STATUS`, `UNBIND`) and raw BER APDUs
+  - `GATEWAY_MULTI_PROTOCOL`: allows raw BER APDUs in addition to RFC1006/TPKT
 - Not yet supported:
   - full native ISODE P3 mailbox/read protocol semantics as expected by `P3BindSession` + `ReceiveMsg/readMsg(...)`.
 
@@ -40,7 +40,6 @@ amhs.p3.gateway.host=0.0.0.0
 amhs.p3.gateway.port=1988
 amhs.p3.gateway.tls.enabled=false
 amhs.p3.gateway.listener-profile=STANDARD_P3
-amhs.p3.gateway.text.welcome-enabled=false
 amhs.p3.gateway.auth.required=true
 amhs.p3.gateway.auth.username=amhsuser
 amhs.p3.gateway.auth.password=changeit
@@ -58,12 +57,6 @@ Run with a non-privileged RFC1006 port if needed:
 ```bash
 ./gradlew bootRun --args='--rfc1006.server.port=1102 --amhs.p3.gateway.enabled=true --amhs.p3.gateway.port=1988'
 ```
-
-### Note for line-oriented clients (only `GATEWAY_MULTI_PROTOCOL`)
-
-- The gateway parses text commands line-by-line (`BIND`, `SUBMIT`, `STATUS`, `UNBIND`).
-- Ensure each command is terminated with `\n` (or `\r\n`).
-- By default the gateway does **not** send an initial welcome banner, so the first response read by the client corresponds to the first command sent.
 
 ## 4) How DR works in this gateway
 
@@ -102,8 +95,8 @@ After startup, verify logs include:
 
 - P3 listener started (`AMHS P3 gateway ... listening`)
 - Per connection protocol mode:
-  - `protocol=text-command` or
-  - `protocol=ber-apdu`
+  - `protocol=ber-apdu` or
+  - `protocol=rfc1006-tpkt`
 - Repeated immediate reconnects with logs like `protocol=ber-apdu` and no successful bind usually indicate protocol/profile mismatch (for example, sending RFC1006/P1 traffic to the P3 gateway port).
 
 If your ISODE client connects but fails during bind/read semantics, this typically indicates expectation mismatch vs full native P3 behavior.
