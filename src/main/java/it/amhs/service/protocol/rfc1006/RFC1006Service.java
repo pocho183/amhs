@@ -342,19 +342,37 @@ public class RFC1006Service {
             return;
         }
 
+        try {
+            associationState.acseStateMachine.onInbound(apdu);
+        } catch (IllegalStateException ex) {
+            logger.warn("Invalid ACSE state transition: {}", ex.getMessage());
+            sendRFC1006(out, p1AssociationProtocol.encodeError("acse-state", ex.getMessage()));
+            return;
+        }
+
         if (apdu instanceof AcseModels.AARQApdu aarq) {
             validateAarqForAmhsP1(aarq, identity.cn(), identity.ou());
             associationState.bound = true;
             associationState.active = true;
             logger.info("Accepted ACSE AARQ for application context {}", aarq.applicationContextName());
-            sendRFC1006(out, acseAssociationProtocol.encode(new AcseModels.AAREApdu(true, java.util.Optional.of("accepted"))));
+            AcseModels.AAREApdu accept = new AcseModels.AAREApdu(
+                true,
+                java.util.Optional.of("accepted"),
+                java.util.Optional.empty(),
+                java.util.Optional.empty(),
+                List.of(ICAO_AMHS_P1_OID)
+            );
+            associationState.acseStateMachine.onOutbound(accept);
+            sendRFC1006(out, acseAssociationProtocol.encode(accept));
             return;
         }
 
         if (apdu instanceof AcseModels.RLRQApdu) {
             associationState.bound = false;
             associationState.active = false;
-            sendRFC1006(out, acseAssociationProtocol.encode(new AcseModels.RLREApdu(true)));
+            AcseModels.RLREApdu release = new AcseModels.RLREApdu(true);
+            associationState.acseStateMachine.onOutbound(release);
+            sendRFC1006(out, acseAssociationProtocol.encode(release));
             return;
         }
 
@@ -864,11 +882,13 @@ public class RFC1006Service {
         private boolean bound;
         private boolean active;
         private int negotiatedMaxUserData;
+        private final AcseModels.AssociationStateMachine acseStateMachine;
 
         private P1AssociationState(boolean bound, int negotiatedMaxUserData) {
             this.bound = bound;
             this.active = true;
             this.negotiatedMaxUserData = negotiatedMaxUserData;
+            this.acseStateMachine = new AcseModels.AssociationStateMachine();
         }
 
         private boolean bound() {
