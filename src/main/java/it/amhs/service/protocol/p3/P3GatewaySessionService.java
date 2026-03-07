@@ -19,6 +19,7 @@ import org.springframework.util.StringUtils;
 
 import it.amhs.api.X400MessageRequest;
 import it.amhs.compliance.AMHSComplianceValidator;
+import it.amhs.compliance.SecurityLabelPolicy;
 import it.amhs.domain.AMHSChannel;
 import it.amhs.domain.AMHSDeliveryReport;
 import it.amhs.domain.AMHSMessage;
@@ -50,6 +51,7 @@ public class P3GatewaySessionService {
     private final String defaultProtocolIndex;
     private final String defaultProtocolAddress;
     private final String defaultServerAddress;
+    private final SecurityLabelPolicy securityLabelPolicy = new SecurityLabelPolicy();
     private final ConcurrentMap<String, Long> submissionCorrelationTable = new ConcurrentHashMap<>();
 
     public P3GatewaySessionService(
@@ -131,6 +133,8 @@ public class P3GatewaySessionService {
         String password = attributes.getOrDefault("password", "");
         String senderAddress = attributes.getOrDefault("sender", "");
         String channelName = attributes.getOrDefault("channel", AMHSChannelService.DEFAULT_CHANNEL_NAME);
+        String securityLabel = attributes.getOrDefault("security-label", "");
+        String gatewayPolicyLabel = attributes.getOrDefault("gateway-policy-label", "");
 
         if (!StringUtils.hasText(senderAddress)) {
             logger.warn("P3 bind rejected: missing sender address");
@@ -162,6 +166,24 @@ public class P3GatewaySessionService {
         } catch (IllegalArgumentException ex) {
             logger.warn("P3 bind rejected: identity binding failed username={} reason={}", username, ex.getMessage());
             return "ERR code=authz-failed detail=" + ex.getMessage();
+        }
+
+        if (StringUtils.hasText(securityLabel)) {
+            try {
+                securityLabelPolicy.parse(securityLabel);
+                if (StringUtils.hasText(gatewayPolicyLabel)
+                    && !securityLabelPolicy.dominates(securityLabel, gatewayPolicyLabel)) {
+                    logger.warn(
+                        "P3 bind rejected: label dominance failure security-label={} gateway-policy-label={}",
+                        securityLabel,
+                        gatewayPolicyLabel
+                    );
+                    return "ERR code=security-policy detail=Security label does not dominate gateway policy label";
+                }
+            } catch (IllegalArgumentException ex) {
+                logger.warn("P3 bind rejected: invalid security label reason={}", ex.getMessage());
+                return "ERR code=security-policy detail=" + ex.getMessage();
+            }
         }
 
         AMHSChannel channel;
