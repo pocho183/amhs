@@ -112,12 +112,12 @@ public class P3GatewayServer {
 
             if (isAsciiCommand(first)) {
                 logger.info("P3 gateway protocol=text-command remote={}", socket.getInetAddress());
-                handleTextSession(session, input, output);
+                handleTextSession(connectionId, session, input, output);
                 return;
             }
 
             logger.info("P3 gateway protocol=ber-apdu remote={}", socket.getInetAddress());
-            handleAsn1Session(session, input, output);
+            handleAsn1Session(connectionId, session, input, output);
         } catch (Exception ex) {
             if (isExpectedDisconnect(ex)) {
                 logger.debug("P3 gateway connection #{} ended before a complete request was received: {}", connectionId, ex.getMessage());
@@ -130,11 +130,6 @@ public class P3GatewayServer {
     private boolean isExpectedDisconnect(Exception ex) {
         return ex instanceof EOFException
             || ex instanceof SocketException;
-    }
-
-    private void handleTextSession(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
-        throws Exception {
-        handleTextSession(-1L, session, input, output);
     }
 
     private void handleTextSession(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
@@ -152,7 +147,7 @@ public class P3GatewayServer {
                 String response = sessionService.handleCommand(session, line);
                 writer.println(response);
                 if (session.isClosed()) {
-                    logger.info("P3 gateway connection #{} text session closed by command {}", connectionId, commandName);
+                    logger.info("P3 gateway connection #{} text session closed by command {}", connectionId, commandName(line));
                     return;
                 }
             }
@@ -169,7 +164,7 @@ public class P3GatewayServer {
                 return;
             }
             pduIndex++;
-            logger.info("P3 gateway connection #{} BER APDU #{} len={} first-byte=0x{}", connectionId, pduIndex, pdu.length, toHex(pdu[0]));
+            logger.info("P3 gateway connection #{} BER APDU #{} len={} first-byte=0x{}", connectionId, pduIndex, pdu.length, toHexByte(pdu[0]));
             byte[] response = asn1GatewayProtocol.handle(session, pdu);
             output.write(response);
             output.flush();
@@ -203,6 +198,19 @@ public class P3GatewayServer {
 
     private boolean isBerApduStart(int firstOctet) {
         return (firstOctet & 0xE0) == 0xA0;
+    }
+
+    private String commandName(String line) {
+        String trimmed = line == null ? "" : line.trim();
+        if (trimmed.isEmpty()) {
+            return "<blank>";
+        }
+        int separator = trimmed.indexOf(' ');
+        return separator < 0 ? trimmed : trimmed.substring(0, separator);
+    }
+
+    private String toHexByte(byte value) {
+        return String.format("%02X", value & 0xFF);
     }
 
     private enum ProtocolKind {
