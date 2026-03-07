@@ -309,6 +309,31 @@ class P3GatewaySessionServiceTest {
         assertTrue(bindResponse.startsWith("ERR code=invalid-or-address detail="));
     }
 
+
+    @Test
+    void reportBeforeBindIsRejectedWithReportSemanticDiagnostic() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            false,
+            "",
+            "",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        String response = sessionService.handleCommand(sessionService.newSession(), "REPORT recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIRRZZZX/CN=Bob Test");
+
+        assertEquals("ERR code=association detail=Report operation received before bind", response);
+    }
+
     @Test
     void unsupportedOperationReturnsExplicitDiagnostic() {
         P3GatewaySessionService sessionService = new P3GatewaySessionService(

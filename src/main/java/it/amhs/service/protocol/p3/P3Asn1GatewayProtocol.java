@@ -52,6 +52,8 @@ public class P3Asn1GatewayProtocol {
     static final int APDU_STATUS_RESPONSE = 5;
     static final int APDU_RELEASE_REQUEST = 6;
     static final int APDU_RELEASE_RESPONSE = 7;
+    static final int APDU_REPORT_REQUEST = 9;
+    static final int APDU_REPORT_RESPONSE = 10;
     static final int APDU_ERROR = 8;
 
     private final P3GatewaySessionService sessionService;
@@ -80,6 +82,7 @@ public class P3Asn1GatewayProtocol {
             case APDU_BIND_REQUEST -> mapBind(session, apdu.value());
             case APDU_SUBMIT_REQUEST -> mapSubmit(session, apdu.value());
             case APDU_STATUS_REQUEST -> mapStatus(session, apdu.value());
+            case APDU_REPORT_REQUEST -> mapReport(session, apdu.value());
             case APDU_RELEASE_REQUEST -> mapRelease(session);
             default -> error("unsupported-operation", "Unsupported APDU " + apdu.tagNumber());
         };
@@ -103,7 +106,7 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] findGatewayOrRoseApdu(BerTlv tlv) {
         if (isRoseInvoke(tlv)
-            || (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() >= APDU_BIND_REQUEST && tlv.tagNumber() <= APDU_ERROR)) {
+            || (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && isGatewayApduTag(tlv.tagNumber()))) {
             return BerCodec.encode(tlv);
         }
         if (!tlv.constructed()) {
@@ -116,6 +119,10 @@ public class P3Asn1GatewayProtocol {
             }
         }
         return null;
+    }
+
+    private boolean isGatewayApduTag(int tagNumber) {
+        return tagNumber >= APDU_BIND_REQUEST && tagNumber <= APDU_REPORT_RESPONSE;
     }
 
     private byte[] wrapRtseResponse(int inboundRtseTag, byte[] nestedResponse) {
@@ -215,6 +222,7 @@ public class P3Asn1GatewayProtocol {
             case APDU_BIND_REQUEST -> mapBind(session, argument);
             case APDU_SUBMIT_REQUEST -> mapSubmit(session, argument);
             case APDU_STATUS_REQUEST -> mapStatus(session, argument);
+            case APDU_REPORT_REQUEST -> mapReport(session, argument);
             case APDU_RELEASE_REQUEST -> mapRelease(session);
             default -> error("unsupported-operation", "Unsupported ROSE operation " + operationCode);
         };
@@ -349,6 +357,27 @@ public class P3Asn1GatewayProtocol {
         return errorFromResponse(response);
     }
 
+    private byte[] mapReport(P3GatewaySessionService.SessionState session, byte[] payload) {
+        Map<Integer, String> fields = decodeContextUtf8Fields(payload);
+        logger.info(
+            "P3 ASN.1 report request fields recipient={} wait-timeout-ms={} retry-interval-ms={} ",
+            safe(fields.get(0)),
+            safe(fields.get(1)),
+            safe(fields.get(2))
+        );
+        String command = "REPORT"
+            + " recipient=" + value(fields.get(0))
+            + ";wait-timeout-ms=" + value(fields.get(1))
+            + ";retry-interval-ms=" + value(fields.get(2));
+        String response = sessionService.handleCommand(session, command);
+        logger.info("P3 ASN.1 report gateway-response={}", response);
+
+        if (response.startsWith("OK")) {
+            return envelope(APDU_REPORT_RESPONSE, encodeKeyValuePayload(parseResponse(response)));
+        }
+        return errorFromResponse(response);
+    }
+
     private byte[] mapRelease(P3GatewaySessionService.SessionState session) {
         String response = sessionService.handleCommand(session, "UNBIND");
         logger.info("P3 ASN.1 release gateway-response={}", response);
@@ -359,14 +388,27 @@ public class P3Asn1GatewayProtocol {
     }
 
     private byte[] errorFromResponse(String response) {
-        return error("gateway", response);
+        Map<String, String> parsed = parseResponse(response);
+        String code = parsed.getOrDefault("code", "gateway");
+        String detail = parsed.getOrDefault("detail", response);
+        String retryable = isRetryable(code) ? "true" : "false";
+        return error(code, detail, retryable);
     }
 
     private byte[] error(String code, String detail) {
+        return error(code, detail, "false");
+    }
+
+    private byte[] error(String code, String detail, String retryable) {
         List<byte[]> fields = new ArrayList<>();
         fields.add(encodeUtf8ContextField(0, code));
         fields.add(encodeUtf8ContextField(1, detail));
+        fields.add(encodeUtf8ContextField(2, retryable));
         return envelope(APDU_ERROR, concat(fields));
+    }
+
+    private boolean isRetryable(String code) {
+        return "interrupted".equals(code) || "routing-policy".equals(code);
     }
 
     private byte[] envelope(int tagNumber, byte[] payload) {

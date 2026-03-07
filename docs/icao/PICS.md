@@ -40,10 +40,10 @@ Legend:
 | A-05 | AP-title / AE-qualifier structures | P | Core structures supported; not a broad complete ACSE interoperability claim. |
 | A-06 | Authentication-value semantics | P | Implemented for configured policy checks, not exhaustive profile-semantic coverage. |
 | A-07 | P3 bind/re-bind/release error semantics | Y | Single-bind association policy, release-before-bind diagnostics, and post-release association-closed diagnostics are enforced. |
-| U-01 | ROSE operation coverage for full P3 service set | N | Full ROSE operation/error mapping coverage is not implemented. |
+| U-01 | ROSE operation coverage for full P3 service set | P | Bind/submit/status/release/report operations are mapped with deterministic error envelopes, but complete profile-wide ROSE operation/error coverage is still pending. |
 | U-02 | RTSE behavior coverage | N | RTSE stack behavior is not implemented as a complete profile-conformant layer. |
 | U-03 | Session semantics beyond wrapper preservation | P | Session/presentation envelopes are preserved/rewrapped in supported gateway paths. |
-| U-04 | Complete X.411/P3 service behavior and error semantics | N | Full externally certifiable P3 service surface and error model are not fully implemented. |
+| U-04 | Complete X.411/P3 service behavior and error semantics | P | Gateway service now provides explicit bind/submit/status/report/release behavior with deterministic error semantics; full externally certifiable profile breadth remains pending. |
 | P1-01 | BER parsing for P1-like envelope | Y | Structured BER/TLV support in parser. |
 | P1-02 | Envelope/content separation | Y | Envelope and content are separated. |
 | P1-03 | Per-recipient handling | Y | Per-recipient routing state supported. |
@@ -84,7 +84,7 @@ This implementation exposes a **gateway-oriented P3 profile** and does not curre
 
 ### 4.2 Declared limitations for P3
 
-- No claim of complete ROSE operation set and error mapping required for a full external P3 service.
+- ROSE operation/error mapping is implemented for the declared gateway operation subset (bind, submit, status, report, release), but full profile-wide operation coverage is still pending.
 - No claim of complete RTSE/session behavior as required by fully profile-complete peers.
 - Presentation/ACSE negotiation semantics are implemented for supported paths only, not as a universal full interoperability surface.
 - Security label behavior (Doc 9880-style policy semantics) is not fully implemented.
