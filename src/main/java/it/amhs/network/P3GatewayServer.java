@@ -39,6 +39,7 @@ public class P3GatewayServer {
     private final int port;
     private final boolean tlsEnabled;
     private final boolean needClientAuth;
+    private final boolean textWelcomeEnabled;
     private final SSLContext tls;
     private final P3GatewaySessionService sessionService;
     private final P3Asn1GatewayProtocol asn1GatewayProtocol;
@@ -50,6 +51,7 @@ public class P3GatewayServer {
         @Value("${amhs.p3.gateway.max-sessions:64}") int maxSessions,
         @Value("${amhs.p3.gateway.tls.enabled:false}") boolean tlsEnabled,
         @Value("${amhs.p3.gateway.tls.need-client-auth:false}") boolean needClientAuth,
+        @Value("${amhs.p3.gateway.text.welcome-enabled:false}") boolean textWelcomeEnabled,
         SSLContext tls,
         P3GatewaySessionService sessionService,
         P3Asn1GatewayProtocol asn1GatewayProtocol
@@ -64,6 +66,7 @@ public class P3GatewayServer {
         this.port = port;
         this.tlsEnabled = tlsEnabled;
         this.needClientAuth = needClientAuth;
+        this.textWelcomeEnabled = textWelcomeEnabled;
         this.tls = tls;
         this.sessionService = sessionService;
         this.asn1GatewayProtocol = asn1GatewayProtocol;
@@ -105,10 +108,12 @@ public class P3GatewayServer {
             input.unread(first);
 
             if (isAsciiCommand(first)) {
+                logger.info("P3 gateway protocol=text-command remote={}", socket.getInetAddress());
                 handleTextSession(session, input, output);
                 return;
             }
 
+            logger.info("P3 gateway protocol=ber-apdu remote={}", socket.getInetAddress());
             handleAsn1Session(session, input, output);
         } catch (Exception ex) {
             if (isExpectedDisconnect(ex)) {
@@ -128,9 +133,14 @@ public class P3GatewayServer {
         throws Exception {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
              PrintWriter writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8)), true)) {
-            writer.println("OK code=gateway-ready");
+            if (textWelcomeEnabled) {
+                writer.println("OK code=gateway-ready");
+            }
             String line;
             while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) {
+                    continue;
+                }
                 String response = sessionService.handleCommand(session, line);
                 writer.println(response);
                 if (session.isClosed()) {
