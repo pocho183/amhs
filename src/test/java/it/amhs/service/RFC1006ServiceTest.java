@@ -137,7 +137,7 @@ class RFC1006ServiceTest {
     }
 
     @Test
-    void shouldRejectDuplicatePresentationContexts() {
+    void shouldAllowRepeatedAbstractSyntaxAcrossPresentationContexts() {
         AcseModels.AARQApdu aarq = new AcseModels.AARQApdu(
             RFC1006Service.ICAO_AMHS_P1_OID,
             Optional.of("LIMMZQZX"),
@@ -151,9 +151,7 @@ class RFC1006ServiceTest {
             List.of(RFC1006Service.ICAO_AMHS_P1_OID, RFC1006Service.ICAO_AMHS_P1_OID)
         );
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-            () -> service.validateAarqForAmhsP1(aarq, "LIMMZQZX", null));
-        assertTrue(ex.getMessage().contains("must not contain duplicates"));
+        service.validateAarqForAmhsP1(aarq, "LIMMZQZX", null);
     }
 
     @Test

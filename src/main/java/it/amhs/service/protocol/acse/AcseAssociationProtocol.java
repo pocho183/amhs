@@ -3,8 +3,10 @@ package it.amhs.service.protocol.acse;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
@@ -22,6 +24,8 @@ public class AcseAssociationProtocol {
     private static final int RLRQ_TAG = 2;
     private static final int RLRE_TAG = 3;
     private static final int ABRT_TAG = 4;
+
+    private static final String DEFAULT_TRANSFER_SYNTAX_OID = "2.1.1";
 
     public byte[] encode(AcseModels.AcseApdu apdu) {
         if (apdu instanceof AcseModels.AARQApdu aarq) {
@@ -269,9 +273,16 @@ public class AcseAssociationProtocol {
 
     private byte[] encodePresentationContexts(int tagNumber, List<String> contextOids) {
         List<byte[]> entries = new ArrayList<>();
+        int contextIdentifier = 1;
         for (String oid : contextOids) {
-            byte[] encodedOid = BerCodec.encode(new BerTlv(0, false, 6, 0, encodeOidValue(oid).length, encodeOidValue(oid)));
-            entries.add(BerCodec.encode(new BerTlv(0, true, 16, 0, encodedOid.length, encodedOid)));
+            byte[] abstractSyntax = BerCodec.encode(new BerTlv(0, false, 6, 0, encodeOidValue(oid).length, encodeOidValue(oid)));
+            byte[] transferSyntax = BerCodec.encode(new BerTlv(0, false, 6, 0,
+                encodeOidValue(DEFAULT_TRANSFER_SYNTAX_OID).length, encodeOidValue(DEFAULT_TRANSFER_SYNTAX_OID)));
+            byte[] transferSyntaxList = BerCodec.encode(new BerTlv(0, true, 16, 0, transferSyntax.length, transferSyntax));
+            byte[] contextIdentifierField = BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] {(byte) contextIdentifier}));
+            byte[] payload = concat(contextIdentifierField, abstractSyntax, transferSyntaxList);
+            entries.add(BerCodec.encode(new BerTlv(0, true, 16, 0, payload.length, payload)));
+            contextIdentifier += 2;
         }
         byte[] sequence = concat(entries.toArray(new byte[0][]));
         byte[] wrappedSeq = BerCodec.encode(new BerTlv(0, true, 16, 0, sequence.length, sequence));
@@ -284,19 +295,52 @@ public class AcseAssociationProtocol {
             throw new IllegalArgumentException("ACSE expected SEQUENCE for presentation contexts");
         }
         List<String> oids = new ArrayList<>();
+        Set<Integer> identifiers = new LinkedHashSet<>();
         for (BerTlv item : BerCodec.decodeAll(seq.value())) {
             if (!item.isUniversal() || item.tagNumber() != 16) {
                 throw new IllegalArgumentException("ACSE presentation context list item must be a SEQUENCE");
             }
             List<BerTlv> contextFields = BerCodec.decodeAll(item.value());
-            if (contextFields.size() != 1) {
-                throw new IllegalArgumentException("ACSE presentation context item must contain exactly one abstract syntax OID");
+            if (contextFields.isEmpty()) {
+                throw new IllegalArgumentException("ACSE presentation context item cannot be empty");
             }
-            BerTlv oidTlv = contextFields.get(0);
-            if (!oidTlv.isUniversal() || oidTlv.tagNumber() != 6) {
-                throw new IllegalArgumentException("ACSE presentation context item must contain OBJECT IDENTIFIER");
+            if (contextFields.size() == 1) {
+                BerTlv oidTlv = contextFields.get(0);
+                if (!oidTlv.isUniversal() || oidTlv.tagNumber() != 6) {
+                    throw new IllegalArgumentException("ACSE presentation context item must contain OBJECT IDENTIFIER");
+                }
+                oids.add(decodeOidValue(oidTlv.value()));
+                continue;
             }
-            oids.add(decodeOidValue(oidTlv.value()));
+
+            BerTlv id = contextFields.get(0);
+            if (!id.isUniversal() || id.tagNumber() != 2 || id.value().length != 1) {
+                throw new IllegalArgumentException("ACSE presentation context item must start with INTEGER identifier");
+            }
+            int identifier = id.value()[0] & 0xFF;
+            if (identifier <= 0 || identifier % 2 == 0 || !identifiers.add(identifier)) {
+                throw new IllegalArgumentException("ACSE presentation context identifier must be unique odd positive integer");
+            }
+
+            BerTlv abstractSyntaxTlv = contextFields.get(1);
+            if (!abstractSyntaxTlv.isUniversal() || abstractSyntaxTlv.tagNumber() != 6) {
+                throw new IllegalArgumentException("ACSE presentation context abstract syntax must be OBJECT IDENTIFIER");
+            }
+            oids.add(decodeOidValue(abstractSyntaxTlv.value()));
+
+            BerTlv transferSyntaxList = contextFields.get(2);
+            if (!transferSyntaxList.isUniversal() || transferSyntaxList.tagNumber() != 16) {
+                throw new IllegalArgumentException("ACSE presentation context transfer syntaxes must be a SEQUENCE");
+            }
+            List<BerTlv> transferSyntaxes = BerCodec.decodeAll(transferSyntaxList.value());
+            if (transferSyntaxes.isEmpty()) {
+                throw new IllegalArgumentException("ACSE presentation context transfer syntax list cannot be empty");
+            }
+            for (BerTlv transferSyntax : transferSyntaxes) {
+                if (!transferSyntax.isUniversal() || transferSyntax.tagNumber() != 6) {
+                    throw new IllegalArgumentException("ACSE transfer syntax must be OBJECT IDENTIFIER");
+                }
+            }
         }
         if (oids.isEmpty()) {
             throw new IllegalArgumentException("ACSE presentation context list cannot be empty");
