@@ -34,6 +34,7 @@ amhs.p3.gateway.enabled=true
 amhs.p3.gateway.host=0.0.0.0
 amhs.p3.gateway.port=1988
 amhs.p3.gateway.tls.enabled=false
+amhs.p3.gateway.text.welcome-enabled=false
 amhs.p3.gateway.auth.required=true
 amhs.p3.gateway.auth.username=amhsuser
 amhs.p3.gateway.auth.password=changeit
@@ -51,6 +52,12 @@ Run with a non-privileged RFC1006 port if needed:
 ```bash
 ./gradlew bootRun --args='--rfc1006.server.port=1102 --amhs.p3.gateway.enabled=true --amhs.p3.gateway.port=1988'
 ```
+
+### Note for line-oriented clients
+
+- The gateway parses text commands line-by-line (`BIND`, `SUBMIT`, `STATUS`, `UNBIND`).
+- Ensure each command is terminated with `\n` (or `\r\n`).
+- By default the gateway does **not** send an initial welcome banner, so the first response read by the client corresponds to the first command sent.
 
 ## 4) How DR works in this gateway
 
@@ -91,5 +98,6 @@ After startup, verify logs include:
 - Per connection protocol mode:
   - `protocol=text-command` or
   - `protocol=ber-apdu`
+- Repeated immediate reconnects with logs like `protocol=ber-apdu` and no successful bind usually indicate protocol/profile mismatch (for example, sending RFC1006/P1 traffic to the P3 gateway port).
 
 If your ISODE client connects but fails during bind/read semantics, this typically indicates expectation mismatch vs full native P3 behavior.

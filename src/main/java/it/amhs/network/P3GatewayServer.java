@@ -39,6 +39,7 @@ public class P3GatewayServer {
     private final int port;
     private final boolean tlsEnabled;
     private final boolean needClientAuth;
+    private final boolean textWelcomeEnabled;
     private final SSLContext tls;
     private final P3GatewaySessionService sessionService;
     private final P3Asn1GatewayProtocol asn1GatewayProtocol;
@@ -50,6 +51,7 @@ public class P3GatewayServer {
         @Value("${amhs.p3.gateway.max-sessions:64}") int maxSessions,
         @Value("${amhs.p3.gateway.tls.enabled:false}") boolean tlsEnabled,
         @Value("${amhs.p3.gateway.tls.need-client-auth:false}") boolean needClientAuth,
+        @Value("${amhs.p3.gateway.text.welcome-enabled:false}") boolean textWelcomeEnabled,
         SSLContext tls,
         P3GatewaySessionService sessionService,
         P3Asn1GatewayProtocol asn1GatewayProtocol
@@ -64,6 +66,7 @@ public class P3GatewayServer {
         this.port = port;
         this.tlsEnabled = tlsEnabled;
         this.needClientAuth = needClientAuth;
+        this.textWelcomeEnabled = textWelcomeEnabled;
         this.tls = tls;
         this.sessionService = sessionService;
         this.asn1GatewayProtocol = asn1GatewayProtocol;
@@ -104,12 +107,31 @@ public class P3GatewayServer {
             }
             input.unread(first);
 
-            if (isAsciiCommand(first)) {
-                handleTextSession(session, input, output);
-                return;
+            ProtocolKind protocol = detectProtocol(first);
+            switch (protocol) {
+                case TEXT_COMMAND -> {
+                    logger.debug("P3 gateway protocol=text-command remote={}", socket.getInetAddress());
+                    handleTextSession(session, input, output);
+                    return;
+                }
+                case BER_APDU -> {
+                    logger.debug("P3 gateway protocol=ber-apdu remote={}", socket.getInetAddress());
+                    handleAsn1Session(session, input, output);
+                    return;
+                }
+                case RFC1006_TPKT -> {
+                    logger.warn("P3 gateway received RFC1006/TPKT traffic on {}:{} from {}. Use the RFC1006 listener port for P1 traffic.", host, port, socket.getInetAddress());
+                    return;
+                }
+                case TLS_CLIENT_HELLO -> {
+                    logger.warn("P3 gateway received a TLS handshake on clear-text endpoint {}:{} from {}. Enable amhs.p3.gateway.tls.enabled or use the TLS endpoint.", host, port, socket.getInetAddress());
+                    return;
+                }
+                case UNKNOWN_BINARY -> {
+                    logger.warn("P3 gateway unsupported first octet 0x{} from {}. Expected text command or BER APDU.", Integer.toHexString(first).toUpperCase(), socket.getInetAddress());
+                    return;
+                }
             }
-
-            handleAsn1Session(session, input, output);
         } catch (Exception ex) {
             if (isExpectedDisconnect(ex)) {
                 logger.debug("P3 gateway client session ended before a complete request was received: {}", ex.getMessage());
@@ -128,9 +150,14 @@ public class P3GatewayServer {
         throws Exception {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
              PrintWriter writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8)), true)) {
-            writer.println("OK code=gateway-ready");
+            if (textWelcomeEnabled) {
+                writer.println("OK code=gateway-ready");
+            }
             String line;
             while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) {
+                    continue;
+                }
                 String response = sessionService.handleCommand(session, line);
                 writer.println(response);
                 if (session.isClosed()) {
@@ -156,8 +183,36 @@ public class P3GatewayServer {
         }
     }
 
+    private ProtocolKind detectProtocol(int firstOctet) {
+        if (isAsciiCommand(firstOctet)) {
+            return ProtocolKind.TEXT_COMMAND;
+        }
+        if ((firstOctet & 0xFF) == 0x03) {
+            return ProtocolKind.RFC1006_TPKT;
+        }
+        if ((firstOctet & 0xFF) == 0x16) {
+            return ProtocolKind.TLS_CLIENT_HELLO;
+        }
+        if (isBerApduStart(firstOctet)) {
+            return ProtocolKind.BER_APDU;
+        }
+        return ProtocolKind.UNKNOWN_BINARY;
+    }
+
     private boolean isAsciiCommand(int firstOctet) {
         return firstOctet >= 0x20 && firstOctet <= 0x7E;
+    }
+
+    private boolean isBerApduStart(int firstOctet) {
+        return (firstOctet & 0xE0) == 0xA0;
+    }
+
+    private enum ProtocolKind {
+        TEXT_COMMAND,
+        BER_APDU,
+        RFC1006_TPKT,
+        TLS_CLIENT_HELLO,
+        UNKNOWN_BINARY
     }
 
     private static final class NamedDaemonThreadFactory implements ThreadFactory {
