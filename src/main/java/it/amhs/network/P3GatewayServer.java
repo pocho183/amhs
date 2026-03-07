@@ -107,31 +107,14 @@ public class P3GatewayServer {
             }
             input.unread(first);
 
-            ProtocolKind protocol = detectProtocol(first);
-            switch (protocol) {
-                case TEXT_COMMAND -> {
-                    logger.debug("P3 gateway protocol=text-command remote={}", socket.getInetAddress());
-                    handleTextSession(session, input, output);
-                    return;
-                }
-                case BER_APDU -> {
-                    logger.debug("P3 gateway protocol=ber-apdu remote={}", socket.getInetAddress());
-                    handleAsn1Session(session, input, output);
-                    return;
-                }
-                case RFC1006_TPKT -> {
-                    logger.warn("P3 gateway received RFC1006/TPKT traffic on {}:{} from {}. Use the RFC1006 listener port for P1 traffic.", host, port, socket.getInetAddress());
-                    return;
-                }
-                case TLS_CLIENT_HELLO -> {
-                    logger.warn("P3 gateway received a TLS handshake on clear-text endpoint {}:{} from {}. Enable amhs.p3.gateway.tls.enabled or use the TLS endpoint.", host, port, socket.getInetAddress());
-                    return;
-                }
-                case UNKNOWN_BINARY -> {
-                    logger.warn("P3 gateway unsupported first octet 0x{} from {}. Expected text command or BER APDU.", Integer.toHexString(first).toUpperCase(), socket.getInetAddress());
-                    return;
-                }
+            if (isAsciiCommand(first)) {
+                logger.info("P3 gateway protocol=text-command remote={}", socket.getInetAddress());
+                handleTextSession(session, input, output);
+                return;
             }
+
+            logger.info("P3 gateway protocol=ber-apdu remote={}", socket.getInetAddress());
+            handleAsn1Session(session, input, output);
         } catch (Exception ex) {
             if (isExpectedDisconnect(ex)) {
                 logger.debug("P3 gateway client session ended before a complete request was received: {}", ex.getMessage());
