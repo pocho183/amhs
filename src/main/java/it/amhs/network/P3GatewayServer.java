@@ -52,6 +52,7 @@ public class P3GatewayServer {
     private static final byte[] COTP_DT_HEADER = new byte[] { 0x02, (byte) 0xF0 };
     private static final int TAG_CLASS_CONTEXT = 2;
     private static final int TAG_CLASS_UNIVERSAL = 0;
+    private static final int TAG_CLASS_APPLICATION = 1;
 
     private final String host;
     private final int port;
@@ -319,7 +320,8 @@ public class P3GatewayServer {
             }
 
             byte[] response = asn1GatewayProtocol.handle(session, applicationPdu);
-            sendRfc1006Dt(output, response);
+            byte[] wrappedResponse = rewrapApplicationPduForRfc1006Response(response, payloadKind, pdu);
+            sendRfc1006Dt(output, wrappedResponse);
             logger.debug("P3 gateway connection #{} RFC1006 payload #{} response-len={}", connectionId, pduIndex, response.length);
             if (session.isClosed()) {
                 logger.info("P3 gateway connection #{} RFC1006 session closed by release after {} payload(s)", connectionId, pduIndex);
@@ -678,6 +680,87 @@ public class P3GatewayServer {
             logger.debug("Failed to find gateway APDU: {}", ex.getMessage());
             return null;
         }
+    }
+
+    private byte[] rewrapApplicationPduForRfc1006Response(byte[] applicationResponse, String inboundKind, byte[] inboundPayload) {
+        if (applicationResponse == null) {
+            return new byte[0];
+        }
+        if ("BER_APDU".equals(inboundKind)) {
+            return applicationResponse;
+        }
+        if ("ACSE_APDU".equals(inboundKind)) {
+            return wrapAcseEnvelope(applicationResponse, inboundPayload);
+        }
+        if ("OSI_PRESENTATION_PPDU".equals(inboundKind)) {
+            byte[] acse = wrapAcseEnvelope(applicationResponse, null);
+            return wrapPresentationEnvelope(acse, inboundPayload);
+        }
+        if ("OSI_SESSION_SPDU".equals(inboundKind)) {
+            return wrapSessionEnvelope(applicationResponse, inboundPayload);
+        }
+        return applicationResponse;
+    }
+
+    private byte[] wrapSessionEnvelope(byte[] applicationResponse, byte[] inboundPayload) {
+        if (inboundPayload == null || inboundPayload.length == 0) {
+            return applicationResponse;
+        }
+        int berOffset = findFirstBerOffset(inboundPayload);
+        if (berOffset < 0) {
+            return applicationResponse;
+        }
+        byte[] prefix = Arrays.copyOfRange(inboundPayload, 0, berOffset);
+        byte[] nested = Arrays.copyOfRange(inboundPayload, berOffset, inboundPayload.length);
+        String nestedKind = classifyRfc1006Payload(nested);
+        byte[] wrappedNested = rewrapApplicationPduForRfc1006Response(applicationResponse, nestedKind, nested);
+        byte[] wrapped = new byte[prefix.length + wrappedNested.length];
+        System.arraycopy(prefix, 0, wrapped, 0, prefix.length);
+        System.arraycopy(wrappedNested, 0, wrapped, prefix.length, wrappedNested.length);
+        return wrapped;
+    }
+
+    private int findFirstBerOffset(byte[] payload) {
+        for (int i = 0; i < payload.length - 1; i++) {
+            byte[] slice = Arrays.copyOfRange(payload, i, payload.length);
+            if (!looksLikeBerApdu(slice)) {
+                continue;
+            }
+            try {
+                BerCodec.decodeSingle(slice);
+                return i;
+            } catch (RuntimeException ignored) {
+                // continue scanning
+            }
+        }
+        return -1;
+    }
+
+    private byte[] wrapPresentationEnvelope(byte[] payload, byte[] inboundPresentation) {
+        byte[] userData = BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, 30, 0, payload.length, payload));
+        try {
+            if (inboundPresentation != null && inboundPresentation.length > 0) {
+                BerTlv inbound = BerCodec.decodeSingle(inboundPresentation);
+                return BerCodec.encode(new BerTlv(inbound.tagClass(), true, inbound.tagNumber(), 0, userData.length, userData));
+            }
+        } catch (RuntimeException ex) {
+            logger.debug("Failed to preserve inbound presentation envelope: {}", ex.getMessage());
+        }
+        return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, 1, 0, userData.length, userData));
+    }
+
+    private byte[] wrapAcseEnvelope(byte[] payload, byte[] inboundAcse) {
+        byte[] userInfo = BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, 30, 0, payload.length, payload));
+        try {
+            if (inboundAcse != null && inboundAcse.length > 0) {
+                BerTlv inbound = BerCodec.decodeSingle(inboundAcse);
+                int responseTag = inbound.tagClass() == TAG_CLASS_APPLICATION && inbound.tagNumber() == 0 ? 1 : inbound.tagNumber();
+                return BerCodec.encode(new BerTlv(inbound.tagClass(), true, responseTag, 0, userInfo.length, userInfo));
+            }
+        } catch (RuntimeException ex) {
+            logger.debug("Failed to preserve inbound ACSE envelope: {}", ex.getMessage());
+        }
+        return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, 1, 0, userInfo.length, userInfo));
     }
 
     private enum ProtocolKind {
