@@ -1,6 +1,7 @@
 package it.amhs.compliance;
 
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -44,7 +45,10 @@ public class SecurityLabelPolicy {
                     throw new IllegalArgumentException("Invalid security label compartment: " + compartment);
                 }
             })
-            .collect(Collectors.toUnmodifiableSet());
+            .collect(Collectors.collectingAndThen(
+                Collectors.toCollection(LinkedHashSet::new),
+                Set::copyOf
+            ));
 
         return new ParsedLabel(classification, compartments);
     }
@@ -61,6 +65,8 @@ public class SecurityLabelPolicy {
         if ("UNCLASSIFIED".equals(parsed.classification()) && !parsed.compartments().isEmpty()) {
             throw new IllegalArgumentException("UNCLASSIFIED labels cannot define compartments");
         }
+
+        // External profile claim processing is intentionally out of scope for now.
     }
 
     public boolean dominates(String leftLabel, String rightLabel) {
