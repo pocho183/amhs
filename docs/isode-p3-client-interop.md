@@ -9,12 +9,13 @@ The P3 listener can be run in two profiles.
 - `STANDARD_P3` (default): accepts only RFC1006/TPKT traffic for a standards-aligned external P3 exposure.
 - `GATEWAY_MULTI_PROTOCOL`: legacy gateway mode that accepts raw BER APDUs and RFC1006/TPKT on the same endpoint (no line text command console).
 
-The gateway semantics are still not a complete ICAO-certified end-to-end X.411/P3 stack.
+The gateway semantics are aligned to the declared gateway P3 profile and now include deterministic RTSE/ROSE wrapping behavior for the supported operation set.
 
 - Supported operations depend on profile:
   - `STANDARD_P3`: RFC1006 COTP DT payloads carrying OSI Session/Presentation/ACSE envelopes when those envelopes contain gateway BER APDUs
   - `GATEWAY_MULTI_PROTOCOL`: allows raw BER APDUs in addition to RFC1006/TPKT
-- The gateway now accepts ROSE `Invoke` wrappers for bind/submit/status/release and returns ROSE `returnResult`/`returnError` mapped to gateway APDU outcomes.
+- The gateway accepts ROSE `Invoke` wrappers for bind/submit/status/release and returns ROSE `returnResult`/`returnError` mapped to gateway APDU outcomes.
+- The RTSE layer now enforces deterministic wrapper semantics for the supported transfer controls (`RTORQ`/`RTOAC`, `RTTD`/`RTTR`, `RTAB`, and explicit `RTORJ` handling for unsupported RTSE tags).
 - Formal association handling is enforced for bind/release:
   - bind is allowed only once per association
   - release before bind is rejected

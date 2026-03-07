@@ -41,7 +41,7 @@ Legend:
 | A-06 | Authentication-value semantics | P | Implemented for configured policy checks, not exhaustive profile-semantic coverage. |
 | A-07 | P3 bind/re-bind/release error semantics | Y | Single-bind association policy, release-before-bind diagnostics, and post-release association-closed diagnostics are enforced. |
 | U-01 | ROSE operation coverage for full P3 service set | P | Bind/submit/status/release/report operations are mapped with deterministic error envelopes, but complete profile-wide ROSE operation/error coverage is still pending. |
-| U-02 | RTSE behavior coverage | N | RTSE stack behavior is not implemented as a complete profile-conformant layer. |
+| U-02 | RTSE behavior coverage | Y | RTSE wrapper semantics are implemented for the declared gateway profile operations, including deterministic `RTORQ`/`RTOAC`, `RTTD`/`RTTR`, `RTAB`, and `RTORJ` rejection paths. |
 | U-03 | Session semantics beyond wrapper preservation | P | Session/presentation envelopes are preserved/rewrapped in supported gateway paths. |
 | U-04 | Complete X.411/P3 service behavior and error semantics | P | Gateway service now provides explicit bind/submit/status/report/release behavior with deterministic error semantics; full externally certifiable profile breadth remains pending. |
 | P1-01 | BER parsing for P1-like envelope | Y | Structured BER/TLV support in parser. |
@@ -85,7 +85,7 @@ This implementation exposes a **gateway-oriented P3 profile** and does not curre
 ### 4.2 Declared limitations for P3
 
 - ROSE operation/error mapping is implemented for the declared gateway operation subset (bind, submit, status, report, release), but full profile-wide operation coverage is still pending.
-- No claim of complete RTSE/session behavior as required by fully profile-complete peers.
+- RTSE wrapper behavior is implemented for the declared gateway operation subset; broader external profile breadth beyond the gateway declaration remains out of scope.
 - Presentation/ACSE negotiation semantics are implemented for supported paths only, not as a universal full interoperability surface.
 - Security label behavior now enforces Doc 9880-style classification ordering and compartment dominance for gateway labels, but full certifiable policy scope remains pending.
 
