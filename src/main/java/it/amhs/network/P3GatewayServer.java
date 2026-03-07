@@ -2,6 +2,7 @@ package it.amhs.network;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.EOFException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -9,6 +10,7 @@ import java.io.PrintWriter;
 import java.io.PushbackInputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.net.SocketException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
@@ -109,8 +111,17 @@ public class P3GatewayServer {
 
             handleAsn1Session(session, input, output);
         } catch (Exception ex) {
+            if (isExpectedDisconnect(ex)) {
+                logger.debug("P3 gateway client session ended before a complete request was received: {}", ex.getMessage());
+                return;
+            }
             logger.warn("P3 gateway client session closed with error: {}", ex.getMessage());
         }
+    }
+
+    private boolean isExpectedDisconnect(Exception ex) {
+        return ex instanceof EOFException
+            || ex instanceof SocketException;
     }
 
     private void handleTextSession(P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
