@@ -68,7 +68,7 @@ public class P3GatewayServer {
 
     public P3GatewayServer(
         @Value("${amhs.p3.gateway.host:0.0.0.0}") String host,
-        @Value("${amhs.p3.gateway.port:1988}") int port,
+        @Value("${amhs.p3.gateway.port:102}") int port,
         @Value("${amhs.p3.gateway.max-sessions:64}") int maxSessions,
         @Value("${amhs.p3.gateway.tls.enabled:false}") boolean tlsEnabled,
         @Value("${amhs.p3.gateway.tls.need-client-auth:false}") boolean needClientAuth,
@@ -90,6 +90,12 @@ public class P3GatewayServer {
         this.needClientAuth = needClientAuth;
         this.textWelcomeEnabled = textWelcomeEnabled;
         this.listenerProfile = ListenerProfile.from(listenerProfile);
+        if (this.listenerProfile == ListenerProfile.STANDARD_P3) {
+            logger.warn(
+                "amhs.p3.gateway.listener-profile=STANDARD_P3 restricts transport ingress to RFC1006/TPKT only, "
+                    + "but this gateway is not a formally complete X.411 P3 stack (ROSE/RTSE/ACSE/session/presentation semantics remain profile-limited)"
+            );
+        }
         this.tls = tls;
         this.sessionService = sessionService;
         this.asn1GatewayProtocol = asn1GatewayProtocol;
