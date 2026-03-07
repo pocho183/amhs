@@ -43,6 +43,19 @@ class P3GatewayServerProtocolDetectionTest {
         assertEquals("BER_APDU", protocol.toString());
     }
 
+
+    @Test
+    void prioritizesBerDetectionForPrintableAcseTags() throws Exception {
+        Object aarq = detectProtocol.invoke(server, (Object) new byte[] { 0x60, 0x03, 0x01, 0x01, 0x00 });
+        Object aareOrPpdu = detectProtocol.invoke(server, (Object) new byte[] { 0x61, 0x03, 0x01, 0x01, 0x00 });
+        Object tag62 = detectProtocol.invoke(server, (Object) new byte[] { 0x62, 0x03, 0x01, 0x01, 0x00 });
+        Object tag64 = detectProtocol.invoke(server, (Object) new byte[] { 0x64, 0x03, 0x01, 0x01, 0x00 });
+
+        assertEquals("BER_APDU", aarq.toString());
+        assertEquals("BER_APDU", aareOrPpdu.toString());
+        assertEquals("BER_APDU", tag62.toString());
+        assertEquals("BER_APDU", tag64.toString());
+    }
     @Test
     void classifiesSessionSpduByLeadingOctet() throws Exception {
         Object kind = classifyRfc1006Payload.invoke(server, (Object) new byte[] { 0x0D, 0x10, 0x00 });

@@ -408,9 +408,6 @@ public class P3GatewayServer {
 
     private ProtocolKind detectProtocol(byte[] preview) {
         int firstOctet = preview[0] & 0xFF;
-        if (isAsciiCommand(firstOctet)) {
-            return ProtocolKind.TEXT_COMMAND;
-        }
         if (looksLikeRfc1006Tpkt(preview)) {
             return ProtocolKind.RFC1006_TPKT;
         }
@@ -419,6 +416,9 @@ public class P3GatewayServer {
         }
         if (looksLikeBerApdu(preview)) {
             return ProtocolKind.BER_APDU;
+        }
+        if (isAsciiCommand(firstOctet)) {
+            return ProtocolKind.TEXT_COMMAND;
         }
         return ProtocolKind.UNKNOWN_BINARY;
     }
