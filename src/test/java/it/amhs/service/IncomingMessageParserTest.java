@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
+import it.amhs.compliance.SecurityLabelPolicy;
 import it.amhs.service.protocol.p1.IncomingMessageParser;
 import it.amhs.service.protocol.p1.P1BerMessageParser;
 import it.amhs.service.protocol.p1.P1AssociationProtocol;
@@ -16,7 +17,7 @@ import it.amhs.service.protocol.rfc1006.RFC1006Service;
 
 class IncomingMessageParserTest {
 
-    private final IncomingMessageParser parser = new IncomingMessageParser(new P1BerMessageParser(), new P1AssociationProtocol(), "LOCAL-MTA", "LOCAL");
+    private final IncomingMessageParser parser = new IncomingMessageParser(new P1BerMessageParser(new SecurityLabelPolicy()), new P1AssociationProtocol(), "LOCAL-MTA", "LOCAL");
 
     @Test
     void shouldParseBerPayloadEvenWhenPrefixedByGarbageBytes() {

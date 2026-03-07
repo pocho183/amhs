@@ -1,6 +1,7 @@
 package it.amhs.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -11,11 +12,12 @@ import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
 import it.amhs.domain.AMHSPriority;
 import it.amhs.domain.AMHSProfile;
+import it.amhs.compliance.SecurityLabelPolicy;
 import it.amhs.service.protocol.p1.P1BerMessageParser;
 
 class P1BerMessageParserTest {
 
-    private final P1BerMessageParser parser = new P1BerMessageParser();
+    private final P1BerMessageParser parser = new P1BerMessageParser(new SecurityLabelPolicy());
 
     @Test
     void shouldParseP1BerSequenceWithOptionalAndChoice() {
@@ -152,6 +154,28 @@ class P1BerMessageParserTest {
         P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
         assertEquals("SECRET", parsed.transferEnvelope().securityParameters().orElseThrow().securityLabel());
         assertEquals(1, parsed.transferEnvelope().unknownExtensions().size());
+    }
+
+
+    @Test
+    void shouldRejectUnsupportedSecurityClassification() {
+        byte[] security = sequence(
+            contextUtf8(0, "COSMIC"),
+            contextPrimitive(1, "TOKEN-1"),
+            contextPrimitive(2, "1.2.3.4")
+        );
+
+        byte[] envelope = sequence(contextConstructed(5, security));
+
+        byte[] payloadContent = concat(
+            contextPrimitive(0, "LIRRZQZX"),
+            contextPrimitive(1, "LIIRYAYX"),
+            contextUtf8(2, "Hello"),
+            contextConstructed(9, envelope)
+        );
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, payloadContent.length, payloadContent));
+
+        assertThrows(IllegalArgumentException.class, () -> parser.parse(payload));
     }
 
     @Test
