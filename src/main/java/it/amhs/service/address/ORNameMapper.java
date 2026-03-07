@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Locale;
 
 import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
@@ -50,7 +51,8 @@ public final class ORNameMapper {
         }
 
         if (attributes.isEmpty() && directoryName.isPresent()) {
-            attributes.put("CN", directoryName.get());
+            attributes.putAll(mapDirectoryNameToOrAddress(directoryName.get()));
+            attributes.putIfAbsent("CN", directoryName.get());
         }
 
         if (attributes.isEmpty()) {
@@ -83,6 +85,42 @@ public final class ORNameMapper {
             throw new IllegalArgumentException("DirectoryName does not contain decodable attributes");
         }
         return String.join(",", values);
+    }
+
+    private static Map<String, String> mapDirectoryNameToOrAddress(String directoryName) {
+        Map<String, String> mapped = new LinkedHashMap<>();
+        for (String token : directoryName.split(",")) {
+            int equalsIndex = token.indexOf('=');
+            if (equalsIndex <= 0) {
+                continue;
+            }
+            String type = token.substring(0, equalsIndex).trim().toUpperCase(Locale.ROOT);
+            String value = token.substring(equalsIndex + 1).trim();
+            if (value.isEmpty()) {
+                continue;
+            }
+
+            switch (type) {
+                case "C" -> mapped.putIfAbsent("C", value);
+                case "O" -> mapped.putIfAbsent("O", value);
+                case "OU" -> {
+                    if (!mapped.containsKey("OU1")) {
+                        mapped.put("OU1", value);
+                    } else if (!mapped.containsKey("OU2")) {
+                        mapped.put("OU2", value);
+                    } else if (!mapped.containsKey("OU3")) {
+                        mapped.put("OU3", value);
+                    } else if (!mapped.containsKey("OU4")) {
+                        mapped.put("OU4", value);
+                    }
+                }
+                case "CN" -> mapped.putIfAbsent("CN", value);
+                default -> {
+                    // Ignore non O/R-address attributes while preserving canonical directoryName.
+                }
+            }
+        }
+        return mapped;
     }
 
     private static List<String> decodeDirectoryDistinguishedName(List<BerTlv> roots) {
