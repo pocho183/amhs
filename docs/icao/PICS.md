@@ -59,7 +59,7 @@ Legend:
 | SEC-02 | Certificate CN/OU channel policy | Y | Channel policy and sender binding checks. |
 | SEC-03 | Full PKI path validation profile | P | Baseline checks present; full ATN PKI profile evidence package remains to be completed. |
 | SEC-04 | CRL / OCSP runtime enforcement | P | Partial support may depend on runtime configuration; not asserted as complete profile enforcement. |
-| SEC-05 | Security label enforcement (Doc 9880) | N | No formal full Doc 9880 security label enforcement claim. |
+| SEC-05 | Security label enforcement (Doc 9880) | P | Classification ordering + compartment dominance semantics are enforced for gateway security labels; full external profile claim remains out of scope. |
 | R-01 | Outbound relay routing table | Y | Prefix-based route selection implemented. |
 | R-02 | Alternate route fallback | Y | Alternate next-hop path supported. |
 | R-03 | Retry with exponential backoff | Y | Retry policy and dead-letter path supported. |
@@ -87,7 +87,7 @@ This implementation exposes a **gateway-oriented P3 profile** and does not curre
 - ROSE operation/error mapping is implemented for the declared gateway operation subset (bind, submit, status, report, release), but full profile-wide operation coverage is still pending.
 - No claim of complete RTSE/session behavior as required by fully profile-complete peers.
 - Presentation/ACSE negotiation semantics are implemented for supported paths only, not as a universal full interoperability surface.
-- Security label behavior (Doc 9880-style policy semantics) is not fully implemented.
+- Security label behavior now enforces Doc 9880-style classification ordering and compartment dominance for gateway labels, but full certifiable policy scope remains pending.
 
 ### 4.3 Interoperability posture
 

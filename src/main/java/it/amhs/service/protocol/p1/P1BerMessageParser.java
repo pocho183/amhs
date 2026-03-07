@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
+import it.amhs.compliance.SecurityLabelPolicy;
 import it.amhs.domain.AMHSPriority;
 import it.amhs.domain.AMHSProfile;
 import it.amhs.service.protocol.p1.ExtensibilityContainers.ExtensionContainer;
@@ -25,6 +26,12 @@ import it.amhs.service.address.ORNameMapper;
 
 @Component
 public class P1BerMessageParser {
+
+    private final SecurityLabelPolicy securityLabelPolicy;
+
+    public P1BerMessageParser(SecurityLabelPolicy securityLabelPolicy) {
+        this.securityLabelPolicy = securityLabelPolicy;
+    }
 
     public ParsedP1Message parse(byte[] payload) {
         BerTlv root = BerCodec.decodeSingle(payload);
@@ -128,7 +135,7 @@ public class P1BerMessageParser {
         String token = BerCodec.findOptional(fields, 2, 1).map(v -> new String(v.value(), StandardCharsets.US_ASCII)).orElse("NONE");
         String oid = BerCodec.findOptional(fields, 2, 2).map(v -> new String(v.value(), StandardCharsets.US_ASCII)).orElse("1.2.840.113549.1.1.1");
         SecurityParameters parameters = new SecurityParameters(label, token, oid);
-        parameters.validate();
+        securityLabelPolicy.validate(parameters);
         return parameters;
     }
 
