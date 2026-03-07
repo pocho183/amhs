@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLServerSocket;
@@ -44,6 +45,7 @@ public class P3GatewayServer {
     private final P3GatewaySessionService sessionService;
     private final P3Asn1GatewayProtocol asn1GatewayProtocol;
     private final ExecutorService clientExecutor;
+    private final AtomicLong connectionSequence = new AtomicLong(0);
 
     public P3GatewayServer(
         @Value("${amhs.p3.gateway.host:0.0.0.0}") String host,
@@ -91,12 +93,13 @@ public class P3GatewayServer {
     private void acceptLoop(ServerSocket server) throws Exception {
         while (true) {
             Socket socket = server.accept();
-            logger.info("P3 gateway connection from {}", socket.getInetAddress());
-            clientExecutor.execute(() -> handleClient(socket));
+            long connectionId = connectionSequence.incrementAndGet();
+            logger.info("P3 gateway connection #{} from {}:{} to local-port={}", connectionId, socket.getInetAddress(), socket.getPort(), socket.getLocalPort());
+            clientExecutor.execute(() -> handleClient(connectionId, socket));
         }
     }
 
-    private void handleClient(Socket socket) {
+    private void handleClient(long connectionId, Socket socket) {
         try (socket;
              PushbackInputStream input = new PushbackInputStream(socket.getInputStream(), 1);
              OutputStream output = socket.getOutputStream()) {
@@ -117,10 +120,10 @@ public class P3GatewayServer {
             handleAsn1Session(session, input, output);
         } catch (Exception ex) {
             if (isExpectedDisconnect(ex)) {
-                logger.debug("P3 gateway client session ended before a complete request was received: {}", ex.getMessage());
+                logger.debug("P3 gateway connection #{} ended before a complete request was received: {}", connectionId, ex.getMessage());
                 return;
             }
-            logger.warn("P3 gateway client session closed with error: {}", ex.getMessage());
+            logger.warn("P3 gateway connection #{} closed with error: {}", connectionId, ex.getMessage());
         }
     }
 
@@ -129,7 +132,7 @@ public class P3GatewayServer {
             || ex instanceof SocketException;
     }
 
-    private void handleTextSession(P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
+    private void handleTextSession(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
         throws Exception {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
              PrintWriter writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8)), true)) {
@@ -144,23 +147,30 @@ public class P3GatewayServer {
                 String response = sessionService.handleCommand(session, line);
                 writer.println(response);
                 if (session.isClosed()) {
+                    logger.info("P3 gateway connection #{} text session closed by command {}", connectionId, commandName);
                     return;
                 }
             }
         }
     }
 
-    private void handleAsn1Session(P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
+    private void handleAsn1Session(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
         throws Exception {
+        int pduIndex = 0;
         while (true) {
             byte[] pdu = asn1GatewayProtocol.readPdu(input);
             if (pdu == null) {
+                logger.info("P3 gateway connection #{} BER session closed by peer after {} APDU(s)", connectionId, pduIndex);
                 return;
             }
+            pduIndex++;
+            logger.info("P3 gateway connection #{} BER APDU #{} len={} first-byte=0x{}", connectionId, pduIndex, pdu.length, toHex(pdu[0]));
             byte[] response = asn1GatewayProtocol.handle(session, pdu);
             output.write(response);
             output.flush();
+            logger.debug("P3 gateway connection #{} BER APDU #{} response-len={}", connectionId, pduIndex, response.length);
             if (session.isClosed()) {
+                logger.info("P3 gateway connection #{} BER session closed by release after {} APDU(s)", connectionId, pduIndex);
                 return;
             }
         }
