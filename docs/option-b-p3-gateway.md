@@ -63,8 +63,8 @@ Add a dedicated section to avoid overloading RFC1006/P1 settings:
 
 ## Validation checklist
 
-1. ISODE P3 client can bind/unbind successfully.
-2. Submit from P3 is stored with `AMHSProfile.P3` and valid O/R mappings.
+1. A client speaking the configured P3 gateway profile can bind/unbind successfully.
+2. Submit from the gateway P3 profile is stored with `AMHSProfile.P3` and valid O/R mappings.
 3. Existing P1 listener interoperability tests still pass unchanged.
 4. Negative cases return explicit protocol diagnostics (auth failure, invalid OR, unsupported operation).
 
