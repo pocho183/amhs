@@ -41,6 +41,8 @@ public class P3Asn1GatewayProtocol {
 
     private static final int RTSE_RTORQ = 16;
     private static final int RTSE_RTOAC = 17;
+    private static final int RTSE_RTORJ = 18;
+    private static final int RTSE_RTAB = 19;
     private static final int RTSE_RTTR = 21;
     private static final int RTSE_RTTD = 22;
 
@@ -96,10 +98,19 @@ public class P3Asn1GatewayProtocol {
     }
 
     private byte[] handleRtse(P3GatewaySessionService.SessionState session, BerTlv rtseApdu) {
+        if (rtseApdu.tagNumber() == RTSE_RTAB) {
+            String response = sessionService.handleCommand(session, "UNBIND");
+            if (response.startsWith("OK")) {
+                return wrapRtseResponse(RTSE_RTAB, envelope(APDU_RELEASE_RESPONSE, new byte[0]));
+            }
+            return wrapRtseResponse(RTSE_RTAB, errorFromResponse(response));
+        }
+
         byte[] nestedApdu = findGatewayOrRoseApdu(rtseApdu);
         if (nestedApdu == null) {
             return wrapRtseResponse(rtseApdu.tagNumber(), error("unsupported-operation", "RTSE APDU did not contain a supported gateway operation"));
         }
+
         byte[] nestedResponse = handle(session, nestedApdu);
         return wrapRtseResponse(rtseApdu.tagNumber(), nestedResponse);
     }
@@ -129,7 +140,9 @@ public class P3Asn1GatewayProtocol {
         int responseTag = switch (inboundRtseTag) {
             case RTSE_RTORQ -> RTSE_RTOAC;
             case RTSE_RTTD -> RTSE_RTTR;
-            default -> inboundRtseTag;
+            case RTSE_RTOAC, RTSE_RTTR -> RTSE_RTORJ;
+            case RTSE_RTORJ, RTSE_RTAB -> inboundRtseTag;
+            default -> RTSE_RTORJ;
         };
         byte[] any = BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, 0, 0, nestedResponse.length, nestedResponse));
         return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, responseTag, 0, any.length, any));

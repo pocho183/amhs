@@ -81,6 +81,33 @@ class P3Asn1GatewayProtocolTest {
     }
 
     @Test
+    void mapsRtabToReleaseResponse() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+
+        byte[] response = protocol.handle(session, rtseEnvelope(19, new byte[0]));
+        BerTlv rtse = BerCodec.decodeSingle(response);
+        assertEquals(1, rtse.tagClass());
+        assertEquals(19, rtse.tagNumber());
+
+        BerTlv any = BerCodec.decodeSingle(rtse.value());
+        BerTlv releaseResponse = BerCodec.decodeSingle(any.value());
+        assertEquals(P3Asn1GatewayProtocol.APDU_RELEASE_RESPONSE, releaseResponse.tagNumber());
+    }
+
+    @Test
+    void unsupportedRtseTagReturnsRtorj() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+
+        byte[] response = protocol.handle(sessionService.newSession(), rtseEnvelope(20, new byte[0]));
+        BerTlv rtse = BerCodec.decodeSingle(response);
+        assertEquals(1, rtse.tagClass());
+        assertEquals(18, rtse.tagNumber());
+    }
+
+    @Test
     void readPduReturnsNullAtEof() throws Exception {
         StubSessionService sessionService = new StubSessionService();
         P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
