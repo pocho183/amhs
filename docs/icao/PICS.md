@@ -34,7 +34,7 @@ Legend:
 | T-05 | COTP DR/ER handling | Y | Disconnect and error TPDUs handled. |
 | T-06 | Idle timeout / frame size guard | Y | Idle and max-frame controls enforced. |
 | A-01 | ACSE AARQ decoding and checks | Y | Application context and identity checks for supported gateway profile paths. |
-| A-02 | ACSE AARE structured response | Y | Result + diagnostic container emitted for supported flows. |
+| A-02 | ACSE AARE structured response | Y | Result + diagnostic container emitted for supported flows, including deterministic rejection diagnostics for invalid AARQ profile elements. |
 | A-03 | Presentation context negotiation | P | Basic/controlled negotiation support; not a full profile-complete negotiation stack. |
 | A-04 | ACSE user-information semantics | P | Supported through constrained EXTERNAL/OCTET STRING handling path. |
 | A-05 | AP-title / AE-qualifier structures | P | Core structures supported; not a broad complete ACSE interoperability claim. |
