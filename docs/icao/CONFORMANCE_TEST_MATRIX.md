@@ -11,7 +11,7 @@ This matrix is intended to close the "documentation layer" gap by mapping expect
 | ASN.1/BER | Validate tag/length/value robustness | `BerCodecTest`, `P1BerMessageParserTest` | Add official X.411 module tag traceability table |
 | ROSE/RTSE upper layers | Validate full operation/error semantics and transfer/session behavior | Gateway-focused APDU/session tests | Implement full profile-complete ROSE/RTSE coverage or maintain explicit non-claim |
 | P1/P3 gateway handling | Validate envelope/content, recipient and trace behaviors in gateway profile | `P1AssociationProtocolTest`, parser tests | Add interoperability captures against certified MTA and evidence of unsupported full P3 service semantics |
-| O/R Address | Validate address grammar and policy checks | `ORAddressTest`, `AMHSComplianceValidatorTest` | Expand to full ORName CHOICE and legacy string variants |
+| O/R Address | Validate address grammar and policy checks | `ORAddressTest`, `AMHSComplianceValidatorTest`, `ORNameMapperTest` | Maintain interoperability vectors for additional peer-specific legacy encodings |
 | Security/PKI | Validate identity binding and TLS behavior | `AMHSComplianceValidatorTest`, TLS runtime config | Add CRL/OCSP tests and ATN PKI profile statement |
 | Routing/S&F | Validate route selection, retries, fallback, loop detect | `RelayRoutingServiceTest`, `OutboundRelayEngineTest` | Add sustained-load and recovery tests |
 | DR/NDR | Validate report lifecycle and correlation | `AMHSDeliveryReportService` + repository/domain model | Add peer-wire campaign proving canonical ITU-T X.411 ASN.1 tag numbering (current checks are profile-table based) |

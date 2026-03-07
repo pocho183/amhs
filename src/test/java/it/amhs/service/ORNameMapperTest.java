@@ -66,7 +66,41 @@ class ORNameMapperTest {
         ORNameMapper.ORName decoded = ORNameMapper.fromBer(directoryNameChoice);
 
         assertEquals("CN=LIRRATCX,OU=AMHS", decoded.directoryName().orElseThrow());
-        assertEquals("/CN=CN=LIRRATCX,OU=AMHS", decoded.orAddress().toCanonicalString());
+        assertEquals("/OU1=AMHS/CN=LIRRATCX", decoded.orAddress().toCanonicalString());
+    }
+
+
+    @Test
+    void shouldMapDirectoryNameCountryAndOrganizationToOrAddressWhenOrAddressChoiceMissing() {
+        byte[] cAtv = sequence(
+            oid("2.5.4.6"),
+            printable("IT")
+        );
+        byte[] oAtv = sequence(
+            oid("2.5.4.10"),
+            printable("ENAV")
+        );
+        byte[] ouAtv = sequence(
+            oid("2.5.4.11"),
+            printable("LIRRZQZX")
+        );
+        byte[] cnAtv = sequence(
+            oid("2.5.4.3"),
+            printable("LIRRATCX")
+        );
+
+        byte[] name = sequence(
+            set(cAtv),
+            set(oAtv),
+            set(ouAtv),
+            set(cnAtv)
+        );
+
+        BerTlv directoryNameChoice = new BerTlv(2, true, 0, 0, name.length, name);
+        ORNameMapper.ORName decoded = ORNameMapper.fromBer(directoryNameChoice);
+
+        assertEquals("C=IT,O=ENAV,OU=LIRRZQZX,CN=LIRRATCX", decoded.directoryName().orElseThrow());
+        assertEquals("/C=IT/O=ENAV/OU1=LIRRZQZX/CN=LIRRATCX", decoded.orAddress().toCanonicalString());
     }
 
     private static byte[] printable(String value) {
