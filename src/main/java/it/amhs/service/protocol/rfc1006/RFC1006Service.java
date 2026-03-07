@@ -11,7 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.time.Instant;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -467,13 +466,9 @@ public class RFC1006Service {
         if (!aarq.presentationContextOids().contains(ICAO_AMHS_P1_OID)) {
             throw new IllegalArgumentException("ACSE presentation contexts do not negotiate AMHS P1 abstract syntax");
         }
-        Set<String> seen = new HashSet<>();
         for (String oid : aarq.presentationContextOids()) {
             if (!StringUtils.hasText(oid)) {
                 throw new IllegalArgumentException("ACSE presentation context OID must not be empty");
-            }
-            if (!seen.add(oid)) {
-                throw new IllegalArgumentException("ACSE presentation contexts must not contain duplicates");
             }
         }
     }

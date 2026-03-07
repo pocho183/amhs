@@ -9,6 +9,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
+import it.amhs.asn1.BerCodec;
+import it.amhs.asn1.BerTlv;
+
 import org.junit.jupiter.api.Test;
 
 import it.amhs.service.protocol.acse.AcseAssociationProtocol;
@@ -99,6 +102,29 @@ class AcseAssociationProtocolTest {
         assertEquals(abrt, protocol.decode(protocol.encode(abrt)));
     }
 
+
+    @Test
+    void shouldDecodeInteroperablePresentationContextDefinitionList() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+
+        byte[] contextId = BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] {0x01}));
+        byte[] abstractSyntax = BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}));
+        byte[] transferSyntax = BerCodec.encode(new BerTlv(0, false, 6, 0, 2, new byte[] {0x51, 0x01}));
+        byte[] transferSyntaxList = BerCodec.encode(new BerTlv(0, true, 16, 0, transferSyntax.length, transferSyntax));
+        byte[] contextItemPayload = concat(contextId, abstractSyntax, transferSyntaxList);
+        byte[] contextItem = BerCodec.encode(new BerTlv(0, true, 16, 0, contextItemPayload.length, contextItemPayload));
+        byte[] contextList = BerCodec.encode(new BerTlv(0, true, 16, 0, contextItem.length, contextItem));
+        byte[] wrappedContextList = BerCodec.encode(new BerTlv(2, true, 29, 0, contextList.length, contextList));
+
+        byte[] apduPayload = concat(appCtx, wrappedContextList);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, apduPayload.length, apduPayload));
+
+        AcseModels.AARQApdu decoded = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(encoded));
+
+        assertEquals(List.of("2.6.0.1.6.1.1"), decoded.presentationContextOids());
+    }
+
     @Test
     void shouldRejectNonApplicationClassApdus() {
         byte[] invalidApdu = new byte[] {0x30, 0x00};
@@ -113,4 +139,18 @@ class AcseAssociationProtocolTest {
 
         assertArrayEquals(new byte[] {(byte) 0x61, 0x03, (byte) 0x82, 0x01, 0x01}, encoded);
     }
+    private static byte[] concat(byte[]... chunks) {
+        int total = 0;
+        for (byte[] chunk : chunks) {
+            total += chunk.length;
+        }
+        byte[] merged = new byte[total];
+        int offset = 0;
+        for (byte[] chunk : chunks) {
+            System.arraycopy(chunk, 0, merged, offset, chunk.length);
+            offset += chunk.length;
+        }
+        return merged;
+    }
+
 }
