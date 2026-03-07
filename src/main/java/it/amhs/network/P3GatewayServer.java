@@ -110,30 +110,14 @@ public class P3GatewayServer {
             }
             input.unread(first);
 
-            ProtocolKind protocol = detectProtocol(first);
-            logger.info("P3 gateway connection #{} first-octet=0x{} protocol={}", connectionId, toHex(first), protocol.logName);
-            switch (protocol) {
-                case TEXT_COMMAND -> {
-                    handleTextSession(connectionId, session, input, output);
-                    return;
-                }
-                case BER_APDU -> {
-                    handleAsn1Session(connectionId, session, input, output);
-                    return;
-                }
-                case RFC1006_TPKT -> {
-                    logger.warn("P3 gateway connection #{} received RFC1006/TPKT traffic on {}:{} from {}. Use the RFC1006 listener port for P1 traffic.", connectionId, host, port, socket.getInetAddress());
-                    return;
-                }
-                case TLS_CLIENT_HELLO -> {
-                    logger.warn("P3 gateway connection #{} received a TLS handshake on clear-text endpoint {}:{} from {}. Enable amhs.p3.gateway.tls.enabled or use the TLS endpoint.", connectionId, host, port, socket.getInetAddress());
-                    return;
-                }
-                case UNKNOWN_BINARY -> {
-                    logger.warn("P3 gateway connection #{} unsupported first octet 0x{} from {}. Expected text command or BER APDU.", connectionId, toHex(first), socket.getInetAddress());
-                    return;
-                }
+            if (isAsciiCommand(first)) {
+                logger.info("P3 gateway protocol=text-command remote={}", socket.getInetAddress());
+                handleTextSession(session, input, output);
+                return;
             }
+
+            logger.info("P3 gateway protocol=ber-apdu remote={}", socket.getInetAddress());
+            handleAsn1Session(session, input, output);
         } catch (Exception ex) {
             if (isExpectedDisconnect(ex)) {
                 logger.debug("P3 gateway connection #{} ended before a complete request was received: {}", connectionId, ex.getMessage());
@@ -148,8 +132,7 @@ public class P3GatewayServer {
             || ex instanceof SocketException;
     }
 
-    // Backward-compatible overload retained for branches/call-sites still using the previous signature.
-    private void handleTextSession(P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
+    private void handleTextSession(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
         throws Exception {
         handleTextSession(-1L, session, input, output);
     }
@@ -161,16 +144,11 @@ public class P3GatewayServer {
             if (textWelcomeEnabled) {
                 writer.println("OK code=gateway-ready");
             }
-            int commandIndex = 0;
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) {
-                    logger.debug("P3 gateway connection #{} ignored blank text line", connectionId);
                     continue;
                 }
-                commandIndex++;
-                String commandName = line.split("\\s+", 2)[0].toUpperCase();
-                logger.info("P3 gateway connection #{} text command #{} {}", connectionId, commandIndex, commandName);
                 String response = sessionService.handleCommand(session, line);
                 writer.println(response);
                 if (session.isClosed()) {
@@ -179,12 +157,6 @@ public class P3GatewayServer {
                 }
             }
         }
-    }
-
-    // Backward-compatible overload retained for branches/call-sites still using the previous signature.
-    private void handleAsn1Session(P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
-        throws Exception {
-        handleAsn1Session(-1L, session, input, output);
     }
 
     private void handleAsn1Session(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
@@ -233,26 +205,12 @@ public class P3GatewayServer {
         return (firstOctet & 0xE0) == 0xA0;
     }
 
-    private String toHex(byte octet) {
-        return toHex((int) octet);
-    }
-
-    private String toHex(int octet) {
-        return String.format("%02X", octet & 0xFF);
-    }
-
     private enum ProtocolKind {
-        TEXT_COMMAND("text-command"),
-        BER_APDU("ber-apdu"),
-        RFC1006_TPKT("rfc1006-tpkt"),
-        TLS_CLIENT_HELLO("tls-client-hello"),
-        UNKNOWN_BINARY("unknown-binary");
-
-        private final String logName;
-
-        ProtocolKind(String logName) {
-            this.logName = logName;
-        }
+        TEXT_COMMAND,
+        BER_APDU,
+        RFC1006_TPKT,
+        TLS_CLIENT_HELLO,
+        UNKNOWN_BINARY
     }
 
     private static final class NamedDaemonThreadFactory implements ThreadFactory {
