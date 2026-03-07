@@ -1,8 +1,12 @@
 package it.amhs.network;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.io.PushbackInputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -20,6 +24,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import it.amhs.service.protocol.p3.P3Asn1GatewayProtocol;
 import it.amhs.service.protocol.p3.P3GatewaySessionService;
 
 @Component
@@ -34,6 +39,7 @@ public class P3GatewayServer {
     private final boolean needClientAuth;
     private final SSLContext tls;
     private final P3GatewaySessionService sessionService;
+    private final P3Asn1GatewayProtocol asn1GatewayProtocol;
     private final ExecutorService clientExecutor;
 
     public P3GatewayServer(
@@ -43,7 +49,8 @@ public class P3GatewayServer {
         @Value("${amhs.p3.gateway.tls.enabled:false}") boolean tlsEnabled,
         @Value("${amhs.p3.gateway.tls.need-client-auth:false}") boolean needClientAuth,
         SSLContext tls,
-        P3GatewaySessionService sessionService
+        P3GatewaySessionService sessionService,
+        P3Asn1GatewayProtocol asn1GatewayProtocol
     ) {
         if (port < 1 || port > 65_535) {
             throw new IllegalArgumentException("amhs.p3.gateway.port out of range: " + port);
@@ -57,6 +64,7 @@ public class P3GatewayServer {
         this.needClientAuth = needClientAuth;
         this.tls = tls;
         this.sessionService = sessionService;
+        this.asn1GatewayProtocol = asn1GatewayProtocol;
         this.clientExecutor = Executors.newFixedThreadPool(maxSessions, new NamedDaemonThreadFactory());
     }
 
@@ -85,11 +93,31 @@ public class P3GatewayServer {
 
     private void handleClient(Socket socket) {
         try (socket;
-             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-             PrintWriter writer = new PrintWriter(socket.getOutputStream(), true, StandardCharsets.UTF_8)) {
+             PushbackInputStream input = new PushbackInputStream(socket.getInputStream(), 1);
+             OutputStream output = socket.getOutputStream()) {
             P3GatewaySessionService.SessionState session = sessionService.newSession();
-            writer.println("OK code=gateway-ready");
+            int first = input.read();
+            if (first < 0) {
+                return;
+            }
+            input.unread(first);
 
+            if (isAsciiCommand(first)) {
+                handleTextSession(session, input, output);
+                return;
+            }
+
+            handleAsn1Session(session, input, output);
+        } catch (Exception ex) {
+            logger.warn("P3 gateway client session closed with error: {}", ex.getMessage());
+        }
+    }
+
+    private void handleTextSession(P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
+        throws Exception {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
+             PrintWriter writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8)), true)) {
+            writer.println("OK code=gateway-ready");
             String line;
             while ((line = reader.readLine()) != null) {
                 String response = sessionService.handleCommand(session, line);
@@ -98,9 +126,27 @@ public class P3GatewayServer {
                     return;
                 }
             }
-        } catch (Exception ex) {
-            logger.warn("P3 gateway client session closed with error: {}", ex.getMessage());
         }
+    }
+
+    private void handleAsn1Session(P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
+        throws Exception {
+        while (true) {
+            byte[] pdu = asn1GatewayProtocol.readPdu(input);
+            if (pdu == null) {
+                return;
+            }
+            byte[] response = asn1GatewayProtocol.handle(session, pdu);
+            output.write(response);
+            output.flush();
+            if (session.isClosed()) {
+                return;
+            }
+        }
+    }
+
+    private boolean isAsciiCommand(int firstOctet) {
+        return firstOctet >= 0x20 && firstOctet <= 0x7E;
     }
 
     private static final class NamedDaemonThreadFactory implements ThreadFactory {
