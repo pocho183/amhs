@@ -49,6 +49,79 @@ class P3Asn1GatewayProtocolTest {
         assertEquals(pdu.length, read.length);
     }
 
+    @Test
+    void mapsRoseInvokeToReturnResult() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+
+        byte[] roseInvoke = roseInvoke(7, P3Asn1GatewayProtocol.APDU_BIND_REQUEST, bindPayload("amhsuser", "changeit", "/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice", "ATFM"));
+        byte[] response = protocol.handle(session, roseInvoke);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(1, responseTlv.tagClass());
+        assertEquals(2, responseTlv.tagNumber());
+
+        BerTlv sequence = BerCodec.decodeSingle(responseTlv.value());
+        assertEquals(16, sequence.tagNumber());
+        var fields = BerCodec.decodeAll(sequence.value());
+        assertEquals(2, fields.size());
+        assertEquals(2, fields.get(0).tagNumber());
+        assertEquals(7, fields.get(0).value()[0] & 0xFF);
+        assertEquals(P3Asn1GatewayProtocol.APDU_BIND_RESPONSE, fields.get(1).tagNumber());
+    }
+
+    @Test
+    void returnsRoseReturnErrorForUnsupportedRoseOperation() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+
+        byte[] roseInvoke = roseInvoke(5, 99, utf8Context(0, "noop"));
+        byte[] response = protocol.handle(session, roseInvoke);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(1, responseTlv.tagClass());
+        assertEquals(3, responseTlv.tagNumber());
+    }
+
+    private static byte[] roseInvoke(int invokeId, int operationCode, byte[] argumentApdu) {
+        byte[] sequence = BerCodec.encode(new BerTlv(
+            0,
+            true,
+            16,
+            0,
+            concat(
+                new BerTlv(0, false, 2, 0, 1, new byte[] { (byte) invokeId }),
+                new BerTlv(0, false, 2, 0, 1, new byte[] { (byte) operationCode }),
+                new BerTlv(2, true, 2, 0, argumentApdu.length, argumentApdu)
+            ).length,
+            concat(
+                new BerTlv(0, false, 2, 0, 1, new byte[] { (byte) invokeId }),
+                new BerTlv(0, false, 2, 0, 1, new byte[] { (byte) operationCode }),
+                new BerTlv(2, true, 2, 0, argumentApdu.length, argumentApdu)
+            )
+        ));
+        return BerCodec.encode(new BerTlv(1, true, 1, 0, sequence.length, sequence));
+    }
+
+    private static byte[] bindPayload(String username, String password, String sender, String channel) {
+        return concat(
+            utf8Context(0, username),
+            utf8Context(1, password),
+            utf8Context(2, sender),
+            utf8Context(3, channel)
+        );
+    }
+
+    private static byte[] concat(BerTlv... tlvs) {
+        byte[][] encoded = new byte[tlvs.length][];
+        for (int i = 0; i < tlvs.length; i++) {
+            encoded[i] = BerCodec.encode(tlvs[i]);
+        }
+        return concat(encoded);
+    }
+
     private static byte[] bindRequest(String username, String password, String sender, String channel) {
         byte[] payload = concat(
             utf8Context(0, username),
