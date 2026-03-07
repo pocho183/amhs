@@ -98,5 +98,6 @@ After startup, verify logs include:
 - Per connection protocol mode:
   - `protocol=text-command` or
   - `protocol=ber-apdu`
+- Repeated immediate reconnects with logs like `protocol=ber-apdu` and no successful bind usually indicate protocol/profile mismatch (for example, sending RFC1006/P1 traffic to the P3 gateway port).
 
 If your ISODE client connects but fails during bind/read semantics, this typically indicates expectation mismatch vs full native P3 behavior.

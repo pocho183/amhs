@@ -166,8 +166,36 @@ public class P3GatewayServer {
         }
     }
 
+    private ProtocolKind detectProtocol(int firstOctet) {
+        if (isAsciiCommand(firstOctet)) {
+            return ProtocolKind.TEXT_COMMAND;
+        }
+        if ((firstOctet & 0xFF) == 0x03) {
+            return ProtocolKind.RFC1006_TPKT;
+        }
+        if ((firstOctet & 0xFF) == 0x16) {
+            return ProtocolKind.TLS_CLIENT_HELLO;
+        }
+        if (isBerApduStart(firstOctet)) {
+            return ProtocolKind.BER_APDU;
+        }
+        return ProtocolKind.UNKNOWN_BINARY;
+    }
+
     private boolean isAsciiCommand(int firstOctet) {
         return firstOctet >= 0x20 && firstOctet <= 0x7E;
+    }
+
+    private boolean isBerApduStart(int firstOctet) {
+        return (firstOctet & 0xE0) == 0xA0;
+    }
+
+    private enum ProtocolKind {
+        TEXT_COMMAND,
+        BER_APDU,
+        RFC1006_TPKT,
+        TLS_CLIENT_HELLO,
+        UNKNOWN_BINARY
     }
 
     private static final class NamedDaemonThreadFactory implements ThreadFactory {
