@@ -71,8 +71,10 @@ public final class AcseModels {
     public enum AssociationState {
         IDLE,
         AWAITING_AARE,
+        AWAITING_AARE_RESPONSE,
         ESTABLISHED,
         AWAITING_RLRE,
+        AWAITING_RLRE_RESPONSE,
         ABORTED,
         CLOSED
     }
@@ -95,22 +97,33 @@ public final class AcseModels {
         private void transition(AcseApdu apdu, boolean outbound) {
             if (apdu instanceof AARQApdu) {
                 require(state == AssociationState.IDLE, "AARQ only allowed in IDLE state");
-                state = outbound ? AssociationState.AWAITING_AARE : AssociationState.ESTABLISHED;
+                state = outbound ? AssociationState.AWAITING_AARE : AssociationState.AWAITING_AARE_RESPONSE;
                 return;
             }
             if (apdu instanceof AAREApdu aare) {
-                require(state == AssociationState.AWAITING_AARE || state == AssociationState.ESTABLISHED,
-                    "AARE only allowed during association setup");
+                if (outbound) {
+                    require(state == AssociationState.AWAITING_AARE_RESPONSE,
+                        "Outbound AARE only allowed after inbound AARQ");
+                } else {
+                    require(state == AssociationState.AWAITING_AARE,
+                        "Inbound AARE only allowed after outbound AARQ");
+                }
                 state = aare.accepted() ? AssociationState.ESTABLISHED : AssociationState.CLOSED;
                 return;
             }
             if (apdu instanceof RLRQApdu) {
                 require(state == AssociationState.ESTABLISHED, "RLRQ only allowed in ESTABLISHED state");
-                state = AssociationState.AWAITING_RLRE;
+                state = outbound ? AssociationState.AWAITING_RLRE : AssociationState.AWAITING_RLRE_RESPONSE;
                 return;
             }
             if (apdu instanceof RLREApdu) {
-                require(state == AssociationState.AWAITING_RLRE, "RLRE only allowed after RLRQ");
+                if (outbound) {
+                    require(state == AssociationState.AWAITING_RLRE_RESPONSE,
+                        "Outbound RLRE only allowed after inbound RLRQ");
+                } else {
+                    require(state == AssociationState.AWAITING_RLRE,
+                        "Inbound RLRE only allowed after outbound RLRQ");
+                }
                 state = AssociationState.CLOSED;
                 return;
             }
