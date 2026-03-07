@@ -30,10 +30,6 @@ class P3Asn1GatewayProtocolTest {
         byte[] statusResponse = protocol.handle(session, statusRequest("sub-1", 1000, 200));
         BerTlv status = BerCodec.decodeSingle(statusResponse);
         assertEquals(P3Asn1GatewayProtocol.APDU_STATUS_RESPONSE, status.tagNumber());
-
-        byte[] readResponse = protocol.handle(session, readRequest("/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice", 1000, 200));
-        BerTlv read = BerCodec.decodeSingle(readResponse);
-        assertEquals(P3Asn1GatewayProtocol.APDU_READ_RESPONSE, read.tagNumber());
     }
 
     @Test
@@ -79,16 +75,6 @@ class P3Asn1GatewayProtocolTest {
             integerContext(2, retryMs)
         );
         return BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_STATUS_REQUEST, 0, payload.length, payload));
-    }
-
-
-    private static byte[] readRequest(String recipient, int waitMs, int retryMs) {
-        byte[] payload = concat(
-            utf8Context(0, recipient),
-            integerContext(1, waitMs),
-            integerContext(2, retryMs)
-        );
-        return BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_READ_REQUEST, 0, payload.length, payload));
     }
 
     private static byte[] utf8Context(int tagNumber, String value) {
@@ -146,7 +132,6 @@ class P3Asn1GatewayProtocolTest {
                 }
                 case "SUBMIT" -> "OK code=submitted submission-id=sub-1 message-id=42";
                 case "STATUS" -> "OK code=status submission-id=sub-1 message-id=42 state=REPORTED dr-status=DELIVERED ipn-status=REPORTED";
-                case "READ" -> "OK code=read report-id=99 message-id=MSG-1 recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice report-type=DR dr-status=DELIVERED";
                 case "UNBIND" -> {
                     yield "OK code=release";
                 }

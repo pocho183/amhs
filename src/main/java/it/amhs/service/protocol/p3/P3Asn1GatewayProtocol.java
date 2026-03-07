@@ -37,8 +37,6 @@ public class P3Asn1GatewayProtocol {
     static final int APDU_RELEASE_REQUEST = 6;
     static final int APDU_RELEASE_RESPONSE = 7;
     static final int APDU_ERROR = 8;
-    static final int APDU_READ_REQUEST = 9;
-    static final int APDU_READ_RESPONSE = 10;
 
     private final P3GatewaySessionService sessionService;
 
@@ -57,7 +55,6 @@ public class P3Asn1GatewayProtocol {
             case APDU_SUBMIT_REQUEST -> mapSubmit(session, apdu.value());
             case APDU_STATUS_REQUEST -> mapStatus(session, apdu.value());
             case APDU_RELEASE_REQUEST -> mapRelease(session);
-            case APDU_READ_REQUEST -> mapRead(session, apdu.value());
             default -> error("unsupported-operation", "Unsupported APDU " + apdu.tagNumber());
         };
     }
@@ -143,21 +140,6 @@ public class P3Asn1GatewayProtocol {
 
         if (response.startsWith("OK")) {
             return envelope(APDU_STATUS_RESPONSE, encodeKeyValuePayload(parseResponse(response)));
-        }
-        return errorFromResponse(response);
-    }
-
-
-    private byte[] mapRead(P3GatewaySessionService.SessionState session, byte[] payload) {
-        Map<Integer, String> fields = decodeContextUtf8Fields(payload);
-        String command = "READ"
-            + " recipient=" + value(fields.get(0))
-            + ";wait-timeout-ms=" + value(fields.get(1))
-            + ";retry-interval-ms=" + value(fields.get(2));
-        String response = sessionService.handleCommand(session, command);
-
-        if (response.startsWith("OK")) {
-            return envelope(APDU_READ_RESPONSE, encodeKeyValuePayload(parseResponse(response)));
         }
         return errorFromResponse(response);
     }

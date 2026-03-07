@@ -93,14 +93,10 @@ Il listener P3 supporta ora anche una modalità binaria BER oltre alla modalità
   - `6` = ReleaseRequest
   - `7` = ReleaseResponse
   - `8` = Error
-  - `9` = ReadRequest
-  - `10` = ReadResponse
 - I campi interni sono UTF8String/INTEGER in TLV context-specific annidati.
 - La semantica operativa resta allineata al gateway (bind/submit/status/release) con correlazione `submission-id`.
 
 > Nota interoperabilità: questa codifica BER è un profilo gateway applicativo e non sostituisce ancora uno stack P3 X.411 completo certificabile Doc 9880/9705 end-to-end.
->
-> Per integrazione con codice ISODE (`P3BindSession`, `X400Msg.sendMsg`, `readMsg`) consultare `docs/isode-p3-client-interop.md`.
 
 
 ---
