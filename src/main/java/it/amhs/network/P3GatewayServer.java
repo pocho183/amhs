@@ -275,12 +275,21 @@ public class P3GatewayServer {
             }
 
             pduIndex++;
-            logger.info("P3 gateway connection #{} RFC1006 BER APDU #{} len={} first-byte=0x{}", connectionId, pduIndex, pdu.length, toHexByte(pdu[0]));
+            String payloadKind = classifyRfc1006Payload(pdu);
+            logger.info(
+                "P3 gateway connection #{} RFC1006 payload #{} len={} first-byte=0x{} kind={} first-bytes={}",
+                connectionId,
+                pduIndex,
+                pdu.length,
+                toHexByte(pdu[0]),
+                payloadKind,
+                toHexPreview(pdu, 64)
+            );
             byte[] response = asn1GatewayProtocol.handle(session, pdu);
             sendRfc1006Dt(output, response);
-            logger.debug("P3 gateway connection #{} RFC1006 BER APDU #{} response-len={}", connectionId, pduIndex, response.length);
+            logger.debug("P3 gateway connection #{} RFC1006 payload #{} response-len={}", connectionId, pduIndex, response.length);
             if (session.isClosed()) {
-                logger.info("P3 gateway connection #{} RFC1006 BER session closed by release after {} APDU(s)", connectionId, pduIndex);
+                logger.info("P3 gateway connection #{} RFC1006 session closed by release after {} payload(s)", connectionId, pduIndex);
                 return;
             }
         }
@@ -435,6 +444,35 @@ public class P3GatewayServer {
             value.append(String.format("%02X", bytes[i] & 0xFF));
         }
         return value.toString();
+    }
+
+    private String toHexPreview(byte[] bytes, int maxBytes) {
+        if (bytes.length <= maxBytes) {
+            return toHex(bytes);
+        }
+        byte[] preview = new byte[maxBytes];
+        System.arraycopy(bytes, 0, preview, 0, maxBytes);
+        return toHex(preview) + " ...";
+    }
+
+    private String classifyRfc1006Payload(byte[] payload) {
+        if (payload.length == 0) {
+            return "EMPTY";
+        }
+        int firstOctet = payload[0] & 0xFF;
+        if (firstOctet == 0x0D || firstOctet == 0x01 || firstOctet == 0x0E) {
+            return "OSI_SESSION_SPDU";
+        }
+        if (firstOctet == 0x31 || firstOctet == 0x61 || firstOctet == 0x62) {
+            return "OSI_PRESENTATION_PPDU";
+        }
+        if (firstOctet == 0x60 || firstOctet == 0x61 || firstOctet == 0x64) {
+            return "ACSE_APDU";
+        }
+        if (looksLikeBerApdu(payload)) {
+            return "BER_APDU";
+        }
+        return "UNKNOWN_BINARY";
     }
 
     private enum ProtocolKind {
