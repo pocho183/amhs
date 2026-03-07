@@ -28,6 +28,14 @@ This PIXIT captures implementation-specific parameters required by a conformance
 - Expected ACSE flow: AARQ request followed by AARE response
 - Application context: checked against configured/expected OID policy
 - AE-title handling: parsed and compared with local policy
+- P3 listener profile option: `amhs.p3.gateway.listener-profile`
+  - `STANDARD_P3`: accepts only RFC1006/TPKT ingress (default for ICAO-facing exposure)
+  - `GATEWAY_MULTI_PROTOCOL`: accepts RFC1006/TPKT plus raw BER APDU ingress for interoperability labs
+- Formal association semantics on gateway APDUs:
+  - Exactly one successful bind is permitted per association
+  - Re-bind on a bound association returns an explicit association diagnostic
+  - Release before successful bind returns an explicit association diagnostic
+  - After successful release, all further operations return `association-closed`
 - Peer certificate identity binding:
   - Optional channel-level `expectedCn`
   - Optional channel-level `expectedOu`

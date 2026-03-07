@@ -15,6 +15,10 @@ The gateway semantics are still not a complete ICAO-certified end-to-end X.411/P
   - `STANDARD_P3`: RFC1006 COTP DT payloads carrying OSI Session/Presentation/ACSE envelopes when those envelopes contain gateway BER APDUs
   - `GATEWAY_MULTI_PROTOCOL`: allows raw BER APDUs in addition to RFC1006/TPKT
 - The gateway now accepts ROSE `Invoke` wrappers for bind/submit/status/release and returns ROSE `returnResult`/`returnError` mapped to gateway APDU outcomes.
+- Formal association handling is enforced for bind/release:
+  - bind is allowed only once per association
+  - release before bind is rejected
+  - post-release operations are rejected with an explicit association-closed diagnostic
 - Not yet supported:
   - full native ISODE P3 mailbox/read protocol semantics as expected by `P3BindSession` + `ReceiveMsg/readMsg(...)`.
 

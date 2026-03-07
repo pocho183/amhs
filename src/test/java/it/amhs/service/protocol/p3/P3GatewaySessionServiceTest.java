@@ -79,6 +79,96 @@ class P3GatewaySessionServiceTest {
         assertEquals("OK code=release", sessionService.handleCommand(session, "UNBIND"));
     }
 
+
+    @Test
+    void bindRejectsSecondBindOnSameAssociation() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+        assertTrue(sessionService.handleCommand(session,
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test")
+            .startsWith("OK code=bind-accepted"));
+
+        String secondBindResponse = sessionService.handleCommand(
+            session,
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test"
+        );
+
+        assertEquals("ERR code=association detail=Bind received on already bound association", secondBindResponse);
+    }
+
+    @Test
+    void unbindBeforeBindIsRejected() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            false,
+            "",
+            "",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        String response = sessionService.handleCommand(sessionService.newSession(), "UNBIND");
+
+        assertEquals("ERR code=association detail=Release received before bind", response);
+    }
+
+    @Test
+    void associationRejectsOperationsAfterRelease() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+        assertTrue(sessionService.handleCommand(session,
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test")
+            .startsWith("OK code=bind-accepted"));
+        assertEquals("OK code=release", sessionService.handleCommand(session, "UNBIND"));
+
+        String submitAfterRelease = sessionService.handleCommand(
+            session,
+            "SUBMIT recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIRRZZZX/CN=Bob Test;body=DATA"
+        );
+
+        assertEquals("ERR code=association-closed detail=Association already released", submitAfterRelease);
+    }
+
     @Test
     void submitBeforeBindIsRejected() {
         P3GatewaySessionService sessionService = new P3GatewaySessionService(

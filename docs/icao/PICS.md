@@ -39,6 +39,7 @@ Legend:
 | A-04 | ACSE user-information semantics | Y | Semantic checks and profile constraints are fully validated on inbound/outbound exchanges. |
 | A-05 | AP-title / AE-qualifier structures | Y | Complete AP-title/AE-qualifier structures are supported for ICAO profile interoperability. |
 | A-06 | Authentication-value semantics | Y | Authentication-value handling is fully validated and policy-enforced. |
+| A-07 | P3 bind/re-bind/release error semantics | Y | Single-bind association policy, release-before-bind diagnostics, and post-release association-closed diagnostics are enforced. |
 | P1-01 | BER parsing for P1-like envelope | Y | Structured BER/TLV support in parser. |
 | P1-02 | Envelope/content separation | Y | Envelope and content are separated. |
 | P1-03 | Per-recipient handling | Y | Per-recipient routing state supported. |

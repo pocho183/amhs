@@ -89,6 +89,10 @@ public class P3GatewaySessionService {
     }
 
     public String handleCommand(SessionState state, String rawCommand) {
+        if (state.closed) {
+            return "ERR code=association-closed detail=Association already released";
+        }
+
         String trimmed = rawCommand == null ? "" : rawCommand.trim();
         if (!StringUtils.hasText(trimmed)) {
             return "ERR code=invalid-command detail=Empty command";
@@ -117,6 +121,11 @@ public class P3GatewaySessionService {
     }
 
     private String bind(SessionState state, Map<String, String> attributes) {
+        if (state.bound) {
+            logger.warn("P3 bind rejected: bind requested on already bound association");
+            return "ERR code=association detail=Bind received on already bound association";
+        }
+
         String username = attributes.getOrDefault("username", "");
         String password = attributes.getOrDefault("password", "");
         String senderAddress = attributes.getOrDefault("sender", "");
@@ -400,6 +409,11 @@ public class P3GatewaySessionService {
     }
 
     private String unbind(SessionState state) {
+        if (!state.bound) {
+            logger.warn("P3 release rejected: release before bind");
+            return "ERR code=association detail=Release received before bind";
+        }
+
         state.bound = false;
         state.username = null;
         state.senderOrAddress = null;
