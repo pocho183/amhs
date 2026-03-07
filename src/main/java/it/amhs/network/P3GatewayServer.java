@@ -131,6 +131,15 @@ public class P3GatewayServer {
                 return;
             }
 
+            if (protocolKind == ProtocolKind.RFC1006_TPKT || protocolKind == ProtocolKind.TLS_CLIENT_HELLO) {
+                logger.info(
+                    "P3 gateway connection #{} rejected protocol={} (this endpoint expects text command or BER APDU over raw transport)",
+                    connectionId,
+                    protocolKind
+                );
+                return;
+            }
+
             logger.warn(
                 "P3 gateway connection #{} unexpected protocol={} (this endpoint expects text command or BER APDU over raw transport)",
                 connectionId,
