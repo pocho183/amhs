@@ -24,6 +24,13 @@ class AMHSComplianceValidatorTest {
         assertDoesNotThrow(() -> validator.validate("C=IT;A=ICAO;P=ROMA;O=ENAV;OU1=OPS;CN=LIRRZQZX", "LIRRZQZX", "body", it.amhs.domain.AMHSProfile.P1));
     }
 
+
+    @Test
+    void shouldRejectWhenIcaoUnitContainsDigits() {
+        assertThrows(IllegalArgumentException.class,
+            () -> validator.validate("C=IT;A=ICAO;P=ROMA;O=ENAV;OU1=LIRRZQZ1", "LIRRZQZX", "body", it.amhs.domain.AMHSProfile.P1));
+    }
+
     @Test
     void shouldRejectWhenCertificateDoesNotMatchIcaoUnit() {
         assertThrows(IllegalArgumentException.class,

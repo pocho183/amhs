@@ -53,7 +53,7 @@ Legend:
 | OR-01 | Structured O/R Address parsing | Y | Supports keyed O/R attribute model. |
 | OR-02 | OU sequencing validation (OU1..OU4) | Y | Enforces non-skipping OU order. |
 | OR-03 | ISO/Numeric country validation | Y | Country checks for C attribute. |
-| OR-04 | Full ORName CHOICE coverage | Y | DirectoryName-only and ORAddress-only CHOICE paths are decoded and normalized into canonical O/R attributes with ICAO validation hooks. |
+| OR-04 | Full ORName CHOICE coverage | Y | DirectoryName-only and ORAddress-only CHOICE paths are decoded and normalized into canonical O/R attributes with ICAO validation hooks, including strict 8-letter ICAO unit checks. |
 | OR-05 | Teletex/DirectoryName compatibility | Y | Teletex, BMPString, UniversalString, IA5 and PrintableString variants are decoded for DirectoryName/legacy paths. |
 | SEC-01 | TLS transport protection | Y | Server TLS supported; optional client auth. |
 | SEC-02 | Certificate CN/OU channel policy | Y | Channel policy and sender binding checks. |

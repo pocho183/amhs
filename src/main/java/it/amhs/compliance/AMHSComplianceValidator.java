@@ -15,7 +15,7 @@ import it.amhs.service.address.ORAddress;
 @Component
 public class AMHSComplianceValidator {
 
-    private static final Pattern ICAO_8_CHAR = Pattern.compile("^[A-Z0-9]{8}$");
+    private static final Pattern ICAO_8_CHAR = Pattern.compile("^[A-Z]{8}$");
     private static final Pattern NUMERIC_COUNTRY = Pattern.compile("^\\d{3}$");
     private static final Set<String> ISO_COUNTRIES = Set.of(Locale.getISOCountries());
 
@@ -122,7 +122,7 @@ public class AMHSComplianceValidator {
         }
 
         if (!containsIcaoUnit(orAddress)) {
-            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must contain an 8-character ICAO unit in OU, O or CN");
+            throw new IllegalArgumentException("AMHS " + fieldName + " O/R address must contain an 8-letter ICAO unit in OU, O or CN");
         }
 
         ensureOrderedOu(orAddress, fieldName);
