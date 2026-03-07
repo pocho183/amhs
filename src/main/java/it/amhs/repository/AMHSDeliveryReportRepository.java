@@ -12,4 +12,6 @@ import it.amhs.domain.AMHSMessage;
 public interface AMHSDeliveryReportRepository extends JpaRepository<AMHSDeliveryReport, Long> {
 
     List<AMHSDeliveryReport> findByMessage(AMHSMessage message);
+
+    List<AMHSDeliveryReport> findByRecipientIgnoreCaseAndIdGreaterThanOrderByIdAsc(String recipient, Long id);
 }
