@@ -111,8 +111,9 @@ public class P3GatewaySessionService {
         String response = switch (operation) {
             case "BIND" -> bind(state, attributes);
             case "SUBMIT" -> submit(state, attributes);
-            case "RETRIEVE", "REPORT", "STATUS" -> retrieveStatus(state, attributes);
-            case "READ" -> readMailbox(state, attributes);
+            case "RETRIEVE", "STATUS" -> retrieveStatus(state, attributes);
+            case "REPORT" -> readMailbox(state, attributes, "Report");
+            case "READ" -> readMailbox(state, attributes, "Read");
             case "UNBIND", "RELEASE", "QUIT" -> unbind(state);
             default -> "ERR code=unsupported-operation detail=Unsupported operation " + operation;
         };
@@ -359,10 +360,10 @@ public class P3GatewaySessionService {
     }
 
 
-    private String readMailbox(SessionState state, Map<String, String> attributes) {
+    private String readMailbox(SessionState state, Map<String, String> attributes, String operationName) {
         if (!state.bound) {
             logger.warn("P3 read rejected: operation before bind");
-            return "ERR code=association detail=Read operation received before bind";
+            return "ERR code=association detail=" + operationName + " operation received before bind";
         }
 
         String recipient = attributes.getOrDefault("recipient", state.senderOrAddress);
@@ -382,7 +383,7 @@ public class P3GatewaySessionService {
                 Thread.sleep(Math.min(retryIntervalMs, remainingMs));
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
-                return "ERR code=interrupted detail=Read wait interrupted";
+                return "ERR code=interrupted detail=" + operationName + " wait interrupted";
             }
             report = loadNextReport(recipient, state.lastReadReportId);
         }
