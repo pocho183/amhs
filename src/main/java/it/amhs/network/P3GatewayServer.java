@@ -285,6 +285,18 @@ public class P3GatewayServer {
                 payloadKind,
                 toHexPreview(pdu, 64)
             );
+
+            if (!isRfc1006PayloadSupportedByAsn1(payloadKind)) {
+                logger.warn(
+                    "P3 gateway connection #{} RFC1006 payload #{} kind={} is not supported by the ASN.1 gateway handler (expected BER APDU); closing connection",
+                    connectionId,
+                    pduIndex,
+                    payloadKind
+                );
+                sendRfc1006Disconnect(output);
+                return;
+            }
+
             byte[] response = asn1GatewayProtocol.handle(session, pdu);
             sendRfc1006Dt(output, response);
             logger.debug("P3 gateway connection #{} RFC1006 payload #{} response-len={}", connectionId, pduIndex, response.length);
@@ -366,6 +378,11 @@ public class P3GatewayServer {
         output.write((length >> 8) & 0xFF);
         output.write(length & 0xFF);
         output.write(tpdu);
+    }
+
+    private void sendRfc1006Disconnect(OutputStream output) throws Exception {
+        sendTpktFrame(output, new byte[] {0x06, COTP_PDU_DR, 0x00, 0x00, 0x00, 0x00, 0x00});
+        output.flush();
     }
 
     private ProtocolKind detectProtocol(byte[] preview) {
@@ -473,6 +490,10 @@ public class P3GatewayServer {
             return "BER_APDU";
         }
         return "UNKNOWN_BINARY";
+    }
+
+    private boolean isRfc1006PayloadSupportedByAsn1(String payloadKind) {
+        return "BER_APDU".equals(payloadKind);
     }
 
     private enum ProtocolKind {

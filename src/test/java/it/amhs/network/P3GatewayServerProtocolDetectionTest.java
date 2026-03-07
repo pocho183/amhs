@@ -12,6 +12,7 @@ class P3GatewayServerProtocolDetectionTest {
     private P3GatewayServer server;
     private Method detectProtocol;
     private Method classifyRfc1006Payload;
+    private Method isRfc1006PayloadSupportedByAsn1;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -20,6 +21,8 @@ class P3GatewayServerProtocolDetectionTest {
         detectProtocol.setAccessible(true);
         classifyRfc1006Payload = P3GatewayServer.class.getDeclaredMethod("classifyRfc1006Payload", byte[].class);
         classifyRfc1006Payload.setAccessible(true);
+        isRfc1006PayloadSupportedByAsn1 = P3GatewayServer.class.getDeclaredMethod("isRfc1006PayloadSupportedByAsn1", String.class);
+        isRfc1006PayloadSupportedByAsn1.setAccessible(true);
     }
 
     @Test
@@ -48,5 +51,14 @@ class P3GatewayServerProtocolDetectionTest {
         Object kind = classifyRfc1006Payload.invoke(server, (Object) new byte[] { 0x60, 0x1A, 0x01, 0x00 });
 
         assertEquals("ACSE_APDU", kind.toString());
+    }
+
+    @Test
+    void onlyBerPayloadsArePassedToAsn1Handler() throws Exception {
+        Object berSupported = isRfc1006PayloadSupportedByAsn1.invoke(server, "BER_APDU");
+        Object sessionSupported = isRfc1006PayloadSupportedByAsn1.invoke(server, "OSI_SESSION_SPDU");
+
+        assertEquals(true, berSupported);
+        assertEquals(false, sessionSupported);
     }
 }
