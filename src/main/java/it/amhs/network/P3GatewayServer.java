@@ -292,7 +292,7 @@ public class P3GatewayServer {
                 toHexPreview(pdu, 64)
             );
 
-            byte[] applicationPdu = extractApplicationPduFromRfc1006Payload(payload, payloadKind);
+            byte[] applicationPdu = extractApplicationPduFromRfc1006Payload(pdu, payloadKind);
             if (applicationPdu == null) {
                 logger.warn(
                     "P3 gateway connection #{} RFC1006 payload #{} kind={} is not supported by the ASN.1 gateway handler (expected BER APDU or OSI Session/Presentation/ACSE envelope); closing connection",
