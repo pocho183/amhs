@@ -366,12 +366,22 @@ public class RFC1006Service {
             associationState.bound = true;
             associationState.active = true;
             logger.info("Accepted ACSE AARQ for application context {}", aarq.applicationContextName());
+            java.util.Set<Integer> acceptedPresentationContextIds = aarq.presentationContexts().isEmpty()
+                ? java.util.Set.of(1)
+                : aarq.presentationContexts().stream()
+                    .filter(ctx -> ICAO_AMHS_P1_OID.equals(ctx.abstractSyntaxOid()))
+                    .map(it.amhs.service.protocol.acse.PresentationContext::identifier)
+                    .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+            if (acceptedPresentationContextIds.isEmpty() && aarq.presentationContextOids().contains(ICAO_AMHS_P1_OID)) {
+                acceptedPresentationContextIds = java.util.Set.of(1);
+            }
             AcseModels.AAREApdu accept = new AcseModels.AAREApdu(
                 true,
                 java.util.Optional.of("accepted"),
                 java.util.Optional.empty(),
                 java.util.Optional.empty(),
-                List.of(ICAO_AMHS_P1_OID)
+                List.of(ICAO_AMHS_P1_OID),
+                acceptedPresentationContextIds
             );
             associationState.acseStateMachine.onOutbound(accept);
             sendRFC1006(out, acseAssociationProtocol.encode(accept));
@@ -469,6 +479,19 @@ public class RFC1006Service {
         for (String oid : aarq.presentationContextOids()) {
             if (!StringUtils.hasText(oid)) {
                 throw new IllegalArgumentException("ACSE presentation context OID must not be empty");
+            }
+        }
+
+        if (!aarq.presentationContexts().isEmpty()) {
+            java.util.Set<Integer> matched = new java.util.LinkedHashSet<>();
+            for (it.amhs.service.protocol.acse.PresentationContext context : aarq.presentationContexts()) {
+                context.validate();
+                if (ICAO_AMHS_P1_OID.equals(context.abstractSyntaxOid())) {
+                    matched.add(context.identifier());
+                }
+            }
+            if (matched.isEmpty()) {
+                throw new IllegalArgumentException("ACSE presentation contexts do not negotiate AMHS P1 abstract syntax");
             }
         }
     }

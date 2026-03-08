@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import it.amhs.service.protocol.acse.AcseAssociationProtocol;
 import it.amhs.service.protocol.acse.AcseModels;
+import it.amhs.service.protocol.acse.PresentationContext;
 
 class AcseAssociationProtocolTest {
 
@@ -124,6 +125,43 @@ class AcseAssociationProtocolTest {
         AcseModels.AARQApdu decoded = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(encoded));
 
         assertEquals(List.of("2.6.0.1.6.1.1"), decoded.presentationContextOids());
+    }
+
+
+    @Test
+    void shouldEncodeAndDecodeControlledPresentationContextNegotiation() {
+        AcseModels.AARQApdu aarq = new AcseModels.AARQApdu(
+            "2.6.0.1.6.1",
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            List.of("2.6.0.1.6.1.1"),
+            List.of(
+                new PresentationContext(1, "2.6.0.1.6.1.1", List.of("2.1.1")),
+                new PresentationContext(3, "1.3.12.2.1011.1.1", List.of("2.1.1"))
+            )
+        );
+
+        AcseModels.AARQApdu decodedAarq = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(protocol.encode(aarq)));
+        assertEquals(2, decodedAarq.presentationContexts().size());
+        assertEquals(1, decodedAarq.presentationContexts().get(0).identifier());
+
+        AcseModels.AAREApdu aare = new AcseModels.AAREApdu(
+            true,
+            Optional.of("accepted"),
+            Optional.empty(),
+            Optional.empty(),
+            List.of("2.6.0.1.6.1.1"),
+            java.util.Set.of(1)
+        );
+
+        AcseModels.AAREApdu decodedAare = assertInstanceOf(AcseModels.AAREApdu.class, protocol.decode(protocol.encode(aare)));
+        assertEquals(java.util.Set.of(1), decodedAare.acceptedPresentationContextIds());
     }
 
     @Test

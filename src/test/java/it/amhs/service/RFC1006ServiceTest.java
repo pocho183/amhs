@@ -12,6 +12,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import it.amhs.service.protocol.acse.AcseModels;
+import it.amhs.service.protocol.acse.PresentationContext;
 import it.amhs.service.protocol.rfc1006.RFC1006Service;
 
 class RFC1006ServiceTest {
@@ -80,6 +81,29 @@ class RFC1006ServiceTest {
             Optional.empty(),
             Optional.of("bind-info".getBytes()),
             List.of(RFC1006Service.ICAO_AMHS_P1_OID)
+        );
+
+        service.validateAarqForAmhsP1(aarq, "LIMMZQZX", null);
+    }
+
+
+    @Test
+    void shouldValidateControlledPresentationContextDefinitions() {
+        AcseModels.AARQApdu aarq = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("LIMMZQZX"),
+            Optional.of("DEST"),
+            Optional.of(new AcseModels.ApTitle("1.3.27.1")),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.27.2")),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of("bind-info".getBytes()),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID),
+            List.of(
+                new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")),
+                new PresentationContext(3, "1.3.12.2.1011.1.1", List.of("2.1.1"))
+            )
         );
 
         service.validateAarqForAmhsP1(aarq, "LIMMZQZX", null);
