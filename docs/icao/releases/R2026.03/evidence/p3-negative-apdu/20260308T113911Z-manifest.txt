@@ -1,0 +1,7 @@
+release=R2026.03
+timestamp=20260308T113911Z
+exit_code=1
+source_log=build/evidence/releases/R2026.03/p3-negative-apdu/20260308T113911Z/run.log
+copied_artifacts=
+  - 20260308T113911Z-run.log
+b09dfb824df20446f71edff296575932e3f0199acd1b79126b8c66bb9a2066a8  20260308T113911Z-run.log
