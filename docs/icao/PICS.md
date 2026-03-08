@@ -221,8 +221,8 @@ Implementation framing for the declaration profile:
    - Capture cross-peer trace chain (ingress event → queue state → emitted DR/NDR → peer acknowledgment) with correlation IDs.
    - ✅ Closed (`R2026.03`): scenario and trace-chain evidence is published in `docs/icao/releases/R2026.03/evidence/p1-dr-ndr-interop/latest-manifest.txt` and the corresponding timestamped `*-dr-ndr-trace-ledger.md`.
 3. **Extension and compatibility governance**
-   - Freeze extension handling policy (known/unknown elements, criticality handling, forward/backward compatibility).
-   - Add regression vectors for legacy encodings observed in operational AMHS environments.
+   - ✅ Closed (`R2026.03`): extension handling policy (known/unknown elements, criticality handling, forward/backward compatibility) is frozen in `docs/icao/P1_EXTENSION_HANDLING_POLICY.md` and release-bound via `docs/icao/releases/R2026.03/PICS_R2026.03.md` section 4.
+   - ✅ Closed (`R2026.03`): regression vectors for operational legacy encodings are catalogued in `docs/icao/P1_LEGACY_ENCODING_REGRESSION_VECTORS.md` with executable coverage in `src/test/java/it/amhs/service/P1AssociationProtocolTest.java` and `src/test/java/it/amhs/service/P1BerMessageParserTest.java`.
 
 ### 7.1.2 P3 implementation work packages
 
