@@ -20,6 +20,7 @@ Included work packages:
 |---|---|
 | Declared release | `R2026.03` |
 | Configuration fingerprint anchor | `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt` |
+| Authority declaration dossier package | `docs/icao/releases/R2026.03/AUTHORITY_DECLARATION_DOSSIER.md` |
 | Prior declared release in this repository | `NONE (initial declared oversight baseline)` |
 | Revalidation mode | `full baseline revalidation (no prior declared delta source available)` |
 | Dossier owner | Operations + Security + Engineering joint declaration |
@@ -28,7 +29,7 @@ Included work packages:
 
 | Package ID | Work package | Authority question answered | Indexed artifacts |
 |---|---|---|---|
-| TC-01 | Technical conformance evidence | Is implementation/profile conformance declared, traceable, and reproducibly tested? | `docs/icao/PICS.md`; `docs/icao/PIXIT.md`; `docs/icao/CONFORMANCE_TEST_MATRIX.md`; `docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`; `docs/icao/X411_MODULE_TRACEABILITY.md`; `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md`; `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`; `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`; `docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt`. |
+| TC-01 | Technical conformance evidence | Is implementation/profile conformance declared, traceable, and reproducibly tested? | `docs/icao/PICS.md`; `docs/icao/PIXIT.md`; `docs/icao/releases/R2026.03/PICS_R2026.03.md`; `docs/icao/releases/R2026.03/PIXIT_R2026.03.md`; `docs/icao/CONFORMANCE_TEST_MATRIX.md`; `docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`; `docs/icao/X411_MODULE_TRACEABILITY.md`; `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md`; `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`; `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`; `docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt`. |
 | OA-01 | Operational assurance pack | Is service operation resilient, measured, and runbook-governed for release use? | `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`; `OPERATIONS_GUIDE.md`; `docs/icao/releases/R2026.03/evidence/operational-assurance/README.md`; `docs/icao/releases/R2026.03/evidence/operational-assurance/latest-manifest.txt`; failover/SLO/backup/performance artifacts under `docs/icao/releases/R2026.03/evidence/operational-assurance/`. |
 | SA-01 | Security assurance pack | Are PKI, labels, negotiation, and security boundary controls declared with evidence? | `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`; `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md`; `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md`; `docs/icao/releases/R2026.03/evidence/security-pki-label/README.md`. |
 | GOV-01 | Governance approvals | Is accountable approval recorded for authority submission and residual risk acceptance? | `docs/icao/ITALY_NATIONAL_DECLARATION_PACKAGE.md`; `docs/icao/releases/R2026.03/evidence/italy-national-interop/20260308T150500Z-approval-register.md`; `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-safety-security-residual-risk-acceptance.md`. |
