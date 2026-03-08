@@ -1,6 +1,7 @@
 package it.amhs.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -241,6 +242,51 @@ class P1BerMessageParserTest {
     }
 
     @Test
+    void shouldPreserveHighTagOperationalUnknownEnvelopeExtensionOctets() {
+        byte[] opaqueHighTagExtension = new byte[] {(byte) 0x81, 0x10, 0x42, 0x00};
+        byte[] envelope = sequence(
+            contextPrimitive(31, opaqueHighTagExtension)
+        );
+
+        byte[] payloadContent = concat(
+            contextPrimitive(0, "LIRRZQZX"),
+            contextPrimitive(1, "LIIRYAYX"),
+            contextUtf8(2, "Hello"),
+            contextConstructed(9, envelope)
+        );
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, payloadContent.length, payloadContent));
+
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+        assertEquals(1, parsed.transferEnvelope().unknownExtensions().size());
+        assertEquals(31, parsed.transferEnvelope().unknownExtensions().get(0).tagNumber());
+        assertArrayEquals(opaqueHighTagExtension, parsed.transferEnvelope().unknownExtensions().get(0).value());
+    }
+
+    @Test
+    void shouldTreatLegacyCriticalityLikeOpaqueUnknownExtensionPayload() {
+        byte[] legacyCriticalityPayload = sequence(
+            contextPrimitive(0, "criticality=critical"),
+            contextPrimitive(1, "peer-defined")
+        );
+        byte[] envelope = sequence(
+            contextConstructed(12, legacyCriticalityPayload)
+        );
+
+        byte[] payloadContent = concat(
+            contextPrimitive(0, "LIRRZQZX"),
+            contextPrimitive(1, "LIIRYAYX"),
+            contextUtf8(2, "Hello"),
+            contextConstructed(9, envelope)
+        );
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, payloadContent.length, payloadContent));
+
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+        assertEquals(1, parsed.transferEnvelope().unknownExtensions().size());
+        assertEquals(12, parsed.transferEnvelope().unknownExtensions().get(0).tagNumber());
+        assertArrayEquals(legacyCriticalityPayload, parsed.transferEnvelope().unknownExtensions().get(0).value());
+    }
+
+    @Test
     void shouldRejectUnsupportedSecurityClassification() {
         byte[] security = sequence(
             contextUtf8(0, "COSMIC"),
@@ -310,6 +356,10 @@ class P1BerMessageParserTest {
     private static byte[] contextPrimitive(int tag, String value) {
         byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
         return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
+    }
+
+    private static byte[] contextPrimitive(int tag, byte[] value) {
+        return BerCodec.encode(new BerTlv(2, false, tag, 0, value.length, value));
     }
 
     private static byte[] contextT61(int tag, String value) {
