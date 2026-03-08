@@ -146,7 +146,7 @@ This section translates open closure points into a concrete delivery plan for bu
 
 ### 6.3 Required technical closure for P3
 
-4. Complete ACSE/presentation negotiation behavior matrix for external interoperability declaration.
+4. ACSE/presentation negotiation behavior matrix completed and published (`docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md`) for external interoperability declaration vectors.
 5. Produce reproducible multi-vendor bind/submit/status/report/release evidence with negative-path diagnostics.
 
 ### 6.4 Compliance packaging required before claim
@@ -160,3 +160,4 @@ This section translates open closure points into a concrete delivery plan for bu
 - Transport and parser tests under `src/test/java/it/amhs/service/`.
 - BER codec tests under `src/test/java/it/amhs/asn1/`.
 - Compliance and address validation tests under `src/test/java/it/amhs/compliance/` and `src/test/java/it/amhs/service/ORAddressTest.java`.
+- ACSE/presentation external declaration matrix under `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md`.
