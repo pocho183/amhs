@@ -1,6 +1,6 @@
 # Reproducible multi-vendor bind/submit/status/report/release evidence
 
-This campaign packages reproducible evidence for the P3 gateway operation set with both positive and negative paths.
+This campaign provides release-bound and reproducible closure evidence for the P3 gateway operation set, including positive-path interoperability and negative-path diagnostics.
 
 ## Scope
 
@@ -20,17 +20,17 @@ Wire/vendor surfaces covered:
 
 ## Reproducible execution
 
-Run:
+Run for the active release label (example: `R2026.03`):
 
 ```bash
-scripts/evidence/p3_multi_vendor_evidence.sh
+scripts/evidence/p3_multi_vendor_evidence.sh R2026.03
 ```
 
-The script executes deterministic JUnit evidence suites and stores artifacts in:
+The command publishes immutable artifacts and checksums under:
 
-- `build/evidence/p3-multi-vendor-evidence.log`
-- `build/test-results/test` (JUnit XML)
-- `build/reports/tests/test/index.html` (HTML report)
+- `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/`
+- `latest-manifest.txt` (pointer to last successful campaign)
+- `<timestamp>-manifest.txt` (artifact list + SHA-256)
 
 ## Evidence mapping
 
@@ -41,6 +41,7 @@ The script executes deterministic JUnit evidence suites and stores artifacts in:
 | RTSE release mapping | `P3Asn1GatewayProtocolTest.mapsRtabToReleaseResponse` |
 | Association bind/submit/release deterministic lifecycle | `P3GatewaySessionServiceTest.bindSubmitAndUnbindFlowReturnsDeterministicSubmissionId` |
 | Status/report behavior and correlation diagnostics | `P3GatewaySessionServiceTest` status/report scenarios in the same suite |
+| ROSE and malformed APDU negative vectors | `P3Asn1GatewayProtocolNegativeVectorsTest` |
 
 ## Negative-path diagnostics included
 
@@ -54,7 +55,9 @@ The script executes deterministic JUnit evidence suites and stores artifacts in:
 | unsupported ROSE operation | ROSE `returnError` with gateway payload `unsupported-operation` |
 | unsupported RTSE wrapper tag | RTSE `RTORJ` |
 
+The campaign writes `*-diagnostics-summary.txt` for quick inspection and keeps full raw logs in `*-run.log`.
+
 ## Notes
 
-- This campaign is intentionally transport/profile focused and does not claim full native mailbox semantics of full ISODE P3 stacks.
-- The evidence command is safe to re-run in CI and local environments.
+- This campaign is intentionally transport/profile focused and does not claim full native mailbox semantics of complete ISODE P3 stacks.
+- The evidence command is deterministic and CI-safe for repeated execution.
