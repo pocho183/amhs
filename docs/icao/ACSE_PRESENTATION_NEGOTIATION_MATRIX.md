@@ -27,7 +27,30 @@ This matrix completes the closure item from `docs/icao/PICS.md` §6.3 ("Complete
 | ACSE-13 | Generic ACSE user-information encoding breadth | Peer requires broad EXTERNAL variations beyond constrained EXTERNAL/OCTET STRING mapping | Supported only for constrained encoding path; broader variants are out of declared scope. | P | External declaration remains gateway-profile limited, not full ACSE universality claim. | `AcseAssociationProtocol` constrained encode/decode path; PICS section 4.2 limits. |
 | ACSE-14 | Full ISO session/presentation negotiation surface | Peer expects profile-complete presentation/session negotiation semantics | Not declared; only supported gateway paths are claimed. | N | Explicit non-claim for full profile-complete external interoperability. | `PICS.md` §4.2 declared limitation and gateway posture. |
 
-## 3. External declaration statement
+
+## 4. Selector/context-name/authentication permutation coverage (external-claim closure)
+
+| Vector ID | Calling selector vs cert identity | ACSE application-context-name | Authentication policy/value | Expected verdict | Evidence anchor |
+|---|---|---|---|---|---|
+| ACSE-MAT-01 | No cert identity binding required | `2.6.0.1.6.1` | Optional auth present (`token-ok`) | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-02 | N/A | Non-AMHS context OID | Optional auth present | Reject: `Unsupported ACSE application-context OID ...` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-03 | N/A | `2.6.0.1.6.1`, but presentation contexts exclude AMHS abstract syntax | Optional auth present | Reject: `presentation contexts do not negotiate AMHS P1 abstract syntax` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-04 | Cert CN/OU present, calling selector absent | `2.6.0.1.6.1` | Optional auth present | Reject: `calling AE-title is mandatory ...` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-05 | Cert CN/OU present, calling selector mismatched | `2.6.0.1.6.1` | Optional auth present | Reject: `calling AE-title is not bound ...` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-06 | N/A | `2.6.0.1.6.1` | Auth **required**, value missing | Reject: `authentication-value is mandatory` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-07 | N/A | `2.6.0.1.6.1` | Expected auth configured, supplied value mismatch | Reject: `authentication-value verification failed` | `RFC1006ServiceAcseNegotiationMatrixTest`, `RFC1006ServiceAcseDiagnosticsTest` |
+| ACSE-MAT-08 | N/A | `2.6.0.1.6.1` | Optional auth present, user-information missing | Reject: `user-information is mandatory ...` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+
+## 5. Evidence attachment requirement (packet + log)
+
+The negotiation/error semantics closure requires both of the following evidence streams for every campaign run:
+
+- **Packet-level** evidence: BER APDU hex vectors for accepted and rejected paths (request + response envelope).
+- **Log-level** evidence: gateway protocol logs that include APDU classification plus field-level outcome diagnostics.
+
+Deterministic capture points are covered by `P3Asn1GatewayProtocolEvidenceTest` (packet hex assertions + log message assertions) and are to be exported in release evidence bundles under `docs/icao/releases/<release>/evidence/`.
+
+## 6. External declaration statement
 
 For external interoperability declaration, this implementation claims **deterministic ACSE/presentation negotiation behavior for the gateway profile vectors ACSE-01..ACSE-12**, with **partial support notes for ACSE-06 and ACSE-13**, and an explicit **non-claim for full profile-complete negotiation breadth (ACSE-14)**.
 
