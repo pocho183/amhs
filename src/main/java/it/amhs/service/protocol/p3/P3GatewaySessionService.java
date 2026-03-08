@@ -168,10 +168,21 @@ public class P3GatewaySessionService {
             return "ERR code=authz-failed detail=" + ex.getMessage();
         }
 
-        if (StringUtils.hasText(securityLabel)) {
+        if (StringUtils.hasText(gatewayPolicyLabel) && !StringUtils.hasText(securityLabel)) {
+            logger.warn("P3 bind rejected: gateway policy label supplied without security label");
+            return "ERR code=security-policy detail=Security label is required when gateway policy label is provided";
+        }
+
+        if (StringUtils.hasText(securityLabel) || StringUtils.hasText(gatewayPolicyLabel)) {
             try {
-                securityLabelPolicy.parse(securityLabel);
-                if (StringUtils.hasText(gatewayPolicyLabel)
+                if (StringUtils.hasText(securityLabel)) {
+                    securityLabelPolicy.parse(securityLabel);
+                }
+                if (StringUtils.hasText(gatewayPolicyLabel)) {
+                    securityLabelPolicy.parse(gatewayPolicyLabel);
+                }
+                if (StringUtils.hasText(securityLabel)
+                    && StringUtils.hasText(gatewayPolicyLabel)
                     && !securityLabelPolicy.dominates(securityLabel, gatewayPolicyLabel)) {
                     logger.warn(
                         "P3 bind rejected: label dominance failure security-label={} gateway-policy-label={}",

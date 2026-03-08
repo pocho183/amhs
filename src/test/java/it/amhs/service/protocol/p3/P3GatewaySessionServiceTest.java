@@ -277,6 +277,61 @@ class P3GatewaySessionServiceTest {
         assertEquals("ERR code=security-policy detail=Security label does not dominate gateway policy label", bindResponse);
     }
 
+
+    @Test
+    void bindRejectsWhenGatewayPolicyLabelHasUnsupportedClassification() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        String bindResponse = sessionService.handleCommand(
+            sessionService.newSession(),
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test;security-label=SECRET|ATFM;gateway-policy-label=COSMIC TOP SECRET"
+        );
+
+        assertTrue(bindResponse.startsWith("ERR code=security-policy detail=Unsupported Doc 9880 security classification"));
+    }
+
+    @Test
+    void bindRejectsGatewayPolicyLabelWithoutSecurityLabel() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        String bindResponse = sessionService.handleCommand(
+            sessionService.newSession(),
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test;gateway-policy-label=SECRET|ATFM"
+        );
+
+        assertEquals("ERR code=security-policy detail=Security label is required when gateway policy label is provided", bindResponse);
+    }
+
     @Test
     void submitRejectsWhenRoutingTableHasNoMatchingRoute() {
         P3GatewaySessionService sessionService = new P3GatewaySessionService(
