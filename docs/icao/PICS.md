@@ -129,7 +129,7 @@ Status for `R2026.03`: **closed at minimum baseline** with release-bound artifac
 
 ### 5.3 ICAO external-claim gap closure
 
-7. Complete profile-complete P3 semantics evidence (or formalize non-claim boundaries with authority acceptance).
+7. ✅ Closed (`R2026.03`): non-claim boundary for external P3 profile-complete semantics is formalized with an authority-acceptance workflow in `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md`.
 8. ✅ Closed (`R2026.03`): canonical X.411 ASN.1 module traceability proof pack linked to runtime behavior and test vectors is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 9. Complete objective security evidence for ATN PKI path validation, CRL/OCSP handling, and Doc 9880-aligned security-label policy treatment.
 10. Complete operational assurance evidence set (performance/resilience, monitoring SLOs, failover drills, backup/restore verification).
@@ -145,7 +145,7 @@ This checklist summarizes only open items after the `R2026.03` baseline evaluati
   - No open structural gap for the declared national-use baseline.
   - Recurring release obligation: refresh campaign/declaration artifacts and approval records.
 - **ICAO external claim**
-  - Complete `§5.3` items 7..10.
+  - Complete `§5.3` items 8..10 (item 7 closed via non-claim boundary acceptance path).
   - Complete all mandatory evidence/governance items in `§6` and delivery steps in `§7`.
 
 ## 6. Missing points for ICAO compliance closure
