@@ -24,6 +24,7 @@ This policy freezes how the AMHS gateway handles extensibility in P1 association
 ### 2.3 Criticality model
 
 - In this profile, no explicit criticality bit is modeled for unknown P1/X.411 extension containers.
+- Unknown-extension payload substructures (including peer-defined criticality indicators) are treated as opaque bytes and are not reinterpreted by this release profile.
 - Safety posture:
   - association-level unknown context tags => reject (fail-fast on control-plane uncertainty)
   - envelope unknown extension tags (`>6`) => preserve (data-plane forward compatibility)
@@ -37,6 +38,8 @@ The following regression checks are mandatory for `R2026.03` and later unless su
 3. Envelope parsing preserves unknown extension tags (`>6`) in `unknownExtensions`.
 4. Envelope parsing ignores legacy non-context envelope elements.
 5. Envelope parsing accepts extension-anchor-only legacy encodings and still preserves true unknown extensions.
+6. Envelope parsing preserves high-tag-number unknown extensions (`>=31`) without payload mutation.
+7. Envelope parsing keeps peer-defined unknown-extension criticality markers opaque and byte-preserved.
 
 
 ## 4. Governance freeze controls
