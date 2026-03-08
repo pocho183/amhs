@@ -3,6 +3,7 @@ package it.amhs.service.protocol.p1;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,13 @@ public class P1AssociationProtocol {
 
     private static final String ICAO_AMHS_P1_ABSTRACT_SYNTAX = "2.6.0.1.6.1";
     private static final int DEFAULT_PROTOCOL_VERSION = 1;
+    private static final Set<Class<? extends Pdu>> UNSUPPORTED_RELAY_PROFILE_PDUS = Set.of(
+        BindResultPdu.class,
+        ReleaseResultPdu.class,
+        TransferResultPdu.class,
+        NonDeliveryReportPdu.class,
+        DeliveryReportPdu.class
+    );
 
     public byte[] encodeBind(
         Optional<String> callingMta,
@@ -70,7 +78,23 @@ public class P1AssociationProtocol {
             case X411TagMap.APDU_BIND_RESULT -> decodeBindResult(pdu.value());
             case X411TagMap.APDU_RELEASE_RESULT -> new ReleaseResultPdu();
             case X411TagMap.APDU_TRANSFER_RESULT -> decodeTransferResult(pdu.value());
+            case X411TagMap.APDU_NON_DELIVERY_REPORT -> new NonDeliveryReportPdu(pdu.value());
+            case X411TagMap.APDU_DELIVERY_REPORT -> new DeliveryReportPdu(pdu.value());
             default -> throw new IllegalArgumentException("Unsupported P1 association PDU tag [" + pdu.tagNumber() + "]");
+        };
+    }
+
+    public Optional<String> unsupportedRelayProfileDiagnostic(Pdu pdu) {
+        if (!UNSUPPORTED_RELAY_PROFILE_PDUS.contains(pdu.getClass())) {
+            return Optional.empty();
+        }
+        return switch (pdu) {
+            case BindResultPdu ignored -> Optional.of("unsupported-operation: bind-result APDU is responder-only in the declared P1 relay/interpersonal profile");
+            case ReleaseResultPdu ignored -> Optional.of("unsupported-operation: release-result APDU is responder-only in the declared P1 relay/interpersonal profile");
+            case TransferResultPdu ignored -> Optional.of("unsupported-operation: transfer-result APDU is responder-only in the declared P1 relay/interpersonal profile");
+            case NonDeliveryReportPdu ignored -> Optional.of("unsupported-operation: non-delivery-report APDU is not accepted on inbound relay association traffic");
+            case DeliveryReportPdu ignored -> Optional.of("unsupported-operation: delivery-report APDU is not accepted on inbound relay association traffic");
+            default -> Optional.empty();
         };
     }
 
@@ -322,7 +346,7 @@ public class P1AssociationProtocol {
         return out;
     }
 
-    public sealed interface Pdu permits BindPdu, TransferPdu, ReleasePdu, AbortPdu, ErrorPdu, BindResultPdu, ReleaseResultPdu, TransferResultPdu {
+    public sealed interface Pdu permits BindPdu, TransferPdu, ReleasePdu, AbortPdu, ErrorPdu, BindResultPdu, ReleaseResultPdu, TransferResultPdu, NonDeliveryReportPdu, DeliveryReportPdu {
     }
 
     public record BindPdu(
@@ -363,7 +387,12 @@ public class P1AssociationProtocol {
     ) implements Pdu {
     }
 
+    public record NonDeliveryReportPdu(byte[] reportPayload) implements Pdu {
+    }
+
+    public record DeliveryReportPdu(byte[] reportPayload) implements Pdu {
+    }
+
     public record RecipientTransferResult(String recipient, int status, Optional<String> diagnostic) {
     }
 }
-

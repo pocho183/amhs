@@ -289,6 +289,12 @@ public class RFC1006Service {
             return;
         }
 
+        Optional<String> unsupportedDiagnostic = p1AssociationProtocol.unsupportedRelayProfileDiagnostic(pdu);
+        if (unsupportedDiagnostic.isPresent()) {
+            sendRFC1006(out, p1AssociationProtocol.encodeError("unsupported-operation", unsupportedDiagnostic.get()));
+            return;
+        }
+
         if (pdu instanceof P1AssociationProtocol.TransferPdu transferPdu) {
             if (!associationState.bound()) {
                 sendRFC1006(out, p1AssociationProtocol.encodeError("association", "P1 transfer received before successful bind"));
