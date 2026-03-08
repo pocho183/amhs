@@ -1,0 +1,9 @@
+release=R2026.03
+timestamp=20260308T195506Z
+test_status=failed-environment
+run_log=20260308T195506Z-run.log
+trace_ledger=20260308T195506Z-dr-ndr-trace-ledger.md
+junit_dir=build/test-results/test
+html_report=build/reports/tests/test/index.html
+peer_profiles=ENAV-OPS, MIL-NET, CERTIFIED-AMHS-LAB, METEO-LEGACY
+repro_command=scripts/evidence/p1_dr_ndr_interop_traces.sh R2026.03
