@@ -1,0 +1,13 @@
+[INFO] timestamp=20260308T200850Z
+[INFO] release=R2026.03
+[INFO] java=openjdk version "21.0.2" 2024-01-16
+[INFO] control=path-validation
+[PASS] TLSContextFactory contains PKIX path-validation and revocation controls
+[INFO] control=truststore-integrity
+[PASS] truststore can be opened with configured credential
+[INFO] control=revocation-freshness-input
+Alias name: amhs-server
+Owner: C=IT, L=Rome, OU=ATM, O=AMHS, CN=amhs.local
+Valid from: Thu Feb 26 07:45:30 UTC 2026 until: Sun Feb 24 07:45:30 UTC 2036
+[INFO] control=degraded-pki-reachability
+[PASS] missing truststore triggers deterministic failure (fail-closed input handling)

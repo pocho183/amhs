@@ -231,8 +231,8 @@ Implementation framing for the declaration profile:
 ### 7.1.3 Security/oversight evidence work packages
 
 1. **ATN PKI runtime enforcement assurance**
-   - Demonstrate path validation, CRL/OCSP enforcement, revocation freshness, and failure behavior under degraded PKI reachability.
-   - Tie each control to objective runtime proof (configuration snapshot + execution logs + verdict statement).
+   - ✅ Closed (`R2026.03`): path validation, CRL/OCSP enforcement controls, revocation-freshness inputs, and fail-closed degraded-PKI behavior are evidenced in `docs/icao/releases/R2026.03/evidence/atn-pki-runtime-enforcement/20260308T200850Z-verdict.md` and `docs/icao/releases/R2026.03/evidence/atn-pki-runtime-enforcement/20260308T200850Z-execution.log`.
+   - ✅ Closed (`R2026.03`): each control is tied to objective runtime proof (`configuration snapshot + execution log + verdict`) and release-indexed in `docs/icao/releases/R2026.03/evidence/atn-pki-runtime-enforcement/20260308T200850Z-manifest.txt` (`latest-manifest.txt` pointer maintained for oversight retrieval).
 2. **Doc 9880-aligned security-label operations**
    - ✅ Closed (`R2026.03`): label parsing, dominance decisions, downgrade/upgrade constraints, and rejection semantics under mixed-label traffic are evidenced in `docs/icao/releases/R2026.03/evidence/security-pki-label/20260308T152500Z-doc9880-label-operations-oversight-record.md`.
    - ✅ Closed (`R2026.03`): residual-risk decisions for local policy tailoring are recorded with accountable-authority acceptance linkage (`AA-R2026.03-OPS-SEC-001`) in `docs/icao/releases/R2026.03/evidence/security-pki-label/20260308T152500Z-doc9880-label-operations-oversight-record.md` and `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-safety-security-residual-risk-acceptance.md`.
