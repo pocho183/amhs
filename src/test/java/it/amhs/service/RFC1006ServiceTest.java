@@ -16,18 +16,7 @@ import it.amhs.service.protocol.rfc1006.RFC1006Service;
 
 class RFC1006ServiceTest {
 
-    private final RFC1006Service service = new RFC1006Service(
-        null,
-        null,
-        null,
-        null,
-        null,
-        "LOCAL-MTA",
-        "LOCAL",
-        30_000,
-        false,
-        ""
-    );
+    private final RFC1006Service service = buildService(false, "");
 
     @Test
     void shouldAppendLocalTraceHopToExistingTrace() {
@@ -155,6 +144,34 @@ class RFC1006ServiceTest {
     }
 
     @Test
+    void shouldRejectMissingAuthenticationValueWhenPolicyRequiresIt() {
+        RFC1006Service authRequiredService = buildService(true, "");
+        AcseModels.AARQApdu aarq = buildMinimalValidAarq(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> authRequiredService.validateAarqForAmhsP1(aarq, "LIMMZQZX", null));
+        assertTrue(ex.getMessage().contains("authentication-value is mandatory"));
+    }
+
+    @Test
+    void shouldRejectAuthenticationValueMismatchWhenExpectedValueConfigured() {
+        RFC1006Service authExpectedService = buildService(false, "shared-secret");
+        AcseModels.AARQApdu aarq = buildMinimalValidAarq(Optional.of("wrong-secret".getBytes(StandardCharsets.UTF_8)));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> authExpectedService.validateAarqForAmhsP1(aarq, "LIMMZQZX", null));
+        assertTrue(ex.getMessage().contains("authentication-value verification failed"));
+    }
+
+    @Test
+    void shouldAcceptAuthenticationValueWhenConfiguredPolicyMatches() {
+        RFC1006Service authExpectedService = buildService(false, "shared-secret");
+        AcseModels.AARQApdu aarq = buildMinimalValidAarq(Optional.of("shared-secret".getBytes(StandardCharsets.UTF_8)));
+
+        authExpectedService.validateAarqForAmhsP1(aarq, "LIMMZQZX", null);
+    }
+
+    @Test
     void shouldStripUtf8BomBeforePayloadInspection() {
         byte[] raw = "\uFEFFFrom:ABC".getBytes(StandardCharsets.UTF_8);
 
@@ -170,5 +187,35 @@ class RFC1006ServiceTest {
 
         assertTrue(service.isLikelyP1AssociationPdu(payload));
         assertTrue(service.isLikelyP1AssociationPdu(service.stripUtf8Bom(withBom)));
+    }
+
+    private RFC1006Service buildService(boolean requireAcseAuthentication, String expectedAcseAuthenticationValue) {
+        return new RFC1006Service(
+            null,
+            null,
+            null,
+            null,
+            null,
+            "LOCAL-MTA",
+            "LOCAL",
+            30_000,
+            requireAcseAuthentication,
+            expectedAcseAuthenticationValue
+        );
+    }
+
+    private AcseModels.AARQApdu buildMinimalValidAarq(Optional<byte[]> authenticationValue) {
+        return new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("LIMMZQZX"),
+            Optional.of("DEST"),
+            Optional.of(new AcseModels.ApTitle("1.3.27.1")),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.27.2")),
+            Optional.empty(),
+            authenticationValue,
+            Optional.of("bind-info".getBytes(StandardCharsets.UTF_8)),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID)
+        );
     }
 }
