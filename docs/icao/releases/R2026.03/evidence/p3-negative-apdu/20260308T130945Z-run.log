@@ -1,0 +1,27 @@
+# p3 negative apdu regression
+release=R2026.03
+2026-03-08T13:09:45Z
+JAVA_HOME=/root/.local/share/mise/installs/java/21.0.2
+command: ./gradlew test --tests it.amhs.service.protocol.p3.P3Asn1GatewayProtocolNegativeVectorsTest --tests it.amhs.service.protocol.p3.P3Asn1GatewayProtocolTest
+Starting a Gradle Daemon, 1 incompatible Daemon could not be reused, use --status for details
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Build file '/workspace/amhs/build.gradle' line: 2
+
+* What went wrong:
+Plugin [id: 'io.freefair.lombok', version: '8.7.1'] was not found in any of the following sources:
+
+- Gradle Core Plugins (plugin is not in 'org.gradle' namespace)
+- Plugin Repositories (could not resolve plugin artifact 'io.freefair.lombok:io.freefair.lombok.gradle.plugin:8.7.1')
+  Searched in the following repositories:
+    Gradle Central Plugin Repository
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 8s
