@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.ByteArrayInputStream;
 import java.io.EOFException;
+import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
 
@@ -86,7 +87,7 @@ class P3Asn1GatewayProtocolNegativeVectorsTest {
         for (BerTlv field : BerCodec.decodeAll(errorApdu.value())) {
             if (field.tagClass() == 2 && field.tagNumber() == fieldTag) {
                 BerTlv utf8 = BerCodec.decodeSingle(field.value());
-                return new String(utf8.value());
+                return new String(utf8.value(), StandardCharsets.UTF_8);
             }
         }
         return null;
