@@ -96,5 +96,6 @@ Boundary note:
 - Tag-level mapping traceability: **implemented**.
 - Runtime guardrails for unknown APDU/bind/envelope tags: **implemented**.
 - Extension-handling freeze (known/unknown rules + backward-compatibility checks): **implemented** (`docs/icao/P1_EXTENSION_HANDLING_POLICY.md`).
+- Operational legacy encoding regression vectors (release-bound): **implemented** (`docs/icao/P1_LEGACY_ENCODING_REGRESSION_VECTORS.md`).
 - ORName CHOICE and DirectoryName string-family decoding baseline: **implemented**.
 - Canonical module-level ASN.1 proof pack for the declared gateway profile: **implemented** (`docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md` + executable lock-step tests).

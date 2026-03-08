@@ -14,3 +14,8 @@ For each run, the script publishes:
 
 
 Coverage includes deterministic vectors for unsupported P3 operations, ACSE rejection diagnostics, and malformed COTP/TPDU parsing paths (via release-bound JUnit XML artifacts when produced).
+
+
+Additional closure artifact:
+
+- `20260308T210500Z-negotiation-error-semantics-closure.md` (packet-level + log-level evidence pointers for ACSE/P3 negotiation/error semantics closure).

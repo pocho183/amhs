@@ -30,7 +30,7 @@ This policy freezes how the AMHS gateway handles extensibility in P1 association
 
 ## 3. Backward-compatibility checks (release-bound)
 
-The following regression checks are mandatory for `R2026.03` and later unless superseded by a signed policy change:
+The following regression checks are mandatory for `R2026.03` and later unless superseded by a signed policy change. Operational legacy vectors are catalogued in `docs/icao/P1_LEGACY_ENCODING_REGRESSION_VECTORS.md` and are part of this freeze baseline:
 
 1. Bind decoding tolerates legacy non-context elements without altering accepted profile fields.
 2. Bind decoding rejects unknown context-specific tags deterministically.
@@ -38,7 +38,20 @@ The following regression checks are mandatory for `R2026.03` and later unless su
 4. Envelope parsing ignores legacy non-context envelope elements.
 5. Envelope parsing accepts extension-anchor-only legacy encodings and still preserves true unknown extensions.
 
-## 4. Evidence links
+
+## 4. Governance freeze controls
+
+- Freeze baseline for `R2026.03` includes:
+  - normative behavior in this policy,
+  - executable compatibility checks in `P1AssociationProtocolTest` and `P1BerMessageParserTest`,
+  - operational vector catalogue in `docs/icao/P1_LEGACY_ENCODING_REGRESSION_VECTORS.md`.
+- Any change to known/unknown handling semantics or criticality posture requires:
+  1. policy diff in this file,
+  2. vector catalogue update,
+  3. traceability map refresh,
+  4. signed release governance approval.
+
+## 5. Evidence links
 
 - Runtime implementation:
   - `src/main/java/it/amhs/service/protocol/p1/P1AssociationProtocol.java`
@@ -50,8 +63,9 @@ The following regression checks are mandatory for `R2026.03` and later unless su
 - Traceability baseline:
   - `docs/icao/X411_MODULE_TRACEABILITY.md`
   - `docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`
+  - `docs/icao/P1_LEGACY_ENCODING_REGRESSION_VECTORS.md`
 
-## 5. Sign-off
+## 6. Sign-off
 
 | Role | Name | Decision | Date (UTC) |
 |---|---|---|---|

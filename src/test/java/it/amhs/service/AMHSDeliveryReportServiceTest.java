@@ -75,6 +75,31 @@ class AMHSDeliveryReportServiceTest {
     }
 
     @Test
+    void mapsRedirectionLoopDiagnosticsForNdr() {
+        AMHSDeliveryReportRepository reportRepo = mock(AMHSDeliveryReportRepository.class);
+        AMHSMessageRepository messageRepo = mock(AMHSMessageRepository.class);
+        AMHSMessageStateMachine stateMachine = mock(AMHSMessageStateMachine.class);
+        X411DiagnosticMapper mapper = new X411DiagnosticMapper();
+        AMHSDeliveryReportService service = new AMHSDeliveryReportService(reportRepo, messageRepo, stateMachine, mapper);
+
+        AMHSMessage message = message("MSG-REDIR-1", null);
+        OutboundP1Client.RelayTransferOutcome outcome = new OutboundP1Client.RelayTransferOutcome(
+            false,
+            null,
+            "redirection-loop-detected",
+            Map.of()
+        );
+
+        service.handleTransferOutcome(message, outcome);
+
+        ArgumentCaptor<AMHSDeliveryReport> captor = ArgumentCaptor.forClass(AMHSDeliveryReport.class);
+        verify(reportRepo).save(captor.capture());
+        assertEquals("X411:21", captor.getValue().getX411DiagnosticCode());
+        assertEquals(AMHSDeliveryStatus.FAILED, captor.getValue().getDeliveryStatus());
+        assertEquals("MSG::MSG-REDIR-1", captor.getValue().getCorrelationToken());
+    }
+
+    @Test
     void createsPerRecipientReportsForMixedOutcome() {
         AMHSDeliveryReportRepository reportRepo = mock(AMHSDeliveryReportRepository.class);
         AMHSMessageRepository messageRepo = mock(AMHSMessageRepository.class);

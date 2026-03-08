@@ -182,6 +182,8 @@ The following list tracks closure status for ICAO-oriented external compliance. 
 14. ✅ Closed (`R2026.03`): conformance test matrix verdicts and row-level artifact references are completed in `docs/icao/CONFORMANCE_TEST_MATRIX.md`.
 15. ✅ Closed (`R2026.03`): national oversight packaging (EU/Italy baseline) with traceable approval records is published in `docs/icao/ITALY_NATIONAL_DECLARATION_PACKAGE.md` and `docs/icao/releases/R2026.03/evidence/italy-national-interop/20260308T150500Z-approval-register.md`.
 
+16. ✅ Closed (`R2026.03`): declaration-profile deterministic behavior contracts for DR/NDR, ACSE reject paths, and unsupported-operation semantics are versioned and published in `docs/icao/contracts/R2026.03/DECLARATION_BEHAVIOR_CONTRACT.md` (`DECL-BEHAVIOR-R2026.03`) with explicit release-blocking divergence policy.
+
 ## 7. P1/P3 ICAO-compliance build plan (implementation-oriented)
 
 This section translates open closure points into a concrete delivery plan for building an AMHS server profile that can be declared ICAO-compliant for P1/P3 scope once all evidence is complete.
@@ -202,8 +204,8 @@ Implementation framing for the declaration profile:
    - Maintain one requirement-to-evidence matrix covering P1, P3, security, and operational controls.
    - Require every declaration statement to link to at least one executable test/log/pcap artifact and one governing document section.
 3. **Deterministic behavior policy**
-   - Promote DR/NDR, ACSE reject paths, and unsupported-operation semantics to normative, versioned behavior contracts.
-   - Treat any runtime divergence from contracts as release-blocking compliance defect.
+   - ✅ Closed (`R2026.03`): DR/NDR, ACSE reject paths, and unsupported-operation semantics are promoted to normative, versioned behavior contracts in `docs/icao/contracts/R2026.03/DECLARATION_BEHAVIOR_CONTRACT.md` (`DECL-BEHAVIOR-R2026.03`).
+   - ✅ Closed (`R2026.03`): runtime divergence from contract semantics is release-blocking for declaration claims under the release gate defined by `docs/icao/contracts/R2026.03/DECLARATION_BEHAVIOR_CONTRACT.md`.
 
 ### 7.1.1 P1 implementation work packages
 
@@ -213,6 +215,7 @@ Implementation framing for the declaration profile:
 2. **DR/NDR determinism evidence**
    - Build reproducible scenarios for delivery success, non-delivery, delay, redirection, and transfer-failure outcomes.
    - Capture cross-peer trace chain (ingress event → queue state → emitted DR/NDR → peer acknowledgment) with correlation IDs.
+   - ✅ Closed (`R2026.03`): scenario and trace-chain evidence is published in `docs/icao/releases/R2026.03/evidence/p1-dr-ndr-interop/latest-manifest.txt` and the corresponding timestamped `*-dr-ndr-trace-ledger.md`.
 3. **Extension and compatibility governance**
    - Freeze extension handling policy (known/unknown elements, criticality handling, forward/backward compatibility).
    - Add regression vectors for legacy encodings observed in operational AMHS environments.
@@ -220,8 +223,8 @@ Implementation framing for the declaration profile:
 ### 7.1.2 P3 implementation work packages
 
 1. **External endpoint profile completion**
-   - Declare complete operation matrix: bind, submit, probe/status, report handling, release, abort, reject/error classes.
-   - Publish explicit semantics for unsupported operations and malformed inputs, including deterministic reject reason mapping.
+   - ✅ Closed (`R2026.03`): complete operation matrix (bind, submit, probe/status, report handling, release, abort, reject/error classes) is published in `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`.
+   - ✅ Closed (`R2026.03`): explicit unsupported/malformed input semantics with deterministic reject reason mapping are published in `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md` section 4 and release-locked to `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`.
 2. **Negotiation and error semantics closure**
    - Complete ACSE/presentation matrix with all selector/context-name/authentication permutations needed for external claim.
    - Attach packet-level and log-level evidence for success and failure paths, including negative vectors.
@@ -232,8 +235,8 @@ Implementation framing for the declaration profile:
 ### 7.1.3 Security/oversight evidence work packages
 
 1. **ATN PKI runtime enforcement assurance**
-   - Demonstrate path validation, CRL/OCSP enforcement, revocation freshness, and failure behavior under degraded PKI reachability.
-   - Tie each control to objective runtime proof (configuration snapshot + execution logs + verdict statement).
+   - ✅ Closed (`R2026.03`): path validation, CRL/OCSP enforcement controls, revocation-freshness inputs, and fail-closed degraded-PKI behavior are evidenced in `docs/icao/releases/R2026.03/evidence/atn-pki-runtime-enforcement/20260308T200850Z-verdict.md` and `docs/icao/releases/R2026.03/evidence/atn-pki-runtime-enforcement/20260308T200850Z-execution.log`.
+   - ✅ Closed (`R2026.03`): each control is tied to objective runtime proof (`configuration snapshot + execution log + verdict`) and release-indexed in `docs/icao/releases/R2026.03/evidence/atn-pki-runtime-enforcement/20260308T200850Z-manifest.txt` (`latest-manifest.txt` pointer maintained for oversight retrieval).
 2. **Doc 9880-aligned security-label operations**
    - ✅ Closed (`R2026.03`): label parsing, dominance decisions, downgrade/upgrade constraints, and rejection semantics under mixed-label traffic are evidenced in `docs/icao/releases/R2026.03/evidence/security-pki-label/20260308T152500Z-doc9880-label-operations-oversight-record.md`.
    - ✅ Closed (`R2026.03`): residual-risk decisions for local policy tailoring are recorded with accountable-authority acceptance linkage (`AA-R2026.03-OPS-SEC-001`) in `docs/icao/releases/R2026.03/evidence/security-pki-label/20260308T152500Z-doc9880-label-operations-oversight-record.md` and `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-safety-security-residual-risk-acceptance.md`.
@@ -251,6 +254,7 @@ Implementation framing for the declaration profile:
 
 4. ✅ Closed (`R2026.03`): ACSE/presentation negotiation behavior matrix is completed and published in `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md` for external interoperability declaration vectors.
 5. ✅ Closed (`R2026.03`): reproducible multi-vendor bind/submit/status/report/release evidence with negative-path diagnostics is published in `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md` and manifest-linked under `docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt` and `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`.
+6. ✅ Closed (`R2026.03`): external endpoint profile completion (complete operation matrix + deterministic unsupported/malformed reject mapping) is published in `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`, with release-binding in `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`.
 
 ### 7.4 Compliance packaging required before claim
 
