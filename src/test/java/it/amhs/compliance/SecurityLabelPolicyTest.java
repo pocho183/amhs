@@ -36,4 +36,18 @@ class SecurityLabelPolicyTest {
         assertFalse(policy.dominates("CONFIDENTIAL|ATFM", "SECRET|ATFM"));
         assertFalse(policy.dominates("SECRET|ATFM", "SECRET|ATFM|EUR"));
     }
+
+
+    @Test
+    void shouldRejectInvalidCompartmentToken() {
+        SecurityParameters params = new SecurityParameters("SECRET|A", "TOKEN-1", "1.2.840.113549.1.1.1");
+        assertThrows(IllegalArgumentException.class, () -> policy.validate(params));
+    }
+
+    @Test
+    void shouldNormalizeCaseAndWhitespaceForDoc9880Labels() {
+        SecurityParameters params = new SecurityParameters("  secret | atfm | eur ", "TOKEN-1", "1.2.840.113549.1.1.1");
+        assertTrue(policy.dominates(params.securityLabel(), "CONFIDENTIAL|ATFM"));
+    }
+
 }

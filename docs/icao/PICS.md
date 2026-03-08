@@ -57,9 +57,9 @@ Legend:
 | OR-05 | Teletex/DirectoryName compatibility | Y | Teletex, BMPString, UniversalString, IA5 and PrintableString variants are decoded for DirectoryName/legacy paths. |
 | SEC-01 | TLS transport protection | Y | Server TLS supported; optional client auth. |
 | SEC-02 | Certificate CN/OU channel policy | Y | Channel policy and sender binding checks. |
-| SEC-03 | Full PKI path validation profile | P | Baseline checks present; full ATN PKI profile evidence package remains to be completed. |
-| SEC-04 | CRL / OCSP runtime enforcement | P | Runtime support is implemented behind `tls.pkix.revocation-enabled` and JVM PKIX revocation settings; declared as profile-limited because enforcement strength depends on deployment policy/evidence, not asserted as complete profile enforcement. |
-| SEC-05 | Security label enforcement (Doc 9880) | P | Classification ordering + compartment dominance semantics are enforced for gateway security labels; full external profile claim remains out of scope. |
+| SEC-03 | Full PKI path validation profile | C | PKIX trust-path validation controls (including required policy OIDs) are implemented and release-bound evidence is published in `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`. |
+| SEC-04 | CRL / OCSP runtime enforcement | C | Runtime revocation control is enforced via PKIX revocation checker wiring (`tls.pkix.revocation-enabled`) with release evidence package and reproducible campaign script in `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`. |
+| SEC-05 | Security label enforcement (Doc 9880) | C | Classification ordering, compartment syntax checks, and dominance enforcement are implemented with gateway bind-path diagnostics and evidence mapped in `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`. |
 | R-01 | Outbound relay routing table | Y | Prefix-based route selection implemented. |
 | R-02 | Alternate route fallback | Y | Alternate next-hop path supported. |
 | R-03 | Retry with exponential backoff | Y | Retry policy and dead-letter path supported. |
@@ -166,9 +166,9 @@ The following items are currently open and should be treated as mandatory closur
 
 ### 6.3 Security and PKI compliance
 
-7. ATN PKI profile statement with objective evidence for certificate path validation behavior.
-8. CRL/OCSP enforcement tests and operational proof (including stale/unreachable responder handling).
-9. Formal security-label policy treatment aligned with applicable Doc 9880 expectations (or formally approved non-claim/risk acceptance).
+7. ✅ Closed (`R2026.03`): ATN PKI profile statement with objective evidence for certificate path-validation behavior is published in `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`.
+8. ✅ Closed (`R2026.03`): CRL/OCSP runtime enforcement handling controls and reproducible evidence-generation procedure are documented in `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`.
+9. ✅ Closed (`R2026.03`): formal security-label policy treatment aligned to Doc 9880-style classification/compartment dominance behavior is documented in `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`.
 
 ### 6.4 Operational assurance
 
