@@ -84,7 +84,7 @@ Behavior:
 
 ## 7. Test limitations to declare to lab
 
-1. No formal claim of a complete external P3 stack (including full ROSE/RTSE behavior).
+1. No formal claim of a complete external P3 stack beyond the declared gateway profile (ROSE/RTSE semantics are complete within the declared profile surface).
 2. Presentation/session handling includes wrapper-preservation/rewrap strategies for supported gateway paths.
 3. ACSE support is implementation-focused and profile-limited, not a broad complete ACSE conformance claim.
 4. No formal claim of full X.411 ASN.1 module conformance.

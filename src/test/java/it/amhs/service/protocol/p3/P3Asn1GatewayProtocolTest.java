@@ -36,7 +36,6 @@ class P3Asn1GatewayProtocolTest {
         assertEquals(P3Asn1GatewayProtocol.APDU_REPORT_RESPONSE, report.tagNumber());
     }
 
-
     @Test
     void unwrapsRtseRtorqAndReturnsRtoacWithGatewayPayload() {
         StubSessionService sessionService = new StubSessionService();
@@ -146,7 +145,6 @@ class P3Asn1GatewayProtocolTest {
         assertEquals(P3Asn1GatewayProtocol.APDU_BIND_RESPONSE, fields.get(1).tagNumber());
     }
 
-
     @Test
     void releaseReturnsGatewayErrorWhenAssociationIsNotBound() {
         StubSessionService sessionService = new StubSessionService() {
@@ -191,6 +189,36 @@ class P3Asn1GatewayProtocolTest {
     }
 
     @Test
+    void returnsRoseRejectForUnexpectedRoseReturnResultApdu() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+
+        byte[] unexpectedReturnResult = BerCodec.encode(new BerTlv(1, true, 2, 0, 0, new byte[0]));
+        byte[] response = protocol.handle(sessionService.newSession(), unexpectedReturnResult);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(1, responseTlv.tagClass());
+        assertEquals(4, responseTlv.tagNumber());
+    }
+
+    @Test
+    void returnsRoseReturnErrorForResponseOperationCodeUsedAsInvoke() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+
+        byte[] roseInvoke = roseInvoke(6, P3Asn1GatewayProtocol.APDU_BIND_RESPONSE, new byte[0]);
+        byte[] response = protocol.handle(sessionService.newSession(), roseInvoke);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(1, responseTlv.tagClass());
+        assertEquals(3, responseTlv.tagNumber());
+
+        BerTlv errorPayload = decodeRoseReturnErrorPayload(responseTlv);
+        assertEquals(P3Asn1GatewayProtocol.APDU_ERROR, errorPayload.tagNumber());
+        assertEquals("invalid-operation-role", decodeErrorField(errorPayload, 0));
+    }
+
+    @Test
     void returnsRoseReturnErrorForUnsupportedRoseOperation() {
         StubSessionService sessionService = new StubSessionService();
         P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
@@ -204,6 +232,20 @@ class P3Asn1GatewayProtocolTest {
         assertEquals(3, responseTlv.tagNumber());
     }
 
+    private static BerTlv decodeRoseReturnErrorPayload(BerTlv roseReturnError) {
+        var fields = BerCodec.decodeAll(roseReturnError.value());
+        return fields.get(2);
+    }
+
+    private static String decodeErrorField(BerTlv errorApdu, int tagNumber) {
+        for (BerTlv field : BerCodec.decodeAll(errorApdu.value())) {
+            if (field.tagClass() == 2 && field.tagNumber() == tagNumber) {
+                BerTlv value = BerCodec.decodeSingle(field.value());
+                return new String(value.value(), StandardCharsets.UTF_8);
+            }
+        }
+        return null;
+    }
 
     private static byte[] rtseEnvelope(int tagNumber, byte[] payload) {
         byte[] any = BerCodec.encode(new BerTlv(2, true, 0, 0, payload.length, payload));
