@@ -125,3 +125,15 @@ Given the declared active/passive model and external orchestration dependency, r
 - data-loss exposure limited by validated RPO controls.
 
 Residual risks must be explicitly accepted by accountable authority per release baseline.
+
+
+## 11. R2026.03 baseline attachment pointers
+
+For release `R2026.03`, the operational-assurance execution artifacts are published in:
+
+- `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-performance-resilience-report.md`
+- `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-slo-declaration.md`
+- `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-monitoring-export-summary.md`
+- `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-failover-drill-report.md`
+- `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-backup-restore-verification.md`
+- `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-manifest.txt`

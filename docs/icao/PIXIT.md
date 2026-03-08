@@ -91,6 +91,7 @@ Behavior:
 5. No complete security label enforcement profile.
 6. CRL / OCSP runtime enforcement: Partial support may depend on runtime configuration; not asserted as complete profile enforcement.
 7. Full certified-node interoperability evidence not yet available.
+8. ICAO external declaration posture is bounded by the non-claim acceptance record in `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md` (profile-complete external P3 semantics not claimed for `R2026.03`).
 
 ## 8. Release configuration fingerprint binding
 
