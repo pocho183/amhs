@@ -22,7 +22,7 @@ This matrix closes the release documentation gap for `R2026.03` by recording row
 
 1. Release-bound PICS (`docs/icao/releases/R2026.03/PICS_R2026.03.md`) and baseline PICS (`docs/icao/PICS.md`)
 2. Release-bound PIXIT (`docs/icao/releases/R2026.03/PIXIT_R2026.03.md`) and baseline PIXIT (`docs/icao/PIXIT.md`)
-3. ICAO/ATN requirement traceability map (`docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`)
+3. Single-source declaration profile conformance map (`docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`)
 4. P3 external declaration matrix (`docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`)
 5. This test matrix with row-level executable and evidence links
 6. Operational HA/failover evidence pack (`docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`) with signed release attachments
@@ -34,5 +34,5 @@ This matrix closes the release documentation gap for `R2026.03` by recording row
 A campaign is considered "assessment-ready" when:
 
 - All matrix rows include an explicit verdict.
-- Each row references executable tests/scripts and produced artifacts.
+- Each declaration row maps to executable tests/scripts or produced logs/pcaps and a governing document section.
 - Open gaps are either closed or formally risk-accepted with rationale.

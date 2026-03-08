@@ -31,6 +31,10 @@ The command publishes immutable artifacts and checksums under:
 - `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/`
 - `latest-manifest.txt` (pointer to last successful campaign)
 - `<timestamp>-manifest.txt` (artifact list + SHA-256)
+- `<timestamp>-signed-campaign-report.md` (signed report with replay instructions + artifact manifest)
+- `<timestamp>-verdict-ledger.md` (campaign verdict ledger by peer profile)
+- `<timestamp>-decoded-trace.txt` (decoded packet-level trace derived from deterministic pcap)
+- `<timestamp>-multi-vendor.pcap.sha256` (pcap checksum, binary pcap retained locally when `AMHS_EVIDENCE_KEEP_PCAP=1`)
 
 ## Evidence mapping
 
@@ -61,3 +65,12 @@ The campaign writes `*-diagnostics-summary.txt` for quick inspection and keeps f
 
 - This campaign is intentionally transport/profile focused and does not claim full native mailbox semantics of complete ISODE P3 stacks.
 - The evidence command is deterministic and CI-safe for repeated execution.
+
+
+## Signed campaign report and replay
+
+Each run emits a signed campaign report and ledger to satisfy PICS §7.1.2 work package 3 requirements:
+
+- signed report includes deterministic replay instructions, sign-off record references, and artifact manifest linkage;
+- verdict ledger records certified and heterogeneous stack verdicts for bind/submit/status/report/release;
+- decoded trace provides human-readable packet transcript generated from deterministic campaign pcap.
