@@ -1,6 +1,8 @@
 # AMHS PICS (Protocol Implementation Conformance Statement)
 
-Document status: **release-bound submission baseline (`R2026.03`)** for controlled interoperability, with technical and governance closure artifacts assembled for authority-facing review.
+Document status: **authority-ready release baseline (`R2026.03`)** for controlled interoperability, with technical and governance closure artifacts assembled for authority-facing review.
+
+Last updated: `2026-03-08` (synchronized with the release-bound wrapper `docs/icao/releases/R2026.03/PICS_R2026.03.md`).
 
 ## 1. Scope
 
@@ -178,7 +180,7 @@ The following list tracks closure status for ICAO-oriented external compliance. 
 
 ### 6.5 Governance and declaration artifacts
 
-13. ✅ Closed (`R2026.03`): completed release-bound PICS/PIXIT set is published (`docs/icao/PICS.md`, `docs/icao/PIXIT.md`) and cryptographically tied to `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`.
+13. ✅ Closed (`R2026.03`): completed release-bound PICS/PIXIT set is published (`docs/icao/PICS.md`, `docs/icao/PIXIT.md`, `docs/icao/releases/R2026.03/PICS_R2026.03.md`, `docs/icao/releases/R2026.03/PIXIT_R2026.03.md`) and cryptographically tied to `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`.
 14. ✅ Closed (`R2026.03`): conformance test matrix verdicts and row-level artifact references are completed in `docs/icao/CONFORMANCE_TEST_MATRIX.md`.
 15. ✅ Closed (`R2026.03`): national oversight packaging (EU/Italy baseline) with traceable approval records is published in `docs/icao/ITALY_NATIONAL_DECLARATION_PACKAGE.md` and `docs/icao/releases/R2026.03/evidence/italy-national-interop/20260308T150500Z-approval-register.md`.
 
@@ -264,6 +266,7 @@ Implementation framing for the declaration profile:
 
 ## 8. Evidence pointers in this repository
 
+- Release-bound declaration package index under `docs/icao/releases/R2026.03/AUTHORITY_DECLARATION_DOSSIER.md`.
 - Transport and parser tests under `src/test/java/it/amhs/service/`.
 - BER codec tests under `src/test/java/it/amhs/asn1/`.
 - Compliance and address validation tests under `src/test/java/it/amhs/compliance/` and `src/test/java/it/amhs/service/ORAddressTest.java`.
