@@ -1,0 +1,10 @@
+release=R2026.03
+generated_at_utc=2026-03-08T14:15:00Z
+scope=icao_external_claim_operational_assurance
+
+artifacts:
+- 20260308T141500Z-performance-resilience-report.md
+- 20260308T141500Z-slo-declaration.md
+- 20260308T141500Z-monitoring-export-summary.md
+- 20260308T141500Z-failover-drill-report.md
+- 20260308T141500Z-backup-restore-verification.md

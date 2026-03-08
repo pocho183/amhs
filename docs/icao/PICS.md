@@ -132,7 +132,7 @@ Status for `R2026.03`: **closed at minimum baseline** with release-bound artifac
 7. Complete profile-complete P3 semantics evidence (or formalize non-claim boundaries with authority acceptance).
 8. ✅ Closed (`R2026.03`): canonical X.411 ASN.1 module traceability proof pack linked to runtime behavior and test vectors is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 9. Complete objective security evidence for ATN PKI path validation, CRL/OCSP handling, and Doc 9880-aligned security-label policy treatment.
-10. Complete operational assurance evidence set (performance/resilience, monitoring SLOs, failover drills, backup/restore verification).
+10. ✅ Closed (`R2026.03`): operational assurance evidence set is published under `docs/icao/releases/R2026.03/evidence/operational-assurance/` including performance/resilience qualification, SLO declaration, monitoring/alerting export summary, failover drill report, and backup/restore verification.
 
 ### 5.4 Consolidated “still missing” checklist for protocol P3
 
@@ -145,7 +145,7 @@ This checklist summarizes only open items after the `R2026.03` baseline evaluati
   - No open structural gap for the declared national-use baseline.
   - Recurring release obligation: refresh campaign/declaration artifacts and approval records.
 - **ICAO external claim**
-  - Complete `§5.3` items 7..10.
+  - Complete `§5.3` items 7 and 9 (item 8 and item 10 are closed in `R2026.03`).
   - Complete all mandatory evidence/governance items in `§6` and delivery steps in `§7`.
 
 ## 6. Missing points for ICAO compliance closure
@@ -172,8 +172,8 @@ The following items are currently open and should be treated as mandatory closur
 
 ### 6.4 Operational assurance
 
-10. Performance/resilience qualification under sustained load, including retry/fallback and recovery behavior.
-11. Operational readiness execution artifacts per release: completed SLO declarations, monitoring/alerting exports, failover drill logs, and backup/restore verification reports (baseline package published in `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`).
+10. ✅ Closed (`R2026.03`): performance/resilience qualification under sustained load, including retry/fallback and recovery behavior (`docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-performance-resilience-report.md`).
+11. ✅ Closed (`R2026.03`): operational readiness execution artifacts for release `R2026.03` are published in `docs/icao/releases/R2026.03/evidence/operational-assurance/` (SLO declaration, monitoring/alerting export summary, failover drill report, backup/restore verification; baseline structure in `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`).
 12. Safety/security assessment records with residual-risk acceptance by accountable authority.
 
 ### 6.5 Governance and declaration artifacts

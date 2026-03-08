@@ -15,7 +15,7 @@ This matrix is intended to close the "documentation layer" gap by mapping expect
 | Security/PKI | Validate identity binding and TLS behavior | `AMHSComplianceValidatorTest`, TLS runtime config | Baseline checks present; full ATN PKI profile evidence package remains to be completed. |
 | Routing/S&F | Validate route selection, retries, fallback, loop detect | `RelayRoutingServiceTest`, `OutboundRelayEngineTest` | Add sustained-load and recovery tests |
 | DR/NDR | Validate report lifecycle and correlation | `AMHSDeliveryReportService` + repository/domain model | Maintain peer-wire campaign refresh per release; canonical gateway-profile ASN.1 module proof is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md` |
-| Operations | Validate 24/7 reliability and observability | `OPERATIONS_GUIDE.md` operational notes, `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md` | Attach executed per-release drill artifacts (SLO sheet, failover timeline, backup/restore report) |
+| Operations | Validate 24/7 reliability and observability | `OPERATIONS_GUIDE.md` operational notes, `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`, `docs/icao/releases/R2026.03/evidence/operational-assurance/` | ✅ Closed (`R2026.03`): executed artifacts attached (performance/resilience report, SLO sheet, monitoring export summary, failover timeline/report, backup/restore verification) |
 
 ## 2. Required evidence package for external assessment
 
