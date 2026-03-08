@@ -243,7 +243,7 @@ Implementation framing for the declaration profile:
 ### 7.2 Required technical closure for P1
 
 1. ✅ Closed (`R2026.03`): canonical ASN.1 module-level proof package for X.411 is linked to runtime codec behavior and BER vectors in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
-2. Freeze and sign-off extension handling rules (known + unknown elements) with backward-compatibility checks.
+2. ✅ Closed (`R2026.03`): extension handling rules (known + unknown elements), criticality posture, and backward-compatibility checks are frozen and signed in `docs/icao/P1_EXTENSION_HANDLING_POLICY.md`, with regression vectors in `src/test/java/it/amhs/service/P1AssociationProtocolTest.java` and `src/test/java/it/amhs/service/P1BerMessageParserTest.java`.
 3. Complete end-to-end DR/NDR interoperability traces proving correlation and semantic consistency across peers.
 
 ### 7.3 Required technical closure for P3
