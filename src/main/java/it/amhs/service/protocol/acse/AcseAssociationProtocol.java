@@ -70,7 +70,7 @@ public class AcseAssociationProtocol {
             aarq.callingApTitle().map(v -> encodeOid(6, v.objectIdentifier())).orElse(new byte[0]),
             aarq.callingAeQualifier().map(v -> encodeSmallInteger(7, v.value())).orElseGet(() -> aarq.callingAeTitle().map(v -> encodeGraphicString(7, v)).orElse(new byte[0])),
             aarq.authenticationValue().map(v -> encodeOctetString(12, v)).orElse(new byte[0]),
-            aarq.presentationContextOids().isEmpty() ? new byte[0] : encodePresentationContexts(29, aarq.presentationContextOids()),
+            aarq.presentationContexts().isEmpty() ? new byte[0] : encodePresentationContextDefinitionList(29, aarq.presentationContexts()),
             aarq.userInformation().map(v -> encodeUserInformation(30, v)).orElse(new byte[0])
         );
         return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, AARQ_TAG, 0, payload.length, payload));
@@ -112,9 +112,9 @@ public class AcseAssociationProtocol {
             .map(this::decodeOctetString);
         Optional<byte[]> userInformation = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 30)
             .map(this::decodeUserInformation);
-        List<String> presentationContexts = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 29)
+        PresentationContextParseResult presentationContexts = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 29)
             .map(this::decodePresentationContexts)
-            .orElse(List.of());
+            .orElseGet(PresentationContextParseResult::empty);
 
         return new AcseModels.AARQApdu(
             appCtx,
@@ -126,7 +126,8 @@ public class AcseAssociationProtocol {
             calledQualifier,
             authValue,
             userInformation,
-            presentationContexts
+            presentationContexts.abstractSyntaxOids(),
+            presentationContexts.proposedContexts()
         );
     }
 
@@ -135,7 +136,7 @@ public class AcseAssociationProtocol {
         byte[] payload = concat(
             encodeResult(2, result),
             aare.resultSourceDiagnostic().map(this::encodeResultSourceDiagnostic).orElseGet(() -> aare.diagnostic().map(v -> encodeGraphicString(10, v)).orElse(new byte[0])),
-            aare.presentationContextOids().isEmpty() ? new byte[0] : encodePresentationContexts(29, aare.presentationContextOids()),
+            encodeAarePresentationNegotiation(aare),
             aare.userInformation().map(v -> encodeUserInformation(30, v)).orElse(new byte[0])
         );
         return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, AARE_TAG, 0, payload.length, payload));
@@ -157,11 +158,12 @@ public class AcseAssociationProtocol {
 
         Optional<byte[]> userInfo = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 30)
             .map(this::decodeUserInformation);
-        List<String> presentationContexts = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 29)
+        PresentationContextParseResult presentationContexts = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 29)
             .map(this::decodePresentationContexts)
-            .orElse(List.of());
+            .orElseGet(PresentationContextParseResult::empty);
 
-        return new AcseModels.AAREApdu(result == 0, diagnostic, rsd, userInfo, presentationContexts);
+        return new AcseModels.AAREApdu(result == 0, diagnostic, rsd, userInfo,
+            presentationContexts.abstractSyntaxOids(), presentationContexts.acceptedContextIdentifiers());
     }
 
     private byte[] encodeRlrq(AcseModels.RLRQApdu rlrq) {
@@ -271,32 +273,78 @@ public class AcseAssociationProtocol {
         return octets.value();
     }
 
+    private byte[] encodeAarePresentationNegotiation(AcseModels.AAREApdu aare) {
+        if (!aare.acceptedPresentationContextIds().isEmpty()) {
+            return encodeAcceptedPresentationContextIds(29, aare.acceptedPresentationContextIds());
+        }
+        if (!aare.presentationContextOids().isEmpty()) {
+            return encodePresentationContexts(29, aare.presentationContextOids());
+        }
+        return new byte[0];
+    }
+
     private byte[] encodePresentationContexts(int tagNumber, List<String> contextOids) {
-        List<byte[]> entries = new ArrayList<>();
+        List<PresentationContext> contexts = new ArrayList<>();
         int contextIdentifier = 1;
         for (String oid : contextOids) {
-            byte[] abstractSyntax = BerCodec.encode(new BerTlv(0, false, 6, 0, encodeOidValue(oid).length, encodeOidValue(oid)));
-            byte[] transferSyntax = BerCodec.encode(new BerTlv(0, false, 6, 0,
-                encodeOidValue(DEFAULT_TRANSFER_SYNTAX_OID).length, encodeOidValue(DEFAULT_TRANSFER_SYNTAX_OID)));
-            byte[] transferSyntaxList = BerCodec.encode(new BerTlv(0, true, 16, 0, transferSyntax.length, transferSyntax));
-            byte[] contextIdentifierField = BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] {(byte) contextIdentifier}));
+            contexts.add(new PresentationContext(contextIdentifier, oid, List.of(DEFAULT_TRANSFER_SYNTAX_OID)));
+            contextIdentifier += 2;
+        }
+        return encodePresentationContextDefinitionList(tagNumber, contexts);
+    }
+
+    private byte[] encodePresentationContextDefinitionList(int tagNumber, List<PresentationContext> contexts) {
+        List<byte[]> entries = new ArrayList<>();
+        for (PresentationContext context : contexts) {
+            context.validate();
+            byte[] abstractSyntax = BerCodec.encode(new BerTlv(0, false, 6, 0,
+                encodeOidValue(context.abstractSyntaxOid()).length, encodeOidValue(context.abstractSyntaxOid())));
+            List<byte[]> transferSyntaxes = new ArrayList<>();
+            for (String transferSyntaxOid : context.transferSyntaxOids()) {
+                transferSyntaxes.add(BerCodec.encode(new BerTlv(0, false, 6, 0,
+                    encodeOidValue(transferSyntaxOid).length, encodeOidValue(transferSyntaxOid))));
+            }
+            byte[] transferSyntaxListPayload = concat(transferSyntaxes.toArray(new byte[0][]));
+            byte[] transferSyntaxList = BerCodec.encode(new BerTlv(0, true, 16, 0, transferSyntaxListPayload.length, transferSyntaxListPayload));
+            byte[] contextIdentifierField = BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] {(byte) context.identifier()}));
             byte[] payload = concat(contextIdentifierField, abstractSyntax, transferSyntaxList);
             entries.add(BerCodec.encode(new BerTlv(0, true, 16, 0, payload.length, payload)));
-            contextIdentifier += 2;
         }
         byte[] sequence = concat(entries.toArray(new byte[0][]));
         byte[] wrappedSeq = BerCodec.encode(new BerTlv(0, true, 16, 0, sequence.length, sequence));
         return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, tagNumber, 0, wrappedSeq.length, wrappedSeq));
     }
 
-    private List<String> decodePresentationContexts(BerTlv wrapped) {
+    private byte[] encodeAcceptedPresentationContextIds(int tagNumber, Set<Integer> acceptedContextIds) {
+        List<Integer> sortedIds = acceptedContextIds.stream().sorted().toList();
+        List<byte[]> items = new ArrayList<>();
+        for (Integer id : sortedIds) {
+            if (id == null || id <= 0 || id % 2 == 0) {
+                throw new IllegalArgumentException("Accepted presentation-context identifier must be an odd positive integer");
+            }
+            items.add(BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] {(byte) (id & 0xFF)})));
+        }
+        byte[] seqPayload = concat(items.toArray(new byte[0][]));
+        byte[] wrappedSeq = BerCodec.encode(new BerTlv(0, true, 16, 0, seqPayload.length, seqPayload));
+        return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, tagNumber, 0, wrappedSeq.length, wrappedSeq));
+    }
+
+    private PresentationContextParseResult decodePresentationContexts(BerTlv wrapped) {
         BerTlv seq = BerCodec.decodeSingle(wrapped.value());
         if (!seq.isUniversal() || seq.tagNumber() != 16) {
             throw new IllegalArgumentException("ACSE expected SEQUENCE for presentation contexts");
         }
         List<String> oids = new ArrayList<>();
-        Set<Integer> identifiers = new LinkedHashSet<>();
+        List<PresentationContext> proposed = new ArrayList<>();
+        Set<Integer> accepted = new LinkedHashSet<>();
         for (BerTlv item : BerCodec.decodeAll(seq.value())) {
+            if (item.isUniversal() && !item.constructed() && item.tagNumber() == 2 && item.value().length == 1) {
+                int id = item.value()[0] & 0xFF;
+                if (id <= 0 || id % 2 == 0 || !accepted.add(id)) {
+                    throw new IllegalArgumentException("ACSE presentation context identifier must be unique odd positive integer");
+                }
+                continue;
+            }
             if (!item.isUniversal() || item.tagNumber() != 16) {
                 throw new IllegalArgumentException("ACSE presentation context list item must be a SEQUENCE");
             }
@@ -318,15 +366,13 @@ public class AcseAssociationProtocol {
                 throw new IllegalArgumentException("ACSE presentation context item must start with INTEGER identifier");
             }
             int identifier = id.value()[0] & 0xFF;
-            if (identifier <= 0 || identifier % 2 == 0 || !identifiers.add(identifier)) {
-                throw new IllegalArgumentException("ACSE presentation context identifier must be unique odd positive integer");
-            }
 
             BerTlv abstractSyntaxTlv = contextFields.get(1);
             if (!abstractSyntaxTlv.isUniversal() || abstractSyntaxTlv.tagNumber() != 6) {
                 throw new IllegalArgumentException("ACSE presentation context abstract syntax must be OBJECT IDENTIFIER");
             }
-            oids.add(decodeOidValue(abstractSyntaxTlv.value()));
+            String abstractSyntaxOid = decodeOidValue(abstractSyntaxTlv.value());
+            oids.add(abstractSyntaxOid);
 
             BerTlv transferSyntaxList = contextFields.get(2);
             if (!transferSyntaxList.isUniversal() || transferSyntaxList.tagNumber() != 16) {
@@ -336,16 +382,29 @@ public class AcseAssociationProtocol {
             if (transferSyntaxes.isEmpty()) {
                 throw new IllegalArgumentException("ACSE presentation context transfer syntax list cannot be empty");
             }
+            List<String> transferSyntaxOids = new ArrayList<>();
             for (BerTlv transferSyntax : transferSyntaxes) {
                 if (!transferSyntax.isUniversal() || transferSyntax.tagNumber() != 6) {
                     throw new IllegalArgumentException("ACSE transfer syntax must be OBJECT IDENTIFIER");
                 }
+                transferSyntaxOids.add(decodeOidValue(transferSyntax.value()));
             }
+            PresentationContext context = new PresentationContext(identifier, abstractSyntaxOid, transferSyntaxOids);
+            context.validate();
+            proposed.add(context);
         }
-        if (oids.isEmpty()) {
+        if (oids.isEmpty() && proposed.isEmpty() && accepted.isEmpty()) {
             throw new IllegalArgumentException("ACSE presentation context list cannot be empty");
         }
-        return List.copyOf(oids);
+        return new PresentationContextParseResult(List.copyOf(oids), List.copyOf(proposed), Set.copyOf(accepted));
+    }
+
+    private record PresentationContextParseResult(List<String> abstractSyntaxOids,
+                                                  List<PresentationContext> proposedContexts,
+                                                  Set<Integer> acceptedContextIdentifiers) {
+        private static PresentationContextParseResult empty() {
+            return new PresentationContextParseResult(List.of(), List.of(), Set.of());
+        }
     }
 
     private byte[] encodeUserInformation(int tagNumber, byte[] associationInformation) {

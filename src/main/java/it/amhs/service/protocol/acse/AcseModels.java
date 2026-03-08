@@ -2,6 +2,7 @@ package it.amhs.service.protocol.acse;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public final class AcseModels {
 
@@ -30,16 +31,46 @@ public final class AcseModels {
         Optional<AeQualifier> calledAeQualifier,
         Optional<byte[]> authenticationValue,
         Optional<byte[]> userInformation,
-        List<String> presentationContextOids
+        List<String> presentationContextOids,
+        List<PresentationContext> presentationContexts
     ) implements AcseApdu {
         public AARQApdu(String applicationContextName, Optional<String> callingAeTitle, Optional<String> calledAeTitle) {
             this(applicationContextName, callingAeTitle, calledAeTitle,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                Optional.empty(), Optional.empty(), List.of());
+                Optional.empty(), Optional.empty(), List.of(), List.of());
+        }
+
+        public AARQApdu(
+            String applicationContextName,
+            Optional<String> callingAeTitle,
+            Optional<String> calledAeTitle,
+            Optional<ApTitle> callingApTitle,
+            Optional<AeQualifier> callingAeQualifier,
+            Optional<ApTitle> calledApTitle,
+            Optional<AeQualifier> calledAeQualifier,
+            Optional<byte[]> authenticationValue,
+            Optional<byte[]> userInformation,
+            List<String> presentationContextOids
+        ) {
+            this(applicationContextName, callingAeTitle, calledAeTitle, callingApTitle, callingAeQualifier,
+                calledApTitle, calledAeQualifier, authenticationValue, userInformation, presentationContextOids, List.of());
         }
 
         public AARQApdu {
             presentationContextOids = List.copyOf(presentationContextOids);
+            presentationContexts = List.copyOf(presentationContexts);
+            if (presentationContexts.isEmpty() && !presentationContextOids.isEmpty()) {
+                java.util.ArrayList<PresentationContext> generated = new java.util.ArrayList<>();
+                int id = 1;
+                for (String oid : presentationContextOids) {
+                    generated.add(new PresentationContext(id, oid, List.of("2.1.1")));
+                    id += 2;
+                }
+                presentationContexts = List.copyOf(generated);
+            }
+            if (presentationContextOids.isEmpty() && !presentationContexts.isEmpty()) {
+                presentationContextOids = presentationContexts.stream().map(PresentationContext::abstractSyntaxOid).toList();
+            }
         }
     }
 
@@ -48,14 +79,26 @@ public final class AcseModels {
         Optional<String> diagnostic,
         Optional<ResultSourceDiagnostic> resultSourceDiagnostic,
         Optional<byte[]> userInformation,
-        List<String> presentationContextOids
+        List<String> presentationContextOids,
+        Set<Integer> acceptedPresentationContextIds
     ) implements AcseApdu {
         public AAREApdu(boolean accepted, Optional<String> diagnostic) {
-            this(accepted, diagnostic, Optional.empty(), Optional.empty(), List.of());
+            this(accepted, diagnostic, Optional.empty(), Optional.empty(), List.of(), Set.of());
+        }
+
+        public AAREApdu(
+            boolean accepted,
+            Optional<String> diagnostic,
+            Optional<ResultSourceDiagnostic> resultSourceDiagnostic,
+            Optional<byte[]> userInformation,
+            List<String> presentationContextOids
+        ) {
+            this(accepted, diagnostic, resultSourceDiagnostic, userInformation, presentationContextOids, Set.of());
         }
 
         public AAREApdu {
             presentationContextOids = List.copyOf(presentationContextOids);
+            acceptedPresentationContextIds = Set.copyOf(acceptedPresentationContextIds);
         }
     }
 
