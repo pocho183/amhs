@@ -230,8 +230,8 @@ Implementation framing for the declaration profile:
    - ✅ Closed (`R2026.03`): complete operation matrix (bind, submit, probe/status, report handling, release, abort, reject/error classes) is published in `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`.
    - ✅ Closed (`R2026.03`): explicit unsupported/malformed input semantics with deterministic reject reason mapping are published in `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md` section 4 and release-locked to `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`.
 2. **Negotiation and error semantics closure**
-   - Complete ACSE/presentation matrix with all selector/context-name/authentication permutations needed for external claim.
-   - Attach packet-level and log-level evidence for success and failure paths, including negative vectors.
+   - ✅ Closed (`R2026.03`): ACSE/presentation matrix with selector/context-name/authentication permutations for external claim closure is published in `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md` section 4.
+   - ✅ Closed (`R2026.03`): packet-level and log-level success/failure evidence (including negative vectors) is release-published in `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/20260308T210500Z-negotiation-error-semantics-closure.md`, with reproducible execution captures indexed by `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`.
 3. **Multi-vendor interoperability campaign**
    - Run repeatable campaign against at least one certified AMHS implementation plus an additional heterogenous stack.
    - Produce signed campaign report with replay instructions and artifact manifest (pcaps, decoded traces, verdict ledger).

@@ -55,3 +55,19 @@ Source of deterministic diagnostic assertions: `it.amhs.service.protocol.rfc1006
 - Rejection with presentation mismatch maps to provider diagnostic pair `(source=1, diagnostic=2)`.
 - Rejection with authentication mismatch maps to requestor diagnostic pair `(source=2, diagnostic=1)`.
 - Rejected `AARE` envelopes contain both `diagnostic` and `result-source-diagnostic` structures for packet/log correlation.
+
+
+## 5) Reproducible execution + artifact publication path
+
+Execution script: `scripts/evidence/p3_negative_apdu_regression.sh R2026.03`.
+
+The script now publishes release-bound JUnit XML attachments for:
+
+- `P3Asn1GatewayProtocolEvidenceTest` (packet-level + log-level evidence assertions)
+- `P3Asn1GatewayProtocolNegativeVectorsTest` (negative APDU paths)
+- `P3Asn1GatewayProtocolTest` (positive/negative gateway protocol semantics)
+- `RFC1006ServiceAcseNegotiationMatrixTest` (ACSE-MAT-01..15 selector/context/auth permutations)
+- `RFC1006ServiceAcseDiagnosticsTest` (diagnostic source/code stability)
+- `CotpConnectionTpduTest` (malformed TPDU vectors)
+
+Artifact index pointer: `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`.

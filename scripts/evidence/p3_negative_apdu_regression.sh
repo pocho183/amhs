@@ -22,9 +22,11 @@ mkdir -p "$WORK_DIR" "$PUBLISH_DIR"
 LOG_FILE="${WORK_DIR}/run.log"
 CMD=(
   ./gradlew test
+  --tests it.amhs.service.protocol.p3.P3Asn1GatewayProtocolEvidenceTest
   --tests it.amhs.service.protocol.p3.P3Asn1GatewayProtocolNegativeVectorsTest
   --tests it.amhs.service.protocol.p3.P3Asn1GatewayProtocolTest
   --tests it.amhs.service.CotpConnectionTpduTest
+  --tests it.amhs.service.protocol.rfc1006.RFC1006ServiceAcseNegotiationMatrixTest
   --tests it.amhs.service.protocol.rfc1006.RFC1006ServiceAcseDiagnosticsTest
 )
 
@@ -43,6 +45,12 @@ set -e
 cp "$LOG_FILE" "${PUBLISH_DIR}/${STAMP}-run.log"
 
 ARTIFACTS=("${STAMP}-run.log")
+if [[ -f build/test-results/test/TEST-it.amhs.service.protocol.p3.P3Asn1GatewayProtocolEvidenceTest.xml ]]; then
+  cp build/test-results/test/TEST-it.amhs.service.protocol.p3.P3Asn1GatewayProtocolEvidenceTest.xml \
+    "${PUBLISH_DIR}/${STAMP}-TEST-P3Asn1GatewayProtocolEvidenceTest.xml"
+  ARTIFACTS+=("${STAMP}-TEST-P3Asn1GatewayProtocolEvidenceTest.xml")
+fi
+
 if [[ -f build/test-results/test/TEST-it.amhs.service.protocol.p3.P3Asn1GatewayProtocolNegativeVectorsTest.xml ]]; then
   cp build/test-results/test/TEST-it.amhs.service.protocol.p3.P3Asn1GatewayProtocolNegativeVectorsTest.xml \
     "${PUBLISH_DIR}/${STAMP}-TEST-P3Asn1GatewayProtocolNegativeVectorsTest.xml"
@@ -59,6 +67,12 @@ if [[ -f build/test-results/test/TEST-it.amhs.service.CotpConnectionTpduTest.xml
   cp build/test-results/test/TEST-it.amhs.service.CotpConnectionTpduTest.xml \
     "${PUBLISH_DIR}/${STAMP}-TEST-CotpConnectionTpduTest.xml"
   ARTIFACTS+=("${STAMP}-TEST-CotpConnectionTpduTest.xml")
+fi
+
+if [[ -f build/test-results/test/TEST-it.amhs.service.protocol.rfc1006.RFC1006ServiceAcseNegotiationMatrixTest.xml ]]; then
+  cp build/test-results/test/TEST-it.amhs.service.protocol.rfc1006.RFC1006ServiceAcseNegotiationMatrixTest.xml \
+    "${PUBLISH_DIR}/${STAMP}-TEST-RFC1006ServiceAcseNegotiationMatrixTest.xml"
+  ARTIFACTS+=("${STAMP}-TEST-RFC1006ServiceAcseNegotiationMatrixTest.xml")
 fi
 
 if [[ -f build/test-results/test/TEST-it.amhs.service.protocol.rfc1006.RFC1006ServiceAcseDiagnosticsTest.xml ]]; then
