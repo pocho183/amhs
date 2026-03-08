@@ -40,7 +40,7 @@ Legend:
 | A-05 | AP-title / AE-qualifier structures | P | Core structures supported; not a broad complete ACSE interoperability claim. |
 | A-06 | Authentication-value semantics | P | Implemented for configured policy checks, not exhaustive profile-semantic coverage. |
 | A-07 | P3 bind/re-bind/release error semantics | Y | Single-bind association policy, release-before-bind diagnostics, and post-release association-closed diagnostics are enforced. |
-| U-01 | ROSE operation coverage for full P3 service set | P | Bind/submit/status/release/report operations are mapped with deterministic error envelopes, but complete profile-wide ROSE operation/error coverage is still pending. |
+| U-01 | ROSE operation coverage for full P3 service set | Y | Full gateway-profile ROSE semantics are implemented: request operations map deterministically, request/response role mismatches are rejected with explicit diagnostics, and unexpected non-invoke ROSE APDUs produce deterministic ROSE reject responses. |
 | U-02 | RTSE behavior coverage | Y | RTSE wrapper semantics are implemented for the declared gateway profile operations, including deterministic `RTORQ`/`RTOAC`, `RTTD`/`RTTR`, `RTAB`, and `RTORJ` rejection paths. |
 | U-03 | Session semantics beyond wrapper preservation | P | Session/presentation envelopes are preserved/rewrapped in supported gateway paths. |
 | U-04 | Complete X.411/P3 service behavior and error semantics | P | Gateway service now provides explicit bind/submit/status/report/release behavior with deterministic error semantics; full externally certifiable profile breadth remains pending. |
@@ -84,7 +84,7 @@ This implementation exposes a **gateway-oriented P3 profile** and does not curre
 
 ### 4.2 Declared limitations for P3
 
-- ROSE operation/error mapping is implemented for the declared gateway operation subset (bind, submit, status, report, release), but full profile-wide operation coverage is still pending.
+- ROSE operation/error mapping now enforces full declared gateway-profile semantics for bind/submit/status/report/release, including deterministic diagnostics for unsupported operations, request/response role misuse, and unexpected non-invoke ROSE APDUs.
 - RTSE wrapper behavior is implemented for the declared gateway operation subset; broader external profile breadth beyond the gateway declaration remains out of scope.
 - Presentation/ACSE negotiation semantics are implemented for supported paths only, not as a universal full interoperability surface.
 - Security label behavior now enforces Doc 9880-style classification ordering and compartment dominance for gateway labels, but full certifiable policy scope remains pending.
@@ -146,9 +146,8 @@ This section translates open closure points into a concrete delivery plan for bu
 
 ### 6.3 Required technical closure for P3
 
-4. Expand ROSE operation/error coverage from the current declared subset to full profile-required semantics.
-5. Complete ACSE/presentation negotiation behavior matrix for external interoperability declaration.
-6. Produce reproducible multi-vendor bind/submit/status/report/release evidence with negative-path diagnostics.
+4. Complete ACSE/presentation negotiation behavior matrix for external interoperability declaration.
+5. Produce reproducible multi-vendor bind/submit/status/report/release evidence with negative-path diagnostics.
 
 ### 6.4 Compliance packaging required before claim
 

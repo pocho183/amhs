@@ -76,6 +76,10 @@ public class P3Asn1GatewayProtocol {
             return handleRoseInvoke(session, apdu);
         }
 
+        if (isRoseApdu(apdu)) {
+            return roseReject(0, "unexpected-rose-apdu");
+        }
+
         if (apdu.tagClass() != TAG_CLASS_CONTEXT || !apdu.constructed()) {
             return error("invalid-apdu", "Expected context-specific constructed APDU");
         }
@@ -151,6 +155,13 @@ public class P3Asn1GatewayProtocol {
     private boolean isRoseInvoke(BerTlv apdu) {
         return apdu.constructed()
             && apdu.tagNumber() == ROSE_INVOKE
+            && (apdu.tagClass() == TAG_CLASS_APPLICATION || apdu.tagClass() == TAG_CLASS_CONTEXT);
+    }
+
+    private boolean isRoseApdu(BerTlv apdu) {
+        return apdu.constructed()
+            && apdu.tagNumber() >= ROSE_INVOKE
+            && apdu.tagNumber() <= ROSE_REJECT
             && (apdu.tagClass() == TAG_CLASS_APPLICATION || apdu.tagClass() == TAG_CLASS_CONTEXT);
     }
 
@@ -237,6 +248,8 @@ public class P3Asn1GatewayProtocol {
             case APDU_STATUS_REQUEST -> mapStatus(session, argument);
             case APDU_REPORT_REQUEST -> mapReport(session, argument);
             case APDU_RELEASE_REQUEST -> mapRelease(session);
+            case APDU_BIND_RESPONSE, APDU_SUBMIT_RESPONSE, APDU_STATUS_RESPONSE, APDU_ERROR, APDU_RELEASE_RESPONSE, APDU_REPORT_RESPONSE ->
+                error("invalid-operation-role", "ROSE invoke requires a request operation code, got " + operationCode);
             default -> error("unsupported-operation", "Unsupported ROSE operation " + operationCode);
         };
     }
