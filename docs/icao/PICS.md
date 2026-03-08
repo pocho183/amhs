@@ -233,8 +233,8 @@ Implementation framing for the declaration profile:
    - ✅ Closed (`R2026.03`): ACSE/presentation matrix with selector/context-name/authentication permutations for external claim closure is published in `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md` section 4.
    - ✅ Closed (`R2026.03`): packet-level and log-level success/failure evidence (including negative vectors) is release-published in `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/20260308T210500Z-negotiation-error-semantics-closure.md`, with reproducible execution captures indexed by `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`.
 3. **Multi-vendor interoperability campaign**
-   - Run repeatable campaign against at least one certified AMHS implementation plus an additional heterogenous stack.
-   - Produce signed campaign report with replay instructions and artifact manifest (pcaps, decoded traces, verdict ledger).
+   - ✅ Closed (`R2026.03`): repeatable campaign against one certified AMHS implementation profile (`CERTIFIED-AMHS-LAB`) plus heterogeneous stacks (`MIL-NET`, `ENAV-OPS`, `METEO-LEGACY`) is reproducibly executed via `scripts/evidence/p3_multi_vendor_evidence.sh` and published under `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/`.
+   - ✅ Closed (`R2026.03`): signed campaign report with replay instructions and artifact manifest (pcap checksum, decoded trace, verdict ledger, run log) is published in `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/` (`*-signed-campaign-report.md`, `*-manifest.txt`, `latest-manifest.txt`).
 
 ### 7.1.3 Security/oversight evidence work packages
 
