@@ -94,6 +94,14 @@ This implementation exposes a **gateway-oriented P3 profile** and does not curre
 - Intended for controlled integration and gateway scenarios where peer expectations are aligned with the declared profile.
 - External operational declaration as a fully conformant P3 endpoint requires closure of all items in Section 5.
 
+### 4.4 Release-bound configuration fingerprint
+
+This PICS baseline is bound to release fingerprint material in:
+
+- `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`
+
+The fingerprint pins transport ports, TLS modes, listener profile, and route/policy feature flags that scope the declared behavior for this release.
+
 ## 5. P3 compliance evaluation by usage scope
 
 The table below evaluates the current P3 posture for three declaration scopes requested by operators: internal use, national deployment (Italy), and ICAO-oriented external declaration.
@@ -106,9 +114,11 @@ The table below evaluates the current P3 posture for three declaration scopes re
 
 ### 5.1 Internal-use gap closure (minimum)
 
-1. Publish a release-specific internal profile statement listing exact P3 operations supported, unsupported, and associated diagnostics.
-2. Add automated regression evidence for malformed/negative APDU vectors and preserve artifacts per release.
-3. Tie PICS/PIXIT to a configuration fingerprint (ports, TLS mode, listener profile, route/policy flags).
+Status for `R2026.03`: **closed at minimum baseline** with release-bound artifacts:
+
+1. Release-specific internal P3 operation profile + diagnostics: `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`.
+2. Automated malformed/negative APDU regression + artifact preservation: `scripts/evidence/p3_negative_apdu_regression.sh` publishing under `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/`.
+3. PICS/PIXIT release fingerprint binding: `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`.
 
 ### 5.2 National-use (Italy) gap closure
 

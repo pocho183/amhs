@@ -92,7 +92,19 @@ Behavior:
 6. CRL / OCSP runtime enforcement has partial support that may depend on runtime configuration; it is not asserted as complete profile enforcement.
 7. Full certified-node interoperability evidence not yet available.
 
-## 8. Proposed lab execution profile
+## 8. Release configuration fingerprint binding
+
+This PIXIT is release-bound to:
+
+- `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`
+
+The fingerprint captures the declared transport ports, TLS mode, P3 listener profile, and route/policy flags that scope interoperability verdicts for this release.
+
+Reference internal profile declaration for exact supported/unsupported P3 operations and diagnostics:
+
+- `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`
+
+## 9. Proposed lab execution profile
 
 - Run baseline transport and ACSE compatibility suite first.
 - Run negative BER/APDU robustness suite second.

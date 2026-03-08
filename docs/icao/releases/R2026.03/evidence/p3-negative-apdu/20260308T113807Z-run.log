@@ -1,0 +1,5 @@
+# p3 negative apdu regression
+release=R2026.03
+2026-03-08T11:38:07Z
+JAVA_HOME=/root/.local/share/mise/installs/java/21.0.2
+command: ./gradlew test --tests it.amhs.service.protocol.p3.P3Asn1GatewayProtocolNegativeVectorsTest --tests it.amhs.service.protocol.p3.P3Asn1GatewayProtocolTest
