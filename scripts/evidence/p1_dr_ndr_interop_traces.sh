@@ -24,6 +24,7 @@ fi
 CMD=(
   ./gradlew test
   --tests it.amhs.service.AMHSDeliveryReportServiceTest
+  --tests it.amhs.service.AMHSDeliveryReportDeterminismEvidenceTest
   --tests it.amhs.service.X411DiagnosticMapperTest
   --tests it.amhs.service.X411DeliveryReportApduCodecTest
   --tests it.amhs.service.P1AssociationProtocolTest
@@ -99,6 +100,7 @@ This ledger captures deterministic cross-peer DR/NDR evidence chain semantics bo
 ## Executed suites
 
 - it.amhs.service.AMHSDeliveryReportServiceTest
+- it.amhs.service.AMHSDeliveryReportDeterminismEvidenceTest
 - it.amhs.service.X411DiagnosticMapperTest
 - it.amhs.service.X411DeliveryReportApduCodecTest
 - it.amhs.service.P1AssociationProtocolTest
