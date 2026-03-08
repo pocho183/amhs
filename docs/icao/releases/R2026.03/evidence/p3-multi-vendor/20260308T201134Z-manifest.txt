@@ -1,0 +1,20 @@
+release=R2026.03
+timestamp=20260308T201134Z
+exit_code=1
+source_log=build/evidence/releases/R2026.03/p3-multi-vendor/20260308T201134Z/run.log
+copied_artifacts=
+  - 20260308T201134Z-run.log
+  - 20260308T201134Z-multi-vendor.pcap.sha256
+  - 20260308T201134Z-decoded-trace.txt
+  - 20260308T201134Z-diagnostics-summary.txt
+  - 20260308T201134Z-verdict-ledger.md
+  - 20260308T201134Z-signed-campaign-report.md
+replay_command=scripts/evidence/p3_multi_vendor_evidence.sh R2026.03
+pcap=20260308T201134Z-multi-vendor.pcap
+pcap_storage=generated-local-not-versioned
+5e88efad5597dc0d629ae934863d7f931637b40d8966f1149d9f01360259cd1b  20260308T201134Z-run.log
+9cccf45ef16f28e90c2944448b0e13affc4cdb20421aaf36f84ec27104554988  20260308T201134Z-multi-vendor.pcap.sha256
+70ba2204e6b3cafb4d9d9324a1367c63913e115809dd8c0b110ce03d5a323a67  20260308T201134Z-decoded-trace.txt
+cb7d53f22a75cf922d27452f4637bdda73fed07e4eb6fa3037c2c2b22a4e0955  20260308T201134Z-diagnostics-summary.txt
+16bb70110e16f2853eb7fa4c5efdfb8ccdaaf28289991f279cffef43bee5a20a  20260308T201134Z-verdict-ledger.md
+0328c97cc3bc5e1dbbfd5b5c26a17d13998930986e1fa94a94ebcf64685278f0  20260308T201134Z-signed-campaign-report.md
