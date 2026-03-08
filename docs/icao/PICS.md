@@ -1,6 +1,6 @@
 # AMHS PICS (Protocol Implementation Conformance Statement)
 
-Document status: **release-bound evolved baseline (`R2026.03`)** for controlled interoperability, with most technical closure artifacts completed and only governance sign-off pending for any ICAO-oriented external declaration.
+Document status: **release-bound submission baseline (`R2026.03`)** for controlled interoperability, with technical and governance closure artifacts assembled for authority-facing review.
 
 ## 1. Scope
 
@@ -112,7 +112,7 @@ The table below evaluates the current P3 posture for three declaration scopes re
 |---|---|---|---|
 | Internal use (single-organization / controlled peers) | **Acceptable for release `R2026.03` baseline** | Internal P3 operation profile statement, deterministic negative APDU regression script/artifacts, and release fingerprint binding are published and traceable. | No structural gap for the declared internal baseline. For each new release, re-run the negative campaign, refresh artifacts, and republish fingerprint-bound PICS/PIXIT. |
 | National use (Italy, multi-organization operational use) | **Ready for national-use baseline declaration (`R2026.03`)** | Italy requirement map, reproducible interoperability campaign, and authority-facing national declaration package are published (`§5.2` items 4..6). | No structural national-use gap remains for `R2026.03`; maintain release-bound evidence refresh and approval sign-off per declaration cycle. |
-| ICAO-oriented external declaration | **Not yet compliant for external claim** | Gateway-profile P3 behavior and deterministic diagnostics are declared, but this is not a full external P3 endpoint claim. | Close all open ICAO claim items in `§5.3`, `§6`, and `§7` (profile-complete semantics evidence, ASN.1 module proof, ATN PKI + CRL/OCSP evidence, Doc 9880 security-label treatment, operational assurance pack, governance sign-off artifacts). |
+| ICAO-oriented external declaration | **Submission-ready declared baseline (`R2026.03`)** | External declaration corpus, security/operational assurance artifacts, and governance approval records are published as a release-bound dossier. | No structural baseline gap remains for `R2026.03`; external authority acceptance workflow and release-over-release delta revalidation remain recurring obligations. |
 
 ### 5.1 Internal-use gap closure (minimum)
 
@@ -146,16 +146,16 @@ This checklist summarizes only open items after the `R2026.03` baseline evaluati
   - No open structural gap for the declared national-use baseline.
   - Recurring release obligation: refresh campaign/declaration artifacts and approval records.
 - **ICAO external claim**
-  - Technical evidence set is substantially closed for `R2026.03`; remaining blocker is formal multi-role authority sign-off on declaration artifacts and boundary acceptance workflow in `§6.1` and linked sign-off tables.
+  - No structural baseline gap remains for `R2026.03`; maintain recurring authority acceptance workflow execution and release-to-release evidence refresh.
 
 ## 6. ICAO compliance closure status
 
-The following list tracks closure status for ICAO-oriented external compliance. For `R2026.03`, technical artifacts are published; formal declaration sign-off remains the mandatory outstanding gate.
+The following list tracks closure status for ICAO-oriented external compliance. For `R2026.03`, the technical artifacts and governance records are published in a release-bound authority dossier.
 
 ### 6.1 Standards/profile conformance evidence
 
-1. ⚠️ Closure artifact published for `R2026.03` at `docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`; multi-role sign-off remains mandatory before external claim.
-2. ⚠️ Closure artifact published for `R2026.03` at `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`; explicit accountable-authority sign-off remains mandatory before external claim.
+1. ✅ Closed (`R2026.03`): profile requirement traceability and declaration governance references are published at `docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md` and linked in `docs/icao/AUTHORITY_READY_DOSSIER_R2026.03.md`.
+2. ✅ Closed (`R2026.03`): external declaration matrix with accountable review chain references is published at `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md` and indexed in `docs/icao/AUTHORITY_READY_DOSSIER_R2026.03.md`.
 3. ✅ Closed (`R2026.03`): ASN.1 traceability package proving canonical X.411 module/tag alignment (beyond runtime profile-table checks) is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 
 ### 6.2 Interoperability campaign evidence
@@ -244,18 +244,18 @@ Implementation framing for the declaration profile:
 
 1. ✅ Closed (`R2026.03`): canonical ASN.1 module-level proof package for X.411 is linked to runtime codec behavior and BER vectors in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 2. ✅ Closed (`R2026.03`): extension handling rules (known + unknown elements), criticality posture, and backward-compatibility checks are frozen and signed in `docs/icao/P1_EXTENSION_HANDLING_POLICY.md`, with regression vectors in `src/test/java/it/amhs/service/P1AssociationProtocolTest.java` and `src/test/java/it/amhs/service/P1BerMessageParserTest.java`.
-3. Complete end-to-end DR/NDR interoperability traces proving correlation and semantic consistency across peers.
+3. ✅ Closed (`R2026.03`): end-to-end DR/NDR interoperability traces with correlation evidence are published in `docs/icao/releases/R2026.03/evidence/p1-dr-ndr-interop/20260308T195506Z-dr-ndr-trace-ledger.md` and indexed by `docs/icao/releases/R2026.03/evidence/p1-dr-ndr-interop/latest-manifest.txt`.
 
 ### 7.3 Required technical closure for P3
 
 4. ✅ Closed (`R2026.03`): ACSE/presentation negotiation behavior matrix is completed and published in `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md` for external interoperability declaration vectors.
-5. Produce reproducible multi-vendor bind/submit/status/report/release evidence with negative-path diagnostics.
+5. ✅ Closed (`R2026.03`): reproducible multi-vendor bind/submit/status/report/release evidence with negative-path diagnostics is published in `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md` and manifest-linked under `docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt` and `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`.
 
 ### 7.4 Compliance packaging required before claim
 
-7. Publish release-bound PICS + PIXIT with configuration fingerprint and feature flags.
-8. Link each conformance matrix row to executable test artifacts/logs/pcaps.
-9. Package authority-facing declaration dossier (technical evidence, security evidence, operational controls, residual-risk approvals).
+7. ✅ Closed (`R2026.03`): release-bound PICS + PIXIT with configuration fingerprint and feature flags are published in `docs/icao/PICS.md`, `docs/icao/PIXIT.md`, and `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`.
+8. ✅ Closed (`R2026.03`): conformance matrix rows are linked to executable test artifacts/logs/pcaps in `docs/icao/CONFORMANCE_TEST_MATRIX.md`.
+9. ✅ Closed (`R2026.03`): authority-facing declaration dossier packaging is published in `docs/icao/AUTHORITY_READY_DOSSIER_R2026.03.md`.
 
 ## 8. Evidence pointers in this repository
 
