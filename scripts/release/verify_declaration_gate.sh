@@ -33,6 +33,10 @@ require_file "$manifest_file"
 require_file "$dossier_file"
 require_file "$conformance_map"
 
+require_binding "release" "$manifest_file"
+require_binding "generated_utc" "$manifest_file"
+require_binding "artifact_manifest_version" "$manifest_file"
+
 require_binding "release" "$fingerprint_file"
 require_binding "release.git.tag" "$fingerprint_file"
 require_binding "release.git.commit" "$fingerprint_file"
@@ -46,9 +50,11 @@ recorded_tag="$(awk -F= '/^release.git.tag=/{print $2}' "$fingerprint_file")"
 recorded_commit="$(awk -F= '/^release.git.commit=/{print $2}' "$fingerprint_file")"
 recorded_manifest_path="$(awk -F= '/^release.artifact.manifest.path=/{print $2}' "$fingerprint_file")"
 recorded_manifest_sha="$(awk -F= '/^release.artifact.manifest.sha256=/{print $2}' "$fingerprint_file")"
+manifest_release="$(awk -F= '/^release=/{print $2}' "$manifest_file")"
 
 [[ "$recorded_release" == "$release_tag" ]] || { echo "[ERROR] release= mismatch in fingerprint" >&2; exit 1; }
 [[ "$recorded_tag" == "$release_tag" ]] || { echo "[ERROR] release.git.tag mismatch in fingerprint" >&2; exit 1; }
+[[ "$manifest_release" == "$release_tag" ]] || { echo "[ERROR] release= mismatch in declaration artifact manifest" >&2; exit 1; }
 
 if ! git -C "$repo_root" rev-parse --verify "$release_tag^{tag}" >/dev/null 2>&1; then
   echo "[ERROR] Required annotated tag '$release_tag' is not present in git metadata" >&2
@@ -71,6 +77,45 @@ computed_manifest_sha="$(sha256sum "$manifest_file" | awk '{print $1}')"
   echo "[ERROR] Manifest SHA mismatch in fingerprint" >&2
   exit 1
 }
+
+required_manifest_artifacts=(
+  "docs/icao/releases/${release_tag}/AUTHORITY_DECLARATION_DOSSIER.md"
+  "docs/icao/releases/${release_tag}/PICS_${release_tag}.md"
+  "docs/icao/releases/${release_tag}/PIXIT_${release_tag}.md"
+  "docs/icao/releases/${release_tag}/evidence/p3-negative-apdu/latest-manifest.txt"
+  "docs/icao/releases/${release_tag}/evidence/p1-dr-ndr-interop/latest-manifest.txt"
+  "docs/icao/releases/${release_tag}/evidence/italy-national-interop/latest-manifest.txt"
+  "docs/icao/releases/${release_tag}/evidence/atn-pki-runtime-enforcement/latest-manifest.txt"
+  "docs/icao/releases/${release_tag}/evidence/operational-assurance/latest-manifest.txt"
+)
+
+for required_artifact in "${required_manifest_artifacts[@]}"; do
+  if ! grep -Eq "^[[:xdigit:]]{64}[[:space:]]+${required_artifact}$" "$manifest_file"; then
+    echo "[ERROR] Manifest is missing required release artifact: ${required_artifact}" >&2
+    exit 1
+  fi
+done
+
+manifest_entries="$(awk '/^[[:xdigit:]]{64}[[:space:]]+/{count++} END {print count+0}' "$manifest_file")"
+if (( manifest_entries < ${#required_manifest_artifacts[@]} )); then
+  echo "[ERROR] Manifest has insufficient artifact entries (${manifest_entries})" >&2
+  exit 1
+fi
+
+while read -r expected_sha artifact_path; do
+  [[ -n "${expected_sha:-}" && -n "${artifact_path:-}" ]] || continue
+  artifact_abs_path="$repo_root/$artifact_path"
+  if [[ ! -f "$artifact_abs_path" ]]; then
+    echo "[ERROR] Manifest references missing file: ${artifact_path}" >&2
+    exit 1
+  fi
+
+  computed_sha="$(sha256sum "$artifact_abs_path" | awk '{print $1}')"
+  if [[ "$computed_sha" != "$expected_sha" ]]; then
+    echo "[ERROR] Manifest digest mismatch for ${artifact_path}" >&2
+    exit 1
+  fi
+done < <(awk '/^[[:xdigit:]]{64}[[:space:]]+/{print $1, $2}' "$manifest_file")
 
 latest_manifest_count="$(grep -Eo "latest-manifest.txt" "$dossier_file" | wc -l | tr -d ' ')"
 if (( latest_manifest_count < 5 )); then
