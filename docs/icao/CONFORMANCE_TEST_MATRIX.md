@@ -8,13 +8,13 @@ This matrix is intended to close the "documentation layer" gap by mapping expect
 |---|---|---|---|
 | RFC1006/COTP | Validate CR/CC, segmentation, DR/ER, limits | `CotpConnectionTpduTest`, `RFC1006ServiceTest` | Add high-volume soak + malformed TPDU corpus results |
 | ACSE (X.227) | Validate AARQ/AARE, context handling, diagnostics | `AcseAssociationProtocolTest`, `AcseModelsTest`, `PresentationContextTest`, `RFC1006ServiceAcseDiagnosticsTest`, `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md` | Add strict ATN ACSE profile campaign vectors with executed verdict columns/log artifacts for each declared behavior vector |
-| ASN.1/BER | Validate tag/length/value robustness | `BerCodecTest`, `P1BerMessageParserTest` | Add official X.411 module tag traceability table |
+| ASN.1/BER | Validate tag/length/value robustness | `BerCodecTest`, `P1BerMessageParserTest` | ✅ Closed (`R2026.03`): official gateway-profile X.411 module tag traceability table/proof pack published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md` |
 | ROSE/RTSE upper layers | Validate full operation/error semantics and transfer/session behavior | Gateway-focused APDU/session tests | Implement full profile-complete ROSE/RTSE coverage or maintain explicit non-claim |
 | P1/P3 gateway handling | Validate envelope/content, recipient and trace behaviors in gateway profile | `P1AssociationProtocolTest`, parser tests | Add interoperability captures against certified MTA and evidence of unsupported full P3 service semantics |
 | O/R Address | Validate address grammar and policy checks | `ORAddressTest`, `AMHSComplianceValidatorTest`, `ORNameMapperTest` | Maintain interoperability vectors for additional peer-specific legacy encodings |
 | Security/PKI | Validate identity binding and TLS behavior | `AMHSComplianceValidatorTest`, TLS runtime config | Add CRL/OCSP tests and ATN PKI profile statement |
 | Routing/S&F | Validate route selection, retries, fallback, loop detect | `RelayRoutingServiceTest`, `OutboundRelayEngineTest` | Add sustained-load and recovery tests |
-| DR/NDR | Validate report lifecycle and correlation | `AMHSDeliveryReportService` + repository/domain model | Add peer-wire campaign proving canonical ITU-T X.411 ASN.1 tag numbering (current checks are profile-table based) |
+| DR/NDR | Validate report lifecycle and correlation | `AMHSDeliveryReportService` + repository/domain model | Maintain peer-wire campaign refresh per release; canonical gateway-profile ASN.1 module proof is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md` |
 | Operations | Validate 24/7 reliability and observability | `OPERATIONS_GUIDE.md` operational notes, `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md` | Attach executed per-release drill artifacts (SLO sheet, failover timeline, backup/restore report) |
 
 ## 2. Required evidence package for external assessment

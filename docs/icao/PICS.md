@@ -49,7 +49,7 @@ Legend:
 | P1-03 | Per-recipient handling | Y | Per-recipient routing state supported. |
 | P1-04 | Trace information handling | Y | Trace extraction/injection supported. |
 | P1-05 | Unknown extension preservation | Y | Unknown extension containers retained. |
-| P1-06 | Full X.411 ASN.1 module conformance | P | Runtime profile tag-table checks and DR/NDR BER evidence are implemented, but canonical module-level ASN.1 proof is still pending. |
+| P1-06 | Full X.411 ASN.1 module conformance | P | Runtime profile tag-table checks, DR/NDR BER evidence, and canonical module-level ASN.1 proof-pack traceability are implemented for the declared gateway profile (`docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`). |
 | OR-01 | Structured O/R Address parsing | Y | Supports keyed O/R attribute model. |
 | OR-02 | OU sequencing validation (OU1..OU4) | Y | Enforces non-skipping OU order. |
 | OR-03 | ISO/Numeric country validation | Y | Country checks for C attribute. |
@@ -129,7 +129,7 @@ Status for `R2026.03`: **closed at minimum baseline** with release-bound artifac
 ### 5.3 ICAO external-claim gap closure
 
 7. Complete profile-complete P3 semantics evidence (or formalize non-claim boundaries with authority acceptance).
-8. Complete canonical X.411 ASN.1 module traceability proof linked to runtime behavior and test vectors.
+8. ✅ Closed (`R2026.03`): canonical X.411 ASN.1 module traceability proof pack linked to runtime behavior and test vectors is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 9. Complete objective security evidence for ATN PKI path validation, CRL/OCSP handling, and Doc 9880-aligned security-label policy treatment.
 10. Complete operational assurance evidence set (performance/resilience, monitoring SLOs, failover drills, backup/restore verification).
 
@@ -155,7 +155,7 @@ The following items are currently open and should be treated as mandatory closur
 
 1. Formal requirement-by-requirement mapping from applicable ICAO/ATN AMHS profiles to implementation/test evidence.
 2. Full P3 service matrix with explicit supported/unsupported operation and error semantics, signed off for external declaration.
-3. ASN.1 traceability package proving canonical X.411 module/tag alignment (beyond runtime profile-table checks).
+3. ✅ Closed (`R2026.03`): ASN.1 traceability package proving canonical X.411 module/tag alignment (beyond runtime profile-table checks) is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 
 ### 6.2 Interoperability campaign evidence
 
@@ -193,7 +193,7 @@ This section translates open closure points into a concrete delivery plan for bu
 
 ### 7.2 Required technical closure for P1
 
-1. Complete canonical ASN.1 module-level proof package for X.411, linked to runtime codec behavior and BER vectors.
+1. ✅ Closed (`R2026.03`): canonical ASN.1 module-level proof package for X.411 is linked to runtime codec behavior and BER vectors in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 2. Freeze and sign-off extension handling rules (known + unknown elements) with backward-compatibility checks.
 3. Complete end-to-end DR/NDR interoperability traces proving correlation and semantic consistency across peers.
 
