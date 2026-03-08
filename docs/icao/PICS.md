@@ -192,6 +192,54 @@ This section translates open closure points into a concrete delivery plan for bu
 - **P3 target**: externally declared P3 endpoint profile (beyond gateway-only posture) with full documented operation/error semantics.
 - **Security target**: ATN PKI + Doc 9880-aligned operational evidence set suitable for oversight review.
 
+Implementation framing for the declaration profile:
+
+1. **Release-bounded declaration baseline**
+   - Pin declaration to a single release tag with immutable build fingerprint (commit SHA, artifact digest, active feature flags, runtime profile hash).
+   - Enforce “no declaration without artifact manifest” gate in release CI.
+2. **Single-source conformance map**
+   - Maintain one requirement-to-evidence matrix covering P1, P3, security, and operational controls.
+   - Require every declaration statement to link to at least one executable test/log/pcap artifact and one governing document section.
+3. **Deterministic behavior policy**
+   - Promote DR/NDR, ACSE reject paths, and unsupported-operation semantics to normative, versioned behavior contracts.
+   - Treat any runtime divergence from contracts as release-blocking compliance defect.
+
+### 7.1.1 P1 implementation work packages
+
+1. **MTS relay/interpersonal profile hardening**
+   - Finalize supported P1 service subset and explicitly encode unsupported behaviors with stable diagnostics.
+   - Lock message-transfer and interpersonal handling semantics to X.411 canonical module interpretation proven in ASN.1 evidence.
+2. **DR/NDR determinism evidence**
+   - Build reproducible scenarios for delivery success, non-delivery, delay, redirection, and transfer-failure outcomes.
+   - Capture cross-peer trace chain (ingress event → queue state → emitted DR/NDR → peer acknowledgment) with correlation IDs.
+3. **Extension and compatibility governance**
+   - Freeze extension handling policy (known/unknown elements, criticality handling, forward/backward compatibility).
+   - Add regression vectors for legacy encodings observed in operational AMHS environments.
+
+### 7.1.2 P3 implementation work packages
+
+1. **External endpoint profile completion**
+   - Declare complete operation matrix: bind, submit, probe/status, report handling, release, abort, reject/error classes.
+   - Publish explicit semantics for unsupported operations and malformed inputs, including deterministic reject reason mapping.
+2. **Negotiation and error semantics closure**
+   - Complete ACSE/presentation matrix with all selector/context-name/authentication permutations needed for external claim.
+   - Attach packet-level and log-level evidence for success and failure paths, including negative vectors.
+3. **Multi-vendor interoperability campaign**
+   - Run repeatable campaign against at least one certified AMHS implementation plus an additional heterogenous stack.
+   - Produce signed campaign report with replay instructions and artifact manifest (pcaps, decoded traces, verdict ledger).
+
+### 7.1.3 Security/oversight evidence work packages
+
+1. **ATN PKI runtime enforcement assurance**
+   - Demonstrate path validation, CRL/OCSP enforcement, revocation freshness, and failure behavior under degraded PKI reachability.
+   - Tie each control to objective runtime proof (configuration snapshot + execution logs + verdict statement).
+2. **Doc 9880-aligned security-label operations**
+   - Validate label parsing, dominance decisions, downgrade/upgrade constraints, and rejection semantics under mixed-label traffic.
+   - Record residual-risk decisions for any local policy tailoring and obtain accountable-authority sign-off.
+3. **Authority-ready dossier assembly**
+   - Package technical conformance evidence, operational assurance pack, security assurance pack, and governance approvals into one indexable dossier.
+   - Include change-impact delta from prior declared release to support oversight revalidation.
+
 ### 7.2 Required technical closure for P1
 
 1. ✅ Closed (`R2026.03`): canonical ASN.1 module-level proof package for X.411 is linked to runtime codec behavior and BER vectors in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
