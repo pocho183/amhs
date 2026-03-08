@@ -89,7 +89,7 @@ Behavior:
 3. ACSE support is implementation-focused and profile-limited, not a broad complete ACSE conformance claim.
 4. No formal claim of full X.411 ASN.1 module conformance.
 5. No complete security label enforcement profile.
-6. CRL/OCSP behavior is not declared as full profile-complete enforcement for all deployments.
+6. CRL / OCSP runtime enforcement has partial support that may depend on runtime configuration; it is not asserted as complete profile enforcement.
 7. Full certified-node interoperability evidence not yet available.
 
 ## 8. Proposed lab execution profile
