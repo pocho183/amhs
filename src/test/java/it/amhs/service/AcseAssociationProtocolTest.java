@@ -3,6 +3,7 @@ package it.amhs.service;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.charset.StandardCharsets;
@@ -139,6 +140,44 @@ class AcseAssociationProtocolTest {
 
         assertArrayEquals(new byte[] {(byte) 0x61, 0x03, (byte) 0x82, 0x01, 0x01}, encoded);
     }
+
+    @Test
+    void shouldRejectUserInformationWithMultipleExternalElements() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+
+        byte[] assocInfo = BerCodec.encode(new BerTlv(0, false, 4, 0, 1, new byte[] {0x41}));
+        byte[] external = BerCodec.encode(new BerTlv(0, true, 8, 0, assocInfo.length, assocInfo));
+        byte[] userInfoSequencePayload = concat(external, external);
+        byte[] userInfoSequence = BerCodec.encode(new BerTlv(0, true, 16, 0, userInfoSequencePayload.length, userInfoSequencePayload));
+        byte[] wrappedUserInfo = BerCodec.encode(new BerTlv(2, true, 30, 0, userInfoSequence.length, userInfoSequence));
+
+        byte[] apduPayload = concat(appCtx, wrappedUserInfo);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, apduPayload.length, apduPayload));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> protocol.decode(encoded));
+        assertTrue(ex.getMessage().contains("exactly one EXTERNAL"));
+    }
+
+    @Test
+    void shouldRejectUserInformationExternalWithTrailingElements() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+
+        byte[] assocInfo = BerCodec.encode(new BerTlv(0, false, 4, 0, 1, new byte[] {0x41}));
+        byte[] trailingOid = BerCodec.encode(new BerTlv(0, false, 6, 0, 2, new byte[] {0x51, 0x01}));
+        byte[] externalPayload = concat(assocInfo, trailingOid);
+        byte[] external = BerCodec.encode(new BerTlv(0, true, 8, 0, externalPayload.length, externalPayload));
+        byte[] userInfoSequence = BerCodec.encode(new BerTlv(0, true, 16, 0, external.length, external));
+        byte[] wrappedUserInfo = BerCodec.encode(new BerTlv(2, true, 30, 0, userInfoSequence.length, userInfoSequence));
+
+        byte[] apduPayload = concat(appCtx, wrappedUserInfo);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, apduPayload.length, apduPayload));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> protocol.decode(encoded));
+        assertTrue(ex.getMessage().contains("exactly one association-information OCTET STRING"));
+    }
+
     private static byte[] concat(byte[]... chunks) {
         int total = 0;
         for (byte[] chunk : chunks) {
