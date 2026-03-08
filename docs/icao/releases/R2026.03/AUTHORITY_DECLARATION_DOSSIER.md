@@ -15,6 +15,7 @@ This dossier packages the release `R2026.03` declaration evidence into authority
 
 - Release: `R2026.03`
 - Configuration fingerprint: `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`
+- Declaration artifact manifest: `docs/icao/releases/R2026.03/DECLARATION_ARTIFACT_MANIFEST.txt`
 - Release-bound PICS: `docs/icao/releases/R2026.03/PICS_R2026.03.md`
 - Release-bound PIXIT: `docs/icao/releases/R2026.03/PIXIT_R2026.03.md`
 

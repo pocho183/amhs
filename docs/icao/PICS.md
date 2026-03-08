@@ -199,6 +199,7 @@ Implementation framing for the declaration profile:
 1. **Release-bounded declaration baseline**
    - Pin declaration to a single release tag with immutable build fingerprint (commit SHA, artifact digest, active feature flags, runtime profile hash).
    - Enforce “no declaration without artifact manifest” gate in release CI.
+   - Implemented baseline controls for `R2026.03`: declaration artifact manifest (`docs/icao/releases/R2026.03/DECLARATION_ARTIFACT_MANIFEST.txt`), fingerprint linkage (`docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`), and CI gate script/workflow (`scripts/release/verify_declaration_gate.sh`, `.github/workflows/release-declaration-gate.yml`).
 2. **Single-source conformance map**
    - Maintain one requirement-to-evidence matrix covering P1, P3, security, and operational controls.
    - Require every declaration statement to link to at least one executable test/log/pcap artifact and one governing document section.

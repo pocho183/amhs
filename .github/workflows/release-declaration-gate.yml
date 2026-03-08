@@ -1,0 +1,33 @@
+name: Release Declaration Gate
+
+on:
+  push:
+    tags:
+      - 'R*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to validate (for example R2026.03)'
+        required: true
+        type: string
+
+jobs:
+  declaration-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "release_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_tag=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enforce declaration/artifact gate
+        run: ./scripts/release/verify_declaration_gate.sh "${{ steps.resolve.outputs.release_tag }}"
