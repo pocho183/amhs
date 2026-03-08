@@ -15,15 +15,16 @@ This matrix is intended to close the "documentation layer" gap by mapping expect
 | Security/PKI | Validate identity binding and TLS behavior | `AMHSComplianceValidatorTest`, TLS runtime config | Add CRL/OCSP tests and ATN PKI profile statement |
 | Routing/S&F | Validate route selection, retries, fallback, loop detect | `RelayRoutingServiceTest`, `OutboundRelayEngineTest` | Add sustained-load and recovery tests |
 | DR/NDR | Validate report lifecycle and correlation | `AMHSDeliveryReportService` + repository/domain model | Add peer-wire campaign proving canonical ITU-T X.411 ASN.1 tag numbering (current checks are profile-table based) |
-| Operations | Validate 24/7 reliability and observability | `OPERATIONS_GUIDE.md` operational notes | Add SLOs, failover drills, backup/restore evidence |
+| Operations | Validate 24/7 reliability and observability | `OPERATIONS_GUIDE.md` operational notes, `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md` | Attach executed per-release drill artifacts (SLO sheet, failover timeline, backup/restore report) |
 
 ## 2. Required evidence package for external assessment
 
 1. PICS (`docs/icao/PICS.md`)
 2. PIXIT (`docs/icao/PIXIT.md`)
 3. This test matrix + filled verdict columns per campaign run
-4. Captured logs/pcaps for each mandatory negative scenario
-5. Interoperability report against at least one certified AMHS implementation
+4. Operational HA/failover evidence pack (`docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`) with signed release attachments
+5. Captured logs/pcaps for each mandatory negative scenario
+6. Interoperability report against at least one certified AMHS implementation
 
 ## 3. Campaign completion criteria
 
