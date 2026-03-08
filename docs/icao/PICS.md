@@ -2,7 +2,7 @@
 
 Document status: **authority-ready release baseline (`R2026.03`)** for controlled interoperability, with technical and governance closure artifacts assembled for authority-facing review.
 
-Last updated: `2026-03-08` (synchronized with the release-bound wrapper `docs/icao/releases/R2026.03/PICS_R2026.03.md`).
+Last updated: `2026-03-09` (synchronized with the release-bound wrapper `docs/icao/releases/R2026.03/PICS_R2026.03.md`).
 
 ## 1. Scope
 
@@ -18,6 +18,7 @@ This PICS describes the currently implemented behavior of this AMHS server for t
 
 - **Implementation type**: AMHS gateway-oriented server with inbound processing and outbound relay support.
 - **Conformance claim level**: profile-limited implementation for controlled lab/integration usage; **not** a declared full external P3 endpoint conformance claim.
+- **Declaration governance boundary**: ICAO-facing claim scope is constrained by the accepted non-claim boundary and external declaration matrix (`docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md`, `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`).
 
 ## 3. Capability matrix (PICS-style answers)
 
@@ -69,6 +70,7 @@ Legend:
 | R-04 | NDR/DR protocol-level correlation | Y | DR/NDR reports now persist `related_mts_identifier` and `correlation_token` for protocol-level message/report linkage. |
 | D-01 | Negative diagnostic mapping completeness | Y | Dedicated X.411 diagnostic mapper covers timeout, routing, loop, security/auth and validation failure classes with explicit/fallback code selection. |
 | O-01 | Operational HA/failover profile | Y | Formal oversight evidence baseline published in `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`; periodic drill artifacts remain release-operational obligations. |
+| G-01 | External declaration governance boundary traceability | C | External declaration scope is explicitly controlled by the non-claim boundary acceptance and service declaration matrix (`docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md`, `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`). |
 
 ## 4. Protocol P3 section (profile declaration)
 
