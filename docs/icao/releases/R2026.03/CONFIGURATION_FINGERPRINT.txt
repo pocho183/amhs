@@ -28,7 +28,7 @@ fingerprint.material=rfc1006.server.host=0.0.0.0|rfc1006.server.port=102|rfc1006
 release.git.tag=R2026.03
 release.git.commit=4a3788dc6c8cca20b06536dd46b1b9a6fbc4193e
 release.artifact.manifest.path=docs/icao/releases/R2026.03/DECLARATION_ARTIFACT_MANIFEST.txt
-release.artifact.manifest.sha256=ee19ec91c4484a78f1467e818a07f60150b0756daede7ae5a6fcfb398d363cc9
+release.artifact.manifest.sha256=62c246fab84ffd7d601c51cd24406ad0d1994ea3492323e1840c36485f50c3b8
 release.runtime.profile.sha256=491e00414f349ac9321005b480b6a1026169222e9a5554606b15096e8ef1a52f
 release.active.feature-flags=rfc1006.tls.enabled=false,rfc1006.tls.need-client-auth=false,amhs.p3.gateway.enabled=false,amhs.p3.gateway.tls.enabled=false,amhs.p3.gateway.tls.need-client-auth=false,amhs.p3.gateway.listener-profile=STANDARD_P3,amhs.relay.enabled=false,amhs.acse.require-authentication-value=false,tls.pkix.revocation-enabled=false
 
@@ -39,8 +39,8 @@ binding.docs.icao.releases.R2026.03.P3_INTERNAL_PROFILE_STATEMENT.md.sha256=cee8
 binding.src.main.resources.application.properties.sha256=ecb8d79d8551f20c0744c21fd0c405037732de00c13fceb4c77ce69bdeb6b9fb
 binding.docs.icao.releases.R2026.03.PICS_R2026.03.md.sha256=b3d0f2952ad91c6f88b7af460ab920a5757abc78fc06409e0ad3eab084978b50
 binding.docs.icao.releases.R2026.03.PIXIT_R2026.03.md.sha256=b6aa5ae9ca1148522923c36ac6f30f265ba683d5f2b3533091e0f37a6d87d426
-binding.docs.icao.releases.R2026.03.AUTHORITY_DECLARATION_DOSSIER.md.sha256=664b49db0dfdc76371fcebc2d93ea701b5c7590c2a5b6a2b52e2f6aed6f1e112
+binding.docs.icao.releases.R2026.03.AUTHORITY_DECLARATION_DOSSIER.md.sha256=aa8326ec1b3e2068c8a623c7c1b14193740d904f0251b7944e4603080f4411e7
 binding.docs.icao.CONFORMANCE_TEST_MATRIX.md.sha256=34a0b91ca6ccda999df20a45ae3d51f1f927522d1b3575c72ff958439466eec2
-binding.docs.icao.releases.R2026.03.DECLARATION_ARTIFACT_MANIFEST.txt.sha256=ee19ec91c4484a78f1467e818a07f60150b0756daede7ae5a6fcfb398d363cc9
+binding.docs.icao.releases.R2026.03.DECLARATION_ARTIFACT_MANIFEST.txt.sha256=62c246fab84ffd7d601c51cd24406ad0d1994ea3492323e1840c36485f50c3b8
 binding..github.workflows.release-declaration-gate.yml.sha256=9a8bd740080859fe567b712e7b8914c2892720f581732efa58041170d5346493
-binding.scripts.release.verify_declaration_gate.sh.sha256=ea324289ad704d6e5fad112ffb1ed9f5516afbe19a84858707eb4e40b3eeceeb
+binding.scripts.release.verify_declaration_gate.sh.sha256=1668db69676a3f13b83dd947c34e7826211cb140a85fbd17a9eaffd5365ca65d
