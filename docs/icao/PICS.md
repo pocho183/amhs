@@ -109,7 +109,7 @@ The table below evaluates the current P3 posture for three declaration scopes re
 | Scope | Current verdict | Rationale from implemented evidence | What is still missing |
 |---|---|---|---|
 | Internal use (single-organization / controlled peers) | **Acceptable for release `R2026.03` baseline** | Internal P3 operation profile statement, deterministic negative APDU regression script/artifacts, and release fingerprint binding are published and traceable. | No structural gap for the declared internal baseline. For each new release, re-run the negative campaign, refresh artifacts, and republish fingerprint-bound PICS/PIXIT. |
-| National use (Italy, multi-organization operational use) | **Partially ready; declaration package still open** | Italy national-use requirement traceability map is published and closes the mapping action (`§5.2` item 4). | Complete `§5.2` items 5 and 6: (a) execute reproducible national interoperability campaign (multi-peer, pcaps/logs), and (b) produce authority-facing national declaration package (operations, security incl. PKI revocation, incident/failover approvals). |
+| National use (Italy, multi-organization operational use) | **Ready for national-use baseline declaration (`R2026.03`)** | Italy requirement map, reproducible interoperability campaign, and authority-facing national declaration package are published (`§5.2` items 4..6). | No structural national-use gap remains for `R2026.03`; maintain release-bound evidence refresh and approval sign-off per declaration cycle. |
 | ICAO-oriented external declaration | **Not yet compliant for external claim** | Gateway-profile P3 behavior and deterministic diagnostics are declared, but this is not a full external P3 endpoint claim. | Close all open ICAO claim items in `§5.3`, `§6`, and `§7` (profile-complete semantics evidence, ASN.1 module proof, ATN PKI + CRL/OCSP evidence, Doc 9880 security-label treatment, operational assurance pack, governance sign-off artifacts). |
 
 ### 5.1 Internal-use gap closure (minimum)
@@ -124,7 +124,7 @@ Status for `R2026.03`: **closed at minimum baseline** with release-bound artifac
 
 4. ✅ Closed (`R2026.03`): traceable requirement map published in `docs/icao/ITALY_NATIONAL_USE_REQUIREMENT_MAP.md` from adopted AMHS profile obligations to implementation/tests/evidence artifacts.
 5. ✅ Closed (`R2026.03`): national interoperability campaign executed with reproducible logs + pcaps and peer-diversity model, published in `docs/icao/NATIONAL_INTEROP_CAMPAIGN_ITALY.md` and `docs/icao/releases/R2026.03/evidence/italy-national-interop/`.
-6. Produce a national declaration package: operational responsibilities, security controls (PKI revocation behavior included), incident/failover procedures, and authority-facing approvals.
+6. ✅ Closed (`R2026.03`): national declaration package published in `docs/icao/ITALY_NATIONAL_DECLARATION_PACKAGE.md` covering operational responsibilities, security controls (PKI revocation behavior included), incident/failover procedures, and authority-facing approvals.
 
 ### 5.3 ICAO external-claim gap closure
 
@@ -141,8 +141,8 @@ This checklist summarizes only open items after the `R2026.03` baseline evaluati
   - No open structural gap for the declared baseline profile.
   - Recurring release obligation: regenerate evidence + fingerprint-bound declarations.
 - **National use (Italy)**
-  - Execute national interoperability campaign with reproducible artifacts (`§5.2` item 5).
-  - Complete authority-facing national declaration dossier (`§5.2` item 6).
+  - No open structural gap for the declared national-use baseline.
+  - Recurring release obligation: refresh campaign/declaration artifacts and approval records.
 - **ICAO external claim**
   - Complete `§5.3` items 7..10.
   - Complete all mandatory evidence/governance items in `§6` and delivery steps in `§7`.

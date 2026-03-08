@@ -30,13 +30,13 @@ Legend:
 | IT-NU-06 | Security labels are enforced at gateway-policy level (classification + compartments), with explicit profile limitation. | `src/main/java/it/amhs/compliance/SecurityLabelPolicy.java`, `src/main/java/it/amhs/service/protocol/p3/P3GatewaySessionService.java` | `src/test/java/it/amhs/compliance/SecurityLabelPolicyTest.java`, `src/test/java/it/amhs/service/protocol/p3/P3GatewaySessionServiceTest.java` | `docs/icao/PICS.md` (SEC-05), `docs/icao/PIXIT.md` limitation notes | Closed |
 | IT-NU-07 | DR/NDR report persistence and protocol-level correlation remain traceable for audits and incident analysis. | `src/main/java/it/amhs/service/report/AMHSDeliveryReportService.java`, `src/main/java/it/amhs/service/report/X411DeliveryReportApduCodec.java`, `src/main/java/it/amhs/domain/AMHSDeliveryReport.java` | `src/test/java/it/amhs/service/AMHSDeliveryReportServiceTest.java`, `src/test/java/it/amhs/service/X411DeliveryReportApduCodecTest.java` | `docs/icao/X411_MODULE_TRACEABILITY.md` (DR/NDR evidence hooks), `docs/icao/PICS.md` (R-04) | Closed |
 | IT-NU-08 | Reproducible evidence publication is release-bound (config fingerprint + manifests + deterministic scripts). | `scripts/evidence/p3_negative_apdu_regression.sh`, `scripts/evidence/p3_multi_vendor_evidence.sh` | Script-driven execution of `P3Asn1GatewayProtocol*` and `P3GatewaySessionServiceTest` suites | `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`, `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`, `docs/icao/MULTI_VENDOR_BIND_SUBMIT_STATUS_REPORT_RELEASE_EVIDENCE.md` | Closed |
-| IT-NU-09 | National operational assurance package includes failover/HA procedures and release execution pack. | Operational runbooks and controls (`OPERATIONS_GUIDE.md`) | Procedure verification entries in release operations campaigns | `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md` | Open (campaign execution continuity required each release) |
+| IT-NU-09 | National operational assurance package includes failover/HA procedures, declaration responsibilities, security controls (including PKI revocation behavior), and authority-facing approvals. | Operational runbooks and controls (`OPERATIONS_GUIDE.md`) | Procedure verification entries in release operations campaigns | `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`, `docs/icao/ITALY_NATIONAL_DECLARATION_PACKAGE.md` | Closed (recurring per-release evidence/approval refresh required) |
 
 ## 3. Gap-closure outcome for PICS §5.2 item 4
 
 PICS §5.2 item 4 (“Build a traceable requirement map from adopted AMHS profile obligations to implementation/tests/evidence artifacts”) is now closed by this document for the `R2026.03` baseline.
 
-Remaining national-use item (§5.2 item 6) remains a declaration/package activity and is tracked as ongoing campaign work.
+All `§5.2` national-use baseline items (4..6) are closed for `R2026.03`; declaration artifacts remain subject to recurring per-release refresh.
 
 ## 4. Maintenance rule
 
