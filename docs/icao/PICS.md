@@ -122,7 +122,7 @@ Status for `R2026.03`: **closed at minimum baseline** with release-bound artifac
 
 ### 5.2 National-use (Italy) gap closure
 
-4. Build a traceable requirement map from adopted AMHS profile obligations to implementation/tests/evidence artifacts.
+4. ✅ Closed (`R2026.03`): traceable requirement map published in `docs/icao/ITALY_NATIONAL_USE_REQUIREMENT_MAP.md` from adopted AMHS profile obligations to implementation/tests/evidence artifacts.
 5. Execute a national interoperability campaign with reproducible pcaps/logs and peer diversity representative of the expected Italian operational environment.
 6. Produce a national declaration package: operational responsibilities, security controls (PKI revocation behavior included), incident/failover procedures, and authority-facing approvals.
 
