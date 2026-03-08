@@ -88,7 +88,7 @@ Behavior:
 2. Presentation/session handling includes wrapper-preservation/rewrap strategies for supported gateway paths.
 3. ACSE support is implementation-focused and profile-limited, not a broad complete ACSE conformance claim.
 4. No formal claim of full X.411 ASN.1 module conformance.
-5. No complete security label enforcement profile.
+5. Gateway security labels enforce Doc 9880-style classification ordering and compartment dominance semantics; full external profile claim remains out of scope.
 6. CRL / OCSP runtime enforcement has partial support that may depend on runtime configuration; it is not asserted as complete profile enforcement.
 7. Full certified-node interoperability evidence not yet available.
 
