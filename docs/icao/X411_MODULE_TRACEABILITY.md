@@ -96,5 +96,4 @@ Boundary note:
 - Tag-level mapping traceability: **implemented**.
 - Runtime guardrails for unknown APDU/bind/envelope tags: **implemented**.
 - ORName CHOICE and DirectoryName string-family decoding baseline: **implemented**.
-- Formal ASN.1 compiler-generated proof package against official X.411 modules: **pending** (still required for certification).
-
+- Canonical module-level ASN.1 proof pack for the declared gateway profile: **implemented** (`docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md` + executable lock-step tests).
