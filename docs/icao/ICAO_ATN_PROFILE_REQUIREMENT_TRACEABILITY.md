@@ -11,10 +11,12 @@ It consolidates declaration statements across **P1**, **P3**, **security**, and 
 
 A declaration statement is valid only when its matrix row contains:
 
-1. **At least one executable evidence artifact** (`./gradlew test ...` command, script execution log, or pcap/manifest output), and
+1. **At least one executable evidence artifact** (`./gradlew test ...` command, script execution log, or pcap output), and
 2. **At least one governing document section** (release-bound section anchor or control section that defines the declaration boundary).
 
 Rows that do not satisfy both conditions are out-of-policy for external declaration.
+
+This rule is mandatory for **every declaration row** in section 4 and applies uniformly across **P1**, **P3**, **security**, and **operational controls**.
 
 ## 3. Applicable profile/governance sources
 

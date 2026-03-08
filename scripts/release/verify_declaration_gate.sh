@@ -118,8 +118,8 @@ while IFS=$'\t' read -r requirement_id control_family governing_sections evidenc
     echo "[ERROR] ${requirement_id} is missing executable evidence references" >&2
     exit 1
   fi
-  if ! [[ "$evidence_artifacts" =~ (\./gradlew[[:space:]]+test|scripts/|\.log|\.pcap|\.pcap\.sha256|manifest\.txt) ]]; then
-    echo "[ERROR] ${requirement_id} evidence must include executable test/script/log/pcap/manifest artifacts" >&2
+  if ! [[ "$evidence_artifacts" =~ (\./gradlew[[:space:]]+test|\.log|\.pcap|\.pcap\.sha256) ]]; then
+    echo "[ERROR] ${requirement_id} evidence must include at least one executable test/log/pcap artifact" >&2
     exit 1
   fi
 
