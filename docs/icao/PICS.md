@@ -65,7 +65,7 @@ Legend:
 | R-03 | Retry with exponential backoff | Y | Retry policy and dead-letter path supported. |
 | R-04 | NDR/DR protocol-level correlation | Y | DR/NDR reports now persist `related_mts_identifier` and `correlation_token` for protocol-level message/report linkage. |
 | D-01 | Negative diagnostic mapping completeness | Y | Dedicated X.411 diagnostic mapper covers timeout, routing, loop, security/auth and validation failure classes with explicit/fallback code selection. |
-| O-01 | Operational HA/failover profile | P | Operational guidance exists; formal evidence pack for external oversight remains required. |
+| O-01 | Operational HA/failover profile | Y | Formal oversight evidence baseline published in `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`; periodic drill artifacts remain release-operational obligations. |
 
 ## 4. Protocol P3 section (profile declaration)
 
@@ -119,7 +119,7 @@ The following items are currently open and should be treated as mandatory closur
 ### 5.4 Operational assurance
 
 10. Performance/resilience qualification under sustained load, including retry/fallback and recovery behavior.
-11. Operational readiness package: SLOs, monitoring/alerting thresholds, failover drills, backup/restore verification.
+11. Operational readiness execution artifacts per release: completed SLO declarations, monitoring/alerting exports, failover drill logs, and backup/restore verification reports (baseline package published in `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`).
 12. Safety/security assessment records with residual-risk acceptance by accountable authority.
 
 ### 5.5 Governance and declaration artifacts
