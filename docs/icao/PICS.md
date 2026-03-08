@@ -182,6 +182,8 @@ The following list tracks closure status for ICAO-oriented external compliance. 
 14. ✅ Closed (`R2026.03`): conformance test matrix verdicts and row-level artifact references are completed in `docs/icao/CONFORMANCE_TEST_MATRIX.md`.
 15. ✅ Closed (`R2026.03`): national oversight packaging (EU/Italy baseline) with traceable approval records is published in `docs/icao/ITALY_NATIONAL_DECLARATION_PACKAGE.md` and `docs/icao/releases/R2026.03/evidence/italy-national-interop/20260308T150500Z-approval-register.md`.
 
+16. ✅ Closed (`R2026.03`): declaration-profile deterministic behavior contracts for DR/NDR, ACSE reject paths, and unsupported-operation semantics are versioned and published in `docs/icao/contracts/R2026.03/DECLARATION_BEHAVIOR_CONTRACT.md` (`DECL-BEHAVIOR-R2026.03`) with explicit release-blocking divergence policy.
+
 ## 7. P1/P3 ICAO-compliance build plan (implementation-oriented)
 
 This section translates open closure points into a concrete delivery plan for building an AMHS server profile that can be declared ICAO-compliant for P1/P3 scope once all evidence is complete.
@@ -201,8 +203,8 @@ Implementation framing for the declaration profile:
    - Maintain one requirement-to-evidence matrix covering P1, P3, security, and operational controls.
    - Require every declaration statement to link to at least one executable test/log/pcap artifact and one governing document section.
 3. **Deterministic behavior policy**
-   - Promote DR/NDR, ACSE reject paths, and unsupported-operation semantics to normative, versioned behavior contracts.
-   - Treat any runtime divergence from contracts as release-blocking compliance defect.
+   - ✅ Closed (`R2026.03`): DR/NDR, ACSE reject paths, and unsupported-operation semantics are promoted to normative, versioned behavior contracts in `docs/icao/contracts/R2026.03/DECLARATION_BEHAVIOR_CONTRACT.md` (`DECL-BEHAVIOR-R2026.03`).
+   - ✅ Closed (`R2026.03`): runtime divergence from contract semantics is release-blocking for declaration claims under the release gate defined by `docs/icao/contracts/R2026.03/DECLARATION_BEHAVIOR_CONTRACT.md`.
 
 ### 7.1.1 P1 implementation work packages
 
