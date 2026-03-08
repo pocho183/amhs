@@ -1,6 +1,6 @@
 # AMHS PICS (Protocol Implementation Conformance Statement)
 
-Document status: **gateway-profile baseline** for controlled interoperability, with an explicit closure plan toward ICAO-compliant AMHS server declarations for P1/P3 service areas.
+Document status: **release-bound evolved baseline (`R2026.03`)** for controlled interoperability, with most technical closure artifacts completed and only governance sign-off pending for any ICAO-oriented external declaration.
 
 ## 1. Scope
 
@@ -24,6 +24,7 @@ Legend:
 - **Y**: implemented
 - **N**: not implemented
 - **P**: partially implemented
+- **C**: implemented and closure-evidenced for `R2026.03` (claim still scoped by declaration/governance boundary)
 
 | Ref | Capability | Status | Notes |
 |---|---|---|---|
@@ -131,7 +132,7 @@ Status for `R2026.03`: **closed at minimum baseline** with release-bound artifac
 
 7. ✅ Closed (`R2026.03`): non-claim boundary for external P3 profile-complete semantics is formalized with an authority-acceptance workflow in `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md`.
 8. ✅ Closed (`R2026.03`): canonical X.411 ASN.1 module traceability proof pack linked to runtime behavior and test vectors is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
-9. Complete objective security evidence for ATN PKI path validation, CRL/OCSP handling, and Doc 9880-aligned security-label policy treatment.
+9. ✅ Closed (`R2026.03`): objective security evidence for ATN PKI path validation, CRL/OCSP handling, and Doc 9880-aligned security-label policy treatment is published in `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`.
 10. ✅ Closed (`R2026.03`): operational assurance evidence set is published under `docs/icao/releases/R2026.03/evidence/operational-assurance/` including performance/resilience qualification, SLO declaration, monitoring/alerting export summary, failover drill report, and backup/restore verification.
 
 ### 5.4 Consolidated “still missing” checklist for protocol P3
@@ -145,16 +146,16 @@ This checklist summarizes only open items after the `R2026.03` baseline evaluati
   - No open structural gap for the declared national-use baseline.
   - Recurring release obligation: refresh campaign/declaration artifacts and approval records.
 - **ICAO external claim**
-  - Complete all mandatory evidence/governance items in `§6` and delivery steps in `§7` (with interoperability §6.2 items now closed in `R2026.03`).
+  - Technical evidence set is substantially closed for `R2026.03`; remaining blocker is formal multi-role authority sign-off on declaration artifacts and boundary acceptance workflow in `§6.1` and linked sign-off tables.
 
-## 6. Missing points for ICAO compliance closure
+## 6. ICAO compliance closure status
 
-The following items are currently open and should be treated as mandatory closure points before claiming ICAO-oriented external compliance.
+The following list tracks closure status for ICAO-oriented external compliance. For `R2026.03`, technical artifacts are published; formal declaration sign-off remains the mandatory outstanding gate.
 
 ### 6.1 Standards/profile conformance evidence
 
-1. ⚠️ Closure artifact published for `R2026.03` at `docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`; sign-off remains mandatory before external claim.
-2. ⚠️ Closure artifact published for `R2026.03` at `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`; explicit authority sign-off remains mandatory before external claim.
+1. ⚠️ Closure artifact published for `R2026.03` at `docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`; multi-role sign-off remains mandatory before external claim.
+2. ⚠️ Closure artifact published for `R2026.03` at `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`; explicit accountable-authority sign-off remains mandatory before external claim.
 3. ✅ Closed (`R2026.03`): ASN.1 traceability package proving canonical X.411 module/tag alignment (beyond runtime profile-table checks) is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 
 ### 6.2 Interoperability campaign evidence
