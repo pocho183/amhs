@@ -235,9 +235,31 @@ public class P3GatewayServer {
                 return;
             }
             pduIndex++;
-            logger.info("P3 gateway connection #{} BER APDU #{} len={} first-byte=0x{}", connectionId, pduIndex, pdu.length, toHexByte(pdu[0]));
-            byte[] response = asn1GatewayProtocol.handle(session, pdu);
-            output.write(response);
+            String payloadKind = classifyRfc1006Payload(pdu);
+            logger.info(
+                "P3 gateway connection #{} BER APDU #{} len={} first-byte=0x{} kind={} first-bytes={}",
+                connectionId,
+                pduIndex,
+                pdu.length,
+                toHexByte(pdu[0]),
+                payloadKind,
+                toHexPreview(pdu, 64)
+            );
+
+            byte[] applicationPdu = extractApplicationPduFromRfc1006Payload(pdu, payloadKind);
+            if (applicationPdu == null) {
+                logger.warn(
+                    "P3 gateway connection #{} BER APDU #{} kind={} is not supported by the ASN.1 gateway handler (expected BER APDU or OSI Session/Presentation/ACSE envelope); closing connection",
+                    connectionId,
+                    pduIndex,
+                    payloadKind
+                );
+                return;
+            }
+
+            byte[] response = asn1GatewayProtocol.handle(session, applicationPdu);
+            byte[] wrappedResponse = rewrapApplicationPduForRfc1006Response(response, payloadKind, pdu);
+            output.write(wrappedResponse);
             output.flush();
             logger.debug("P3 gateway connection #{} BER APDU #{} response-len={}", connectionId, pduIndex, response.length);
             if (session.isClosed()) {
