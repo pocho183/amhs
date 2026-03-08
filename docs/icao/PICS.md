@@ -174,7 +174,7 @@ The following items are currently open and should be treated as mandatory closur
 
 10. ✅ Closed (`R2026.03`): performance/resilience qualification under sustained load, including retry/fallback and recovery behavior (`docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-performance-resilience-report.md`).
 11. ✅ Closed (`R2026.03`): operational readiness execution artifacts for release `R2026.03` are published in `docs/icao/releases/R2026.03/evidence/operational-assurance/` (SLO declaration, monitoring/alerting export summary, failover drill report, backup/restore verification; baseline structure in `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`).
-12. Safety/security assessment records with residual-risk acceptance by accountable authority.
+12. ✅ Closed (`R2026.03`): safety/security assessment records with residual-risk acceptance by accountable authority are published in `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-safety-security-residual-risk-acceptance.md`.
 
 ### 6.5 Governance and declaration artifacts
 

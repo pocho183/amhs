@@ -8,3 +8,4 @@ artifacts:
 - 20260308T141500Z-monitoring-export-summary.md
 - 20260308T141500Z-failover-drill-report.md
 - 20260308T141500Z-backup-restore-verification.md
+- 20260308T141500Z-safety-security-residual-risk-acceptance.md

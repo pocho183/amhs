@@ -9,6 +9,7 @@ Evidence bundle contents for each run window:
 - `<timestamp>-monitoring-export-summary.md`
 - `<timestamp>-failover-drill-report.md`
 - `<timestamp>-backup-restore-verification.md`
+- `<timestamp>-safety-security-residual-risk-acceptance.md`
 - `<timestamp>-manifest.txt`
 
 `latest-manifest.txt` points to the latest timestamped manifest.
