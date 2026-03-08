@@ -40,6 +40,13 @@ This matrix completes the closure item from `docs/icao/PICS.md` §6.3 ("Complete
 | ACSE-MAT-06 | N/A | `2.6.0.1.6.1` | Auth **required**, value missing | Reject: `authentication-value is mandatory` | `RFC1006ServiceAcseNegotiationMatrixTest` |
 | ACSE-MAT-07 | N/A | `2.6.0.1.6.1` | Expected auth configured, supplied value mismatch | Reject: `authentication-value verification failed` | `RFC1006ServiceAcseNegotiationMatrixTest`, `RFC1006ServiceAcseDiagnosticsTest` |
 | ACSE-MAT-08 | N/A | `2.6.0.1.6.1` | Optional auth present, user-information missing | Reject: `user-information is mandatory ...` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-09 | Cert CN/OU present, calling selector matches cert CN | `2.6.0.1.6.1` | Optional auth present | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-10 | Cert CN/OU present, calling selector matches cert OU | `2.6.0.1.6.1` | Optional auth present | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-11 | N/A | `2.6.0.1.6.1`, presentation-context list absent | Optional auth present | Reject: `presentation-layer negotiation is missing presentation contexts` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-12 | N/A | `2.6.0.1.6.1`, blank presentation-context OID entry | Optional auth present | Reject: `presentation context OID must not be empty` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-13 | N/A | `2.6.0.1.6.1` | Optional auth provided as zero-length | Reject: `authentication-value cannot be empty when provided` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-14 | N/A | `2.6.0.1.6.1` | Auth **required**, value provided and non-empty | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-15 | N/A | `2.6.0.1.6.1` | Expected auth configured, supplied value matches | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
 
 ## 5. Evidence attachment requirement (packet + log)
 

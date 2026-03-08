@@ -116,6 +116,69 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
         );
 
+        AcseModels.AARQApdu certSelectorMatchesCn = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu certSelectorMatchesOu = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("OPS"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu noPresentationContexts = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of()
+        );
+
+        AcseModels.AARQApdu emptyPresentationOid = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, "", List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu emptyAuthProvided = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(new byte[0]),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu requiredAuthProvided = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu expectedAuthMatched = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
         return Stream.of(
             Arguments.of("ACSE-MAT-01 valid selectors/context/auth", service(false, ""), baseline, "", "", null),
             Arguments.of("ACSE-MAT-02 invalid application-context-name", service(false, ""), wrongContextName, "", "",
@@ -131,7 +194,17 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             Arguments.of("ACSE-MAT-07 auth content mismatch", service(false, "token-ok"), wrongAuth, "", "",
                 "ACSE authentication-value verification failed"),
             Arguments.of("ACSE-MAT-08 missing association-information", service(false, ""), missingUserInformation, "", "",
-                "ACSE user-information is mandatory for AMHS association information")
+                "ACSE user-information is mandatory for AMHS association information"),
+            Arguments.of("ACSE-MAT-09 certificate CN binding success", service(false, ""), certSelectorMatchesCn, "ALICE", "OPS", null),
+            Arguments.of("ACSE-MAT-10 certificate OU binding success", service(false, ""), certSelectorMatchesOu, "ALICE", "OPS", null),
+            Arguments.of("ACSE-MAT-11 presentation context list missing", service(false, ""), noPresentationContexts, "", "",
+                "ACSE presentation-layer negotiation is missing presentation contexts"),
+            Arguments.of("ACSE-MAT-12 presentation context OID empty", service(false, ""), emptyPresentationOid, "", "",
+                "ACSE presentation context OID must not be empty"),
+            Arguments.of("ACSE-MAT-13 authentication value provided as zero-length", service(false, ""), emptyAuthProvided, "", "",
+                "ACSE authentication-value cannot be empty when provided"),
+            Arguments.of("ACSE-MAT-14 auth-required policy with valid value", service(true, ""), requiredAuthProvided, "", "", null),
+            Arguments.of("ACSE-MAT-15 expected authentication value matched", service(false, "token-ok"), expectedAuthMatched, "", "", null)
         );
     }
 

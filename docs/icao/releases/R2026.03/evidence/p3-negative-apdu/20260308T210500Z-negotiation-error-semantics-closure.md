@@ -40,3 +40,18 @@ Covered vectors:
 - `ACSE-MAT-06` auth required + missing value (reject)
 - `ACSE-MAT-07` auth mismatch (reject)
 - `ACSE-MAT-08` missing user-information association payload (reject)
+- `ACSE-MAT-09` selector bound to certificate CN (accept)
+- `ACSE-MAT-10` selector bound to certificate OU (accept)
+- `ACSE-MAT-11` missing presentation context list (reject)
+- `ACSE-MAT-12` empty presentation-context OID entry (reject)
+- `ACSE-MAT-13` zero-length authentication value (reject)
+- `ACSE-MAT-14` authentication required with valid value present (accept)
+- `ACSE-MAT-15` expected authentication value exact match (accept)
+
+## 4) Rejection semantics evidence (diagnostic stability)
+
+Source of deterministic diagnostic assertions: `it.amhs.service.protocol.rfc1006.RFC1006ServiceAcseDiagnosticsTest`.
+
+- Rejection with presentation mismatch maps to provider diagnostic pair `(source=1, diagnostic=2)`.
+- Rejection with authentication mismatch maps to requestor diagnostic pair `(source=2, diagnostic=1)`.
+- Rejected `AARE` envelopes contain both `diagnostic` and `result-source-diagnostic` structures for packet/log correlation.
