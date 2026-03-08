@@ -16,6 +16,11 @@ public final class AcseModels {
     }
 
     public record AeQualifier(int value) {
+        public AeQualifier {
+            if (value < 0 || value > 255) {
+                throw new IllegalArgumentException("ACSE AE-qualifier must fit in one octet (0..255)");
+            }
+        }
     }
 
     public record ResultSourceDiagnostic(int source, int diagnostic) {
@@ -58,18 +63,17 @@ public final class AcseModels {
 
         public AARQApdu {
             presentationContextOids = List.copyOf(presentationContextOids);
-            presentationContexts = List.copyOf(presentationContexts);
-            if (presentationContexts.isEmpty() && !presentationContextOids.isEmpty()) {
-                java.util.ArrayList<PresentationContext> generated = new java.util.ArrayList<>();
-                int id = 1;
-                for (String oid : presentationContextOids) {
-                    generated.add(new PresentationContext(id, oid, List.of("2.1.1")));
-                    id += 2;
-                }
-                presentationContexts = List.copyOf(generated);
-            }
-            if (presentationContextOids.isEmpty() && !presentationContexts.isEmpty()) {
-                presentationContextOids = presentationContexts.stream().map(PresentationContext::abstractSyntaxOid).toList();
+            validateAeIdentity("calling", callingAeTitle, callingAeQualifier);
+            validateAeIdentity("called", calledAeTitle, calledAeQualifier);
+        }
+
+        private static void validateAeIdentity(
+            String side,
+            Optional<String> aeTitle,
+            Optional<AeQualifier> aeQualifier
+        ) {
+            if (aeTitle.isPresent() && aeQualifier.isPresent()) {
+                throw new IllegalArgumentException("ACSE " + side + " identity cannot include both AE-title and AE-qualifier");
             }
         }
     }

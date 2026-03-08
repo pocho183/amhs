@@ -415,7 +415,11 @@ public class AcseAssociationProtocol {
     }
 
     private byte[] decodeUserInformation(BerTlv wrapped) {
-        BerTlv sequence = BerCodec.decodeSingle(wrapped.value());
+        List<BerTlv> wrappedElements = BerCodec.decodeAll(wrapped.value());
+        if (wrappedElements.size() != 1) {
+            throw new IllegalArgumentException("ACSE user-information wrapper must contain exactly one SEQUENCE");
+        }
+        BerTlv sequence = wrappedElements.get(0);
         if (!sequence.isUniversal() || sequence.tagNumber() != 16) {
             throw new IllegalArgumentException("ACSE expected SEQUENCE in user-information");
         }
@@ -423,11 +427,18 @@ public class AcseAssociationProtocol {
         if (elements.isEmpty()) {
             return new byte[0];
         }
+        if (elements.size() != 1) {
+            throw new IllegalArgumentException("ACSE user-information SEQUENCE must contain exactly one EXTERNAL");
+        }
         BerTlv external = elements.get(0);
         if (!external.isUniversal() || external.tagNumber() != 8) {
             throw new IllegalArgumentException("ACSE expected EXTERNAL in user-information");
         }
-        BerTlv associationInfo = BerCodec.decodeSingle(external.value());
+        List<BerTlv> externalElements = BerCodec.decodeAll(external.value());
+        if (externalElements.size() != 1) {
+            throw new IllegalArgumentException("ACSE EXTERNAL must contain exactly one association-information OCTET STRING");
+        }
+        BerTlv associationInfo = externalElements.get(0);
         if (!associationInfo.isUniversal() || associationInfo.tagNumber() != 4) {
             throw new IllegalArgumentException("ACSE expected OCTET STRING as association information");
         }
