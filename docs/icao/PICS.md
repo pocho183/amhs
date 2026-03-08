@@ -154,8 +154,8 @@ The following items are currently open and should be treated as mandatory closur
 
 ### 6.1 Standards/profile conformance evidence
 
-1. Formal requirement-by-requirement mapping from applicable ICAO/ATN AMHS profiles to implementation/test evidence.
-2. Full P3 service matrix with explicit supported/unsupported operation and error semantics, signed off for external declaration.
+1. ⚠️ Closure artifact published for `R2026.03` at `docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`; sign-off remains mandatory before external claim.
+2. ⚠️ Closure artifact published for `R2026.03` at `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`; explicit authority sign-off remains mandatory before external claim.
 3. ✅ Closed (`R2026.03`): ASN.1 traceability package proving canonical X.411 module/tag alignment (beyond runtime profile-table checks) is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 
 ### 6.2 Interoperability campaign evidence
