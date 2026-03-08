@@ -178,9 +178,9 @@ The following items are currently open and should be treated as mandatory closur
 
 ### 6.5 Governance and declaration artifacts
 
-13. Completed PICS/PIXIT set tied to a specific release baseline and configuration fingerprint.
-14. Conformance test matrix verdict completion with artifact references per row.
-15. National oversight packaging (including any EU/Italy-specific authority expectations) with traceable approval records.
+13. ✅ Closed (`R2026.03`): completed release-bound PICS/PIXIT set is published (`docs/icao/PICS.md`, `docs/icao/PIXIT.md`) and cryptographically tied to `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`.
+14. ✅ Closed (`R2026.03`): conformance test matrix verdicts and row-level artifact references are completed in `docs/icao/CONFORMANCE_TEST_MATRIX.md`.
+15. ✅ Closed (`R2026.03`): national oversight packaging (EU/Italy baseline) with traceable approval records is published in `docs/icao/ITALY_NATIONAL_DECLARATION_PACKAGE.md` and `docs/icao/releases/R2026.03/evidence/italy-national-interop/20260308T150500Z-approval-register.md`.
 
 ## 7. P1/P3 ICAO-compliance build plan (implementation-oriented)
 

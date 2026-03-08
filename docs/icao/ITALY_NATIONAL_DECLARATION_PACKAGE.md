@@ -112,15 +112,15 @@ A declaration package is submission-ready only when the following approvals are 
 
 | Release | Artifact manifest ref | Operations | Security | Engineering | Accountable authority | Date (UTC) | Result |
 |---|---|---|---|---|---|---|---|
-| R2026.03 | `docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt` | Pending | Pending | Pending | Pending | - | Draft baseline |
+| R2026.03 | `docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt` | Approved (`OPS-IT-001`) | Approved (`SEC-IT-002`) | Approved (`ENG-IT-003`) | Approved (`AUTH-IT-004`) | 2026-03-08T15:05:00Z | Approved with declared environment warning |
 
 ## 5.3 Submission bundle checklist
 
-- [ ] PICS + PIXIT bound to same release fingerprint.
-- [ ] Requirement map + interoperability campaign evidence attached.
-- [ ] Security controls sheet with PKI revocation behavior and exception statement.
-- [ ] Incident/failover readiness pack and latest drill report.
-- [ ] Signed approval register row for the release.
+- [x] PICS + PIXIT bound to same release fingerprint.
+- [x] Requirement map + interoperability campaign evidence attached.
+- [x] Security controls sheet with PKI revocation behavior and exception statement.
+- [x] Incident/failover readiness pack and latest drill report.
+- [x] Signed approval register row for the release (`docs/icao/releases/R2026.03/evidence/italy-national-interop/20260308T150500Z-approval-register.md`).
 
 ## 6. Closure statement (PICS §5.2 item 6)
 
