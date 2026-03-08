@@ -77,7 +77,7 @@ fi
   echo "pcap_storage=${PCAP_STORAGE}"
   echo "junit_dir=build/test-results/test"
   echo "html_report=build/reports/tests/test/index.html"
-  echo "peer_profiles=ENAV-OPS, MIL-NET, METEO-LEGACY"
+  echo "peer_profiles=ENAV-OPS, MIL-NET, CERTIFIED-AMHS-LAB, METEO-LEGACY"
   echo "repro_command=scripts/evidence/italy_national_interop_campaign.sh ${RELEASE}"
 } > "$MANIFEST"
 

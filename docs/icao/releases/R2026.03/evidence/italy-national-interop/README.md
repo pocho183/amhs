@@ -16,3 +16,6 @@ For each run, the script publishes:
 
 
 Binary `.pcap` artifacts are intentionally not versioned in this repository. They are generated locally by the campaign script and can be retained only when `AMHS_EVIDENCE_KEEP_PCAP=1` is set.
+
+
+Peer diversity profile in manifest includes `ENAV-OPS`, `MIL-NET`, `CERTIFIED-AMHS-LAB`, and `METEO-LEGACY`.

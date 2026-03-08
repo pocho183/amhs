@@ -145,8 +145,7 @@ This checklist summarizes only open items after the `R2026.03` baseline evaluati
   - No open structural gap for the declared national-use baseline.
   - Recurring release obligation: refresh campaign/declaration artifacts and approval records.
 - **ICAO external claim**
-  - Complete `§5.3` items 8..10 (item 7 closed via non-claim boundary acceptance path).
-  - Complete all mandatory evidence/governance items in `§6` and delivery steps in `§7`.
+  - Complete all mandatory evidence/governance items in `§6` and delivery steps in `§7` (with interoperability §6.2 items now closed in `R2026.03`).
 
 ## 6. Missing points for ICAO compliance closure
 
@@ -154,15 +153,15 @@ The following items are currently open and should be treated as mandatory closur
 
 ### 6.1 Standards/profile conformance evidence
 
-1. Formal requirement-by-requirement mapping from applicable ICAO/ATN AMHS profiles to implementation/test evidence.
-2. Full P3 service matrix with explicit supported/unsupported operation and error semantics, signed off for external declaration.
+1. ⚠️ Closure artifact published for `R2026.03` at `docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`; sign-off remains mandatory before external claim.
+2. ⚠️ Closure artifact published for `R2026.03` at `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`; explicit authority sign-off remains mandatory before external claim.
 3. ✅ Closed (`R2026.03`): ASN.1 traceability package proving canonical X.411 module/tag alignment (beyond runtime profile-table checks) is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 
 ### 6.2 Interoperability campaign evidence
 
-4. Multi-peer interoperability campaign (including at least one certified AMHS implementation) with reproducible logs and pcaps.
-5. Negative-scenario campaign pack (malformed TPDU, ACSE rejection vectors, unsupported P3 operations) with deterministic verdicts.
-6. Evidence of behavior with legacy peer encodings for O/R and DirectoryName variants observed in operational networks.
+4. ✅ Closed (`R2026.03`): multi-peer interoperability campaign (including certified AMHS lab peer profile) with reproducible logs and pcaps is published in `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md` and `docs/icao/releases/R2026.03/evidence/italy-national-interop/`.
+5. ✅ Closed (`R2026.03`): negative-scenario campaign pack covering malformed TPDU, ACSE rejection vectors, and unsupported P3 operations with deterministic verdicts is published in `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md` and `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/`.
+6. ✅ Closed (`R2026.03`): legacy peer encoding behavior for O/R and DirectoryName variants is evidenced via deterministic ORName/DirectoryName tests and campaign artifacts in `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md`.
 
 ### 6.3 Security and PKI compliance
 
@@ -174,7 +173,7 @@ The following items are currently open and should be treated as mandatory closur
 
 10. ✅ Closed (`R2026.03`): performance/resilience qualification under sustained load, including retry/fallback and recovery behavior (`docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-performance-resilience-report.md`).
 11. ✅ Closed (`R2026.03`): operational readiness execution artifacts for release `R2026.03` are published in `docs/icao/releases/R2026.03/evidence/operational-assurance/` (SLO declaration, monitoring/alerting export summary, failover drill report, backup/restore verification; baseline structure in `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`).
-12. Safety/security assessment records with residual-risk acceptance by accountable authority.
+12. ✅ Closed (`R2026.03`): safety/security assessment records with residual-risk acceptance by accountable authority are published in `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-safety-security-residual-risk-acceptance.md`.
 
 ### 6.5 Governance and declaration artifacts
 
@@ -191,6 +190,54 @@ This section translates open closure points into a concrete delivery plan for bu
 - **P1 target**: externalized MTS relay/interpersonal handling profile aligned with X.411 module definitions and deterministic DR/NDR behavior.
 - **P3 target**: externally declared P3 endpoint profile (beyond gateway-only posture) with full documented operation/error semantics.
 - **Security target**: ATN PKI + Doc 9880-aligned operational evidence set suitable for oversight review.
+
+Implementation framing for the declaration profile:
+
+1. **Release-bounded declaration baseline**
+   - Pin declaration to a single release tag with immutable build fingerprint (commit SHA, artifact digest, active feature flags, runtime profile hash).
+   - Enforce “no declaration without artifact manifest” gate in release CI.
+2. **Single-source conformance map**
+   - Maintain one requirement-to-evidence matrix covering P1, P3, security, and operational controls.
+   - Require every declaration statement to link to at least one executable test/log/pcap artifact and one governing document section.
+3. **Deterministic behavior policy**
+   - Promote DR/NDR, ACSE reject paths, and unsupported-operation semantics to normative, versioned behavior contracts.
+   - Treat any runtime divergence from contracts as release-blocking compliance defect.
+
+### 7.1.1 P1 implementation work packages
+
+1. **MTS relay/interpersonal profile hardening**
+   - Finalize supported P1 service subset and explicitly encode unsupported behaviors with stable diagnostics.
+   - Lock message-transfer and interpersonal handling semantics to X.411 canonical module interpretation proven in ASN.1 evidence.
+2. **DR/NDR determinism evidence**
+   - Build reproducible scenarios for delivery success, non-delivery, delay, redirection, and transfer-failure outcomes.
+   - Capture cross-peer trace chain (ingress event → queue state → emitted DR/NDR → peer acknowledgment) with correlation IDs.
+3. **Extension and compatibility governance**
+   - Freeze extension handling policy (known/unknown elements, criticality handling, forward/backward compatibility).
+   - Add regression vectors for legacy encodings observed in operational AMHS environments.
+
+### 7.1.2 P3 implementation work packages
+
+1. **External endpoint profile completion**
+   - Declare complete operation matrix: bind, submit, probe/status, report handling, release, abort, reject/error classes.
+   - Publish explicit semantics for unsupported operations and malformed inputs, including deterministic reject reason mapping.
+2. **Negotiation and error semantics closure**
+   - Complete ACSE/presentation matrix with all selector/context-name/authentication permutations needed for external claim.
+   - Attach packet-level and log-level evidence for success and failure paths, including negative vectors.
+3. **Multi-vendor interoperability campaign**
+   - Run repeatable campaign against at least one certified AMHS implementation plus an additional heterogenous stack.
+   - Produce signed campaign report with replay instructions and artifact manifest (pcaps, decoded traces, verdict ledger).
+
+### 7.1.3 Security/oversight evidence work packages
+
+1. **ATN PKI runtime enforcement assurance**
+   - Demonstrate path validation, CRL/OCSP enforcement, revocation freshness, and failure behavior under degraded PKI reachability.
+   - Tie each control to objective runtime proof (configuration snapshot + execution logs + verdict statement).
+2. **Doc 9880-aligned security-label operations**
+   - Validate label parsing, dominance decisions, downgrade/upgrade constraints, and rejection semantics under mixed-label traffic.
+   - Record residual-risk decisions for any local policy tailoring and obtain accountable-authority sign-off.
+3. **Authority-ready dossier assembly**
+   - Package technical conformance evidence, operational assurance pack, security assurance pack, and governance approvals into one indexable dossier.
+   - Include change-impact delta from prior declared release to support oversight revalidation.
 
 ### 7.2 Required technical closure for P1
 
