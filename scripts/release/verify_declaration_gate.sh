@@ -12,6 +12,7 @@ release_dir="$repo_root/docs/icao/releases/${release_tag}"
 fingerprint_file="$release_dir/CONFIGURATION_FINGERPRINT.txt"
 manifest_file="$release_dir/DECLARATION_ARTIFACT_MANIFEST.txt"
 dossier_file="$release_dir/AUTHORITY_DECLARATION_DOSSIER.md"
+conformance_map="$repo_root/docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md"
 
 require_file() {
   local file="$1"
@@ -30,6 +31,7 @@ require_binding() {
 require_file "$fingerprint_file"
 require_file "$manifest_file"
 require_file "$dossier_file"
+require_file "$conformance_map"
 
 require_binding "release" "$fingerprint_file"
 require_binding "release.git.tag" "$fingerprint_file"
@@ -75,5 +77,61 @@ if (( latest_manifest_count < 5 )); then
   echo "[ERROR] Authority dossier must reference all required evidence latest-manifest pointers" >&2
   exit 1
 fi
+
+map_rows="$(awk '
+  /^## 4\. Single-source requirement-to-evidence matrix/ {in_section=1; next}
+  /^## / && in_section {in_section=0}
+  in_section && /^\|/ {
+    line=$0
+    gsub(/^\|[[:space:]]*/, "", line)
+    gsub(/[[:space:]]*\|$/, "", line)
+    n=split(line, cols, /[[:space:]]*\|[[:space:]]*/)
+    if (n < 6) next
+    if (cols[1] == "Requirement ID" || cols[1] ~ /^-+$/) next
+    printf "%s\t%s\t%s\t%s\n", cols[1], tolower(cols[2]), cols[4], cols[5]
+  }
+' "$conformance_map" || true)"
+
+[[ -n "$map_rows" ]] || {
+  echo "[ERROR] Conformance map section 4 has no declaration rows: $conformance_map" >&2
+  exit 1
+}
+
+has_p1=0
+has_p3=0
+has_security=0
+has_operational=0
+
+while IFS=$'\t' read -r requirement_id control_family governing_sections evidence_artifacts; do
+  [[ -n "$requirement_id" ]] || continue
+
+  if [[ -z "$governing_sections" || "$governing_sections" == "-" ]]; then
+    echo "[ERROR] ${requirement_id} is missing governing document section references" >&2
+    exit 1
+  fi
+  if [[ "$governing_sections" != *"§"* ]]; then
+    echo "[ERROR] ${requirement_id} governing references must include section anchors (e.g., §n)" >&2
+    exit 1
+  fi
+
+  if [[ -z "$evidence_artifacts" || "$evidence_artifacts" == "-" ]]; then
+    echo "[ERROR] ${requirement_id} is missing executable evidence references" >&2
+    exit 1
+  fi
+  if ! [[ "$evidence_artifacts" =~ (\./gradlew[[:space:]]+test|scripts/|\.log|\.pcap|\.pcap\.sha256|manifest\.txt) ]]; then
+    echo "[ERROR] ${requirement_id} evidence must include executable test/script/log/pcap/manifest artifacts" >&2
+    exit 1
+  fi
+
+  [[ "$control_family" == *"p1"* ]] && has_p1=1
+  [[ "$control_family" == *"p3"* ]] && has_p3=1
+  [[ "$control_family" == *"security"* ]] && has_security=1
+  [[ "$control_family" == *"operational"* ]] && has_operational=1
+done <<< "$map_rows"
+
+(( has_p1 == 1 )) || { echo "[ERROR] Conformance map must include at least one P1 declaration row" >&2; exit 1; }
+(( has_p3 == 1 )) || { echo "[ERROR] Conformance map must include at least one P3 declaration row" >&2; exit 1; }
+(( has_security == 1 )) || { echo "[ERROR] Conformance map must include at least one security declaration row" >&2; exit 1; }
+(( has_operational == 1 )) || { echo "[ERROR] Conformance map must include at least one operational declaration row" >&2; exit 1; }
 
 echo "[OK] Release declaration gate passed for ${release_tag}."
