@@ -310,8 +310,17 @@ public class P3GatewaySessionService {
             return "ERR code=invalid-command detail=Missing submission-id";
         }
 
-        long waitTimeoutMs = parseLong(attributes.get("wait-timeout-ms"), defaultStatusWaitTimeoutMs);
-        long retryIntervalMs = Math.max(1L, parseLong(attributes.get("retry-interval-ms"), defaultStatusRetryIntervalMs));
+        ParsedNumber waitTimeout = parseNonNegativeLong(attributes.get("wait-timeout-ms"), defaultStatusWaitTimeoutMs, "wait-timeout-ms");
+        if (waitTimeout.error() != null) {
+            return waitTimeout.error();
+        }
+        ParsedNumber retryInterval = parseNonNegativeLong(attributes.get("retry-interval-ms"), defaultStatusRetryIntervalMs, "retry-interval-ms");
+        if (retryInterval.error() != null) {
+            return retryInterval.error();
+        }
+
+        long waitTimeoutMs = waitTimeout.value();
+        long retryIntervalMs = Math.max(1L, retryInterval.value());
         Instant deadline = Instant.now().plusMillis(Math.max(0L, waitTimeoutMs));
 
         StatusSnapshot snapshot = loadStatus(submissionId);
@@ -381,14 +390,18 @@ public class P3GatewaySessionService {
         return "PENDING";
     }
 
-    private long parseLong(String maybeNumber, long fallback) {
+    private ParsedNumber parseNonNegativeLong(String maybeNumber, long fallback, String fieldName) {
         if (!StringUtils.hasText(maybeNumber)) {
-            return fallback;
+            return new ParsedNumber(Math.max(0L, fallback), null);
         }
         try {
-            return Long.parseLong(maybeNumber.trim());
+            long parsed = Long.parseLong(maybeNumber.trim());
+            if (parsed < 0L) {
+                return new ParsedNumber(0L, "ERR code=invalid-command detail=" + fieldName + " must be >= 0");
+            }
+            return new ParsedNumber(parsed, null);
         } catch (NumberFormatException ex) {
-            return fallback;
+            return new ParsedNumber(0L, "ERR code=invalid-command detail=Invalid numeric value for " + fieldName);
         }
     }
 
@@ -405,8 +418,17 @@ public class P3GatewaySessionService {
             return "ERR code=invalid-or-address detail=Missing recipient address";
         }
 
-        long waitTimeoutMs = parseLong(attributes.get("wait-timeout-ms"), defaultStatusWaitTimeoutMs);
-        long retryIntervalMs = Math.max(1L, parseLong(attributes.get("retry-interval-ms"), defaultStatusRetryIntervalMs));
+        ParsedNumber waitTimeout = parseNonNegativeLong(attributes.get("wait-timeout-ms"), defaultStatusWaitTimeoutMs, "wait-timeout-ms");
+        if (waitTimeout.error() != null) {
+            return waitTimeout.error();
+        }
+        ParsedNumber retryInterval = parseNonNegativeLong(attributes.get("retry-interval-ms"), defaultStatusRetryIntervalMs, "retry-interval-ms");
+        if (retryInterval.error() != null) {
+            return retryInterval.error();
+        }
+
+        long waitTimeoutMs = waitTimeout.value();
+        long retryIntervalMs = Math.max(1L, retryInterval.value());
         Instant deadline = Instant.now().plusMillis(Math.max(0L, waitTimeoutMs));
 
         AMHSDeliveryReport report = loadNextReport(recipient, state.lastReadReportId);
@@ -421,12 +443,13 @@ public class P3GatewaySessionService {
             report = loadNextReport(recipient, state.lastReadReportId);
         }
 
+        String operationCode = operationName.equalsIgnoreCase("Report") ? "report" : "read";
         if (report == null) {
-            return "OK code=read-empty recipient=" + recipient;
+            return "OK code=" + operationCode + "-empty recipient=" + recipient;
         }
 
         state.lastReadReportId = report.getId();
-        return "OK code=read"
+        return "OK code=" + operationCode
             + " report-id=" + report.getId()
             + " message-id=" + report.getMessage().getMessageId()
             + " recipient=" + report.getRecipient()
@@ -499,5 +522,8 @@ public class P3GatewaySessionService {
     }
 
     private record StatusSnapshot(AMHSMessage message, AMHSDeliveryReport latestReport, String drStatus, String ipnStatus) {
+    }
+
+    private record ParsedNumber(long value, String error) {
     }
 }

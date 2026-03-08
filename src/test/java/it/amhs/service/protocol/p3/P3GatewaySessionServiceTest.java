@@ -519,6 +519,64 @@ class P3GatewaySessionServiceTest {
         assertTrue(statusResponse.contains("ipn-status=REPORTED"));
     }
 
+
+    @Test
+    void statusRejectsInvalidNumericWaitTimeout() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+        assertTrue(sessionService.handleCommand(session,
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test")
+            .startsWith("OK code=bind-accepted"));
+
+        String response = sessionService.handleCommand(session, "STATUS submission-id=sub-1;wait-timeout-ms=nan");
+        assertEquals("ERR code=invalid-command detail=Invalid numeric value for wait-timeout-ms", response);
+    }
+
+    @Test
+    void reportReturnsReportEmptyCodeWhenMailboxHasNoReports() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+        assertTrue(sessionService.handleCommand(session,
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test")
+            .startsWith("OK code=bind-accepted"));
+
+        String response = sessionService.handleCommand(session, "REPORT recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test");
+        assertEquals("OK code=report-empty recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test", response);
+    }
+
+
     private static AMHSChannelService enabledChannelService() {
         AMHSChannel channel = new AMHSChannel();
         channel.setName("ATFM");
