@@ -96,6 +96,30 @@ class P1AssociationProtocolTest {
     }
 
     @Test
+    void shouldKeepBackwardCompatibilityWithLegacyNonContextBindElements() {
+        byte[] bindPayload = concat(
+            contextPrimitive(0, "CALLING-MTA"),
+            contextConstructed(2, BerCodec.encode(new BerTlv(0, false, 6, 0, 5, new byte[] {
+                0x56, 0x00, 0x01, 0x06, 0x01
+            }))),
+            BerCodec.encode(new BerTlv(2, false, 3, 0, 1, new byte[] { 0x01 })),
+            BerCodec.encode(new BerTlv(2, true, 6, 0, 0, new byte[0])),
+            contextConstructed(7, BerCodec.encode(new BerTlv(0, false, 6, 0, 5, new byte[] {
+                0x56, 0x00, 0x01, 0x06, 0x01
+            }))),
+            BerCodec.encode(new BerTlv(0, false, 2, 0, 4, "v1.0".getBytes(StandardCharsets.US_ASCII)))
+        );
+
+        byte[] pdu = BerCodec.encode(new BerTlv(2, true, 0, 0, bindPayload.length, bindPayload));
+
+        P1AssociationProtocol.BindPdu bind = assertInstanceOf(P1AssociationProtocol.BindPdu.class, protocol.decode(pdu));
+        assertEquals("2.6.0.1.6.1", bind.abstractSyntaxOid());
+        assertEquals(1, bind.protocolVersion());
+        assertTrue(bind.mtsApduPresent());
+        assertTrue(bind.presentationContextPresent());
+    }
+
+    @Test
     void shouldEncodeErrorPdu() {
         byte[] error = protocol.encodeError("association", "bind required");
         P1AssociationProtocol.ErrorPdu decoded = assertInstanceOf(P1AssociationProtocol.ErrorPdu.class, protocol.decode(error));

@@ -158,6 +158,46 @@ class P1BerMessageParserTest {
 
 
     @Test
+    void shouldKeepBackwardCompatibilityWhenLegacyEnvelopeContainsExtensionAnchorOnly() {
+        byte[] envelope = sequence(
+            contextPrimitive(6, "legacy-anchor"),
+            contextPrimitive(10, "opaque-extension")
+        );
+
+        byte[] payloadContent = concat(
+            contextPrimitive(0, "LIRRZQZX"),
+            contextPrimitive(1, "LIIRYAYX"),
+            contextUtf8(2, "Hello"),
+            contextConstructed(9, envelope)
+        );
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, payloadContent.length, payloadContent));
+
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+        assertEquals(1, parsed.transferEnvelope().unknownExtensions().size());
+        assertEquals(10, parsed.transferEnvelope().unknownExtensions().get(0).tagNumber());
+    }
+
+    @Test
+    void shouldIgnoreLegacyNonContextEnvelopeElementForBackwardCompatibility() {
+        byte[] envelope = sequence(
+            contextPrimitive(10, "opaque-extension"),
+            BerCodec.encode(new BerTlv(0, false, 19, 0, 7, "LEGACY1".getBytes(StandardCharsets.US_ASCII)))
+        );
+
+        byte[] payloadContent = concat(
+            contextPrimitive(0, "LIRRZQZX"),
+            contextPrimitive(1, "LIIRYAYX"),
+            contextUtf8(2, "Hello"),
+            contextConstructed(9, envelope)
+        );
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, payloadContent.length, payloadContent));
+
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+        assertEquals(1, parsed.transferEnvelope().unknownExtensions().size());
+        assertEquals(10, parsed.transferEnvelope().unknownExtensions().get(0).tagNumber());
+    }
+
+    @Test
     void shouldRejectUnsupportedSecurityClassification() {
         byte[] security = sequence(
             contextUtf8(0, "COSMIC"),
