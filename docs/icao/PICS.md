@@ -237,8 +237,8 @@ Implementation framing for the declaration profile:
    - ✅ Closed (`R2026.03`): label parsing, dominance decisions, downgrade/upgrade constraints, and rejection semantics under mixed-label traffic are evidenced in `docs/icao/releases/R2026.03/evidence/security-pki-label/20260308T152500Z-doc9880-label-operations-oversight-record.md`.
    - ✅ Closed (`R2026.03`): residual-risk decisions for local policy tailoring are recorded with accountable-authority acceptance linkage (`AA-R2026.03-OPS-SEC-001`) in `docs/icao/releases/R2026.03/evidence/security-pki-label/20260308T152500Z-doc9880-label-operations-oversight-record.md` and `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-safety-security-residual-risk-acceptance.md`.
 3. **Authority-ready dossier assembly**
-   - Package technical conformance evidence, operational assurance pack, security assurance pack, and governance approvals into one indexable dossier.
-   - Include change-impact delta from prior declared release to support oversight revalidation.
+   - ✅ Closed (`R2026.03`): technical conformance evidence, operational assurance pack, security assurance pack, and governance approvals are assembled into one indexable dossier in `docs/icao/AUTHORITY_READY_DOSSIER_R2026.03.md`.
+   - ✅ Closed (`R2026.03`): change-impact delta for oversight revalidation is documented in section 5 of `docs/icao/AUTHORITY_READY_DOSSIER_R2026.03.md`, including baseline handling where no prior declared release exists in this repository.
 
 ### 7.2 Required technical closure for P1
 
