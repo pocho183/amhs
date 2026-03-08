@@ -2,6 +2,7 @@ package it.amhs.service.protocol.acse;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public final class AcseModels {
 
@@ -15,6 +16,11 @@ public final class AcseModels {
     }
 
     public record AeQualifier(int value) {
+        public AeQualifier {
+            if (value < 0 || value > 255) {
+                throw new IllegalArgumentException("ACSE AE-qualifier must fit in one octet (0..255)");
+            }
+        }
     }
 
     public record ResultSourceDiagnostic(int source, int diagnostic) {
@@ -30,16 +36,45 @@ public final class AcseModels {
         Optional<AeQualifier> calledAeQualifier,
         Optional<byte[]> authenticationValue,
         Optional<byte[]> userInformation,
-        List<String> presentationContextOids
+        List<String> presentationContextOids,
+        List<PresentationContext> presentationContexts
     ) implements AcseApdu {
         public AARQApdu(String applicationContextName, Optional<String> callingAeTitle, Optional<String> calledAeTitle) {
             this(applicationContextName, callingAeTitle, calledAeTitle,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-                Optional.empty(), Optional.empty(), List.of());
+                Optional.empty(), Optional.empty(), List.of(), List.of());
+        }
+
+        public AARQApdu(
+            String applicationContextName,
+            Optional<String> callingAeTitle,
+            Optional<String> calledAeTitle,
+            Optional<ApTitle> callingApTitle,
+            Optional<AeQualifier> callingAeQualifier,
+            Optional<ApTitle> calledApTitle,
+            Optional<AeQualifier> calledAeQualifier,
+            Optional<byte[]> authenticationValue,
+            Optional<byte[]> userInformation,
+            List<String> presentationContextOids
+        ) {
+            this(applicationContextName, callingAeTitle, calledAeTitle, callingApTitle, callingAeQualifier,
+                calledApTitle, calledAeQualifier, authenticationValue, userInformation, presentationContextOids, List.of());
         }
 
         public AARQApdu {
             presentationContextOids = List.copyOf(presentationContextOids);
+            validateAeIdentity("calling", callingAeTitle, callingAeQualifier);
+            validateAeIdentity("called", calledAeTitle, calledAeQualifier);
+        }
+
+        private static void validateAeIdentity(
+            String side,
+            Optional<String> aeTitle,
+            Optional<AeQualifier> aeQualifier
+        ) {
+            if (aeTitle.isPresent() && aeQualifier.isPresent()) {
+                throw new IllegalArgumentException("ACSE " + side + " identity cannot include both AE-title and AE-qualifier");
+            }
         }
     }
 
@@ -48,14 +83,26 @@ public final class AcseModels {
         Optional<String> diagnostic,
         Optional<ResultSourceDiagnostic> resultSourceDiagnostic,
         Optional<byte[]> userInformation,
-        List<String> presentationContextOids
+        List<String> presentationContextOids,
+        Set<Integer> acceptedPresentationContextIds
     ) implements AcseApdu {
         public AAREApdu(boolean accepted, Optional<String> diagnostic) {
-            this(accepted, diagnostic, Optional.empty(), Optional.empty(), List.of());
+            this(accepted, diagnostic, Optional.empty(), Optional.empty(), List.of(), Set.of());
+        }
+
+        public AAREApdu(
+            boolean accepted,
+            Optional<String> diagnostic,
+            Optional<ResultSourceDiagnostic> resultSourceDiagnostic,
+            Optional<byte[]> userInformation,
+            List<String> presentationContextOids
+        ) {
+            this(accepted, diagnostic, resultSourceDiagnostic, userInformation, presentationContextOids, Set.of());
         }
 
         public AAREApdu {
             presentationContextOids = List.copyOf(presentationContextOids);
+            acceptedPresentationContextIds = Set.copyOf(acceptedPresentationContextIds);
         }
     }
 

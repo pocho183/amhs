@@ -53,4 +53,29 @@ class AcseModelsTest {
         AcseModels.AssociationStateMachine sm = new AcseModels.AssociationStateMachine();
         assertThrows(IllegalStateException.class, () -> sm.onOutbound(new AcseModels.RLRQApdu(Optional.empty())));
     }
+
+    @Test
+    void shouldRejectAarqWithBothAeTitleAndAeQualifierOnSameSide() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> new AcseModels.AARQApdu(
+            "2.6.0.1.6.1",
+            Optional.of("CALLING"),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.27.1")),
+            Optional.of(new AcseModels.AeQualifier(7)),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of("bind-info".getBytes()),
+            java.util.List.of("2.6.0.1.6.1")
+        ));
+
+        assertEquals("ACSE calling identity cannot include both AE-title and AE-qualifier", ex.getMessage());
+    }
+
+    @Test
+    void shouldRejectOutOfRangeAeQualifier() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> new AcseModels.AeQualifier(256));
+        assertEquals("ACSE AE-qualifier must fit in one octet (0..255)", ex.getMessage());
+    }
 }

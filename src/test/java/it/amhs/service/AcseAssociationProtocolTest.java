@@ -3,6 +3,7 @@ package it.amhs.service;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.charset.StandardCharsets;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import it.amhs.service.protocol.acse.AcseAssociationProtocol;
 import it.amhs.service.protocol.acse.AcseModels;
+import it.amhs.service.protocol.acse.PresentationContext;
 
 class AcseAssociationProtocolTest {
 
@@ -125,6 +127,43 @@ class AcseAssociationProtocolTest {
         assertEquals(List.of("2.6.0.1.6.1.1"), decoded.presentationContextOids());
     }
 
+
+    @Test
+    void shouldEncodeAndDecodeControlledPresentationContextNegotiation() {
+        AcseModels.AARQApdu aarq = new AcseModels.AARQApdu(
+            "2.6.0.1.6.1",
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            List.of("2.6.0.1.6.1.1"),
+            List.of(
+                new PresentationContext(1, "2.6.0.1.6.1.1", List.of("2.1.1")),
+                new PresentationContext(3, "1.3.12.2.1011.1.1", List.of("2.1.1"))
+            )
+        );
+
+        AcseModels.AARQApdu decodedAarq = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(protocol.encode(aarq)));
+        assertEquals(2, decodedAarq.presentationContexts().size());
+        assertEquals(1, decodedAarq.presentationContexts().get(0).identifier());
+
+        AcseModels.AAREApdu aare = new AcseModels.AAREApdu(
+            true,
+            Optional.of("accepted"),
+            Optional.empty(),
+            Optional.empty(),
+            List.of("2.6.0.1.6.1.1"),
+            java.util.Set.of(1)
+        );
+
+        AcseModels.AAREApdu decodedAare = assertInstanceOf(AcseModels.AAREApdu.class, protocol.decode(protocol.encode(aare)));
+        assertEquals(java.util.Set.of(1), decodedAare.acceptedPresentationContextIds());
+    }
+
     @Test
     void shouldRejectNonApplicationClassApdus() {
         byte[] invalidApdu = new byte[] {0x30, 0x00};
@@ -139,6 +178,44 @@ class AcseAssociationProtocolTest {
 
         assertArrayEquals(new byte[] {(byte) 0x61, 0x03, (byte) 0x82, 0x01, 0x01}, encoded);
     }
+
+    @Test
+    void shouldRejectUserInformationWithMultipleExternalElements() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+
+        byte[] assocInfo = BerCodec.encode(new BerTlv(0, false, 4, 0, 1, new byte[] {0x41}));
+        byte[] external = BerCodec.encode(new BerTlv(0, true, 8, 0, assocInfo.length, assocInfo));
+        byte[] userInfoSequencePayload = concat(external, external);
+        byte[] userInfoSequence = BerCodec.encode(new BerTlv(0, true, 16, 0, userInfoSequencePayload.length, userInfoSequencePayload));
+        byte[] wrappedUserInfo = BerCodec.encode(new BerTlv(2, true, 30, 0, userInfoSequence.length, userInfoSequence));
+
+        byte[] apduPayload = concat(appCtx, wrappedUserInfo);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, apduPayload.length, apduPayload));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> protocol.decode(encoded));
+        assertTrue(ex.getMessage().contains("exactly one EXTERNAL"));
+    }
+
+    @Test
+    void shouldRejectUserInformationExternalWithTrailingElements() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+
+        byte[] assocInfo = BerCodec.encode(new BerTlv(0, false, 4, 0, 1, new byte[] {0x41}));
+        byte[] trailingOid = BerCodec.encode(new BerTlv(0, false, 6, 0, 2, new byte[] {0x51, 0x01}));
+        byte[] externalPayload = concat(assocInfo, trailingOid);
+        byte[] external = BerCodec.encode(new BerTlv(0, true, 8, 0, externalPayload.length, externalPayload));
+        byte[] userInfoSequence = BerCodec.encode(new BerTlv(0, true, 16, 0, external.length, external));
+        byte[] wrappedUserInfo = BerCodec.encode(new BerTlv(2, true, 30, 0, userInfoSequence.length, userInfoSequence));
+
+        byte[] apduPayload = concat(appCtx, wrappedUserInfo);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, apduPayload.length, apduPayload));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> protocol.decode(encoded));
+        assertTrue(ex.getMessage().contains("exactly one association-information OCTET STRING"));
+    }
+
     private static byte[] concat(byte[]... chunks) {
         int total = 0;
         for (byte[] chunk : chunks) {
