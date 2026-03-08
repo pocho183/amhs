@@ -11,3 +11,6 @@ For each run, the script publishes:
 - optional `<timestamp>-TEST-*.xml` JUnit files when Gradle test execution reaches test phase
 
 `latest-manifest.txt` is a stable pointer to the most recent timestamped execution manifest.
+
+
+Coverage includes deterministic vectors for unsupported P3 operations, ACSE rejection diagnostics, and malformed COTP/TPDU parsing paths (via release-bound JUnit XML artifacts when produced).

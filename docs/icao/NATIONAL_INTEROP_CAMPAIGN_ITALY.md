@@ -12,11 +12,12 @@ Execute and preserve release-bound evidence for:
 
 ## Peer diversity model used for campaign
 
-The campaign models three peer families used in Italian AMHS operational context:
+The campaign models four peer families used in Italian AMHS operational context:
 
 1. **ENAV-OPS**: modern operations-facing partner profile.
 2. **MIL-NET**: profile using explicit RTSE/ROSE wrapper behavior.
-3. **METEO-LEGACY**: legacy encoding-sensitive partner profile (DirectoryName/O/R variants).
+3. **CERTIFIED-AMHS-LAB**: certified AMHS implementation profile used for cross-stack bind/submit/status/report/release validation.
+4. **METEO-LEGACY**: legacy encoding-sensitive partner profile (DirectoryName/O/R variants).
 
 ## Reproducible execution command
 
@@ -24,7 +25,7 @@ The campaign models three peer families used in Italian AMHS operational context
 scripts/evidence/italy_national_interop_campaign.sh R2026.03
 ```
 
-The script performs deterministic JUnit execution for P3 gateway bind/submit/status/report/release behavior and ORName legacy handling, then publishes a deterministic peer-diversity packet capture.
+The script performs deterministic JUnit execution for P3 gateway bind/submit/status/report/release behavior and ORName legacy handling, then publishes a deterministic peer-diversity packet capture including the certified-lab peer profile.
 
 ## Evidence artifacts
 

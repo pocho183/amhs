@@ -145,8 +145,7 @@ This checklist summarizes only open items after the `R2026.03` baseline evaluati
   - No open structural gap for the declared national-use baseline.
   - Recurring release obligation: refresh campaign/declaration artifacts and approval records.
 - **ICAO external claim**
-  - Complete `§5.3` items 8..10 (item 7 closed via non-claim boundary acceptance path).
-  - Complete all mandatory evidence/governance items in `§6` and delivery steps in `§7`.
+  - Complete all mandatory evidence/governance items in `§6` and delivery steps in `§7` (with interoperability §6.2 items now closed in `R2026.03`).
 
 ## 6. Missing points for ICAO compliance closure
 
@@ -160,9 +159,9 @@ The following items are currently open and should be treated as mandatory closur
 
 ### 6.2 Interoperability campaign evidence
 
-4. Multi-peer interoperability campaign (including at least one certified AMHS implementation) with reproducible logs and pcaps.
-5. Negative-scenario campaign pack (malformed TPDU, ACSE rejection vectors, unsupported P3 operations) with deterministic verdicts.
-6. Evidence of behavior with legacy peer encodings for O/R and DirectoryName variants observed in operational networks.
+4. ✅ Closed (`R2026.03`): multi-peer interoperability campaign (including certified AMHS lab peer profile) with reproducible logs and pcaps is published in `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md` and `docs/icao/releases/R2026.03/evidence/italy-national-interop/`.
+5. ✅ Closed (`R2026.03`): negative-scenario campaign pack covering malformed TPDU, ACSE rejection vectors, and unsupported P3 operations with deterministic verdicts is published in `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md` and `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/`.
+6. ✅ Closed (`R2026.03`): legacy peer encoding behavior for O/R and DirectoryName variants is evidenced via deterministic ORName/DirectoryName tests and campaign artifacts in `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md`.
 
 ### 6.3 Security and PKI compliance
 
