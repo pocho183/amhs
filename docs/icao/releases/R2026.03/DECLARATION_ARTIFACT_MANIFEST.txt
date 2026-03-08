@@ -1,0 +1,12 @@
+release=R2026.03
+generated_utc=2026-03-08T20:14:02Z
+artifact_manifest_version=1
+
+664b49db0dfdc76371fcebc2d93ea701b5c7590c2a5b6a2b52e2f6aed6f1e112  docs/icao/releases/R2026.03/AUTHORITY_DECLARATION_DOSSIER.md
+b3d0f2952ad91c6f88b7af460ab920a5757abc78fc06409e0ad3eab084978b50  docs/icao/releases/R2026.03/PICS_R2026.03.md
+b6aa5ae9ca1148522923c36ac6f30f265ba683d5f2b3533091e0f37a6d87d426  docs/icao/releases/R2026.03/PIXIT_R2026.03.md
+63a07ac6d26d42437d7ad603d31fbd688d054e610471ecd890d75c549ab49c3e  docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt
+9161dbbaa51a415f9e65dce592ba632724e42fc84eb407ced9e2b6a3dfdc0a15  docs/icao/releases/R2026.03/evidence/p1-dr-ndr-interop/latest-manifest.txt
+efdeb7995a70d85081449ec0b090c22b272418c89e50369a1012117eddcbb0f9  docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt
+442ca61a41d476d8873af6df215df2b55f695cd3492c86d939d80958d640402c  docs/icao/releases/R2026.03/evidence/atn-pki-runtime-enforcement/latest-manifest.txt
+97393e470bd0fa9ebd5105a9d288e3c16c4d48c4ed4a45b272b879486e736d40  docs/icao/releases/R2026.03/evidence/operational-assurance/latest-manifest.txt

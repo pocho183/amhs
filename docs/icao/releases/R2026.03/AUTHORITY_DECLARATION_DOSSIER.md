@@ -15,6 +15,7 @@ This dossier packages the release `R2026.03` declaration evidence into authority
 
 - Release: `R2026.03`
 - Configuration fingerprint: `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`
+- Declaration artifact manifest: `docs/icao/releases/R2026.03/DECLARATION_ARTIFACT_MANIFEST.txt`
 - Release-bound PICS: `docs/icao/releases/R2026.03/PICS_R2026.03.md`
 - Release-bound PIXIT: `docs/icao/releases/R2026.03/PIXIT_R2026.03.md`
 
@@ -53,6 +54,8 @@ This dossier packages the release `R2026.03` declaration evidence into authority
 ## 7. Submission gate checklist
 
 - [x] Release-bound PICS/PIXIT published and linked to configuration fingerprint.
+- [x] Declaration package is pinned to release tag `R2026.03`, immutable commit SHA, runtime profile hash, and declaration artifact manifest digest.
+- [x] Release CI gate (`scripts/release/verify_declaration_gate.sh`) blocks declaration publication when required artifact manifests are missing.
 - [x] Conformance matrix rows linked to executable tests/scripts and evidence artifacts.
 - [x] Technical, security, and operational evidence sections assembled for authority review.
 - [x] Residual-risk approvals and governance acceptance records linked.
