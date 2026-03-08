@@ -24,6 +24,8 @@ CMD=(
   ./gradlew test
   --tests it.amhs.service.protocol.p3.P3Asn1GatewayProtocolNegativeVectorsTest
   --tests it.amhs.service.protocol.p3.P3Asn1GatewayProtocolTest
+  --tests it.amhs.service.CotpConnectionTpduTest
+  --tests it.amhs.service.protocol.rfc1006.RFC1006ServiceAcseDiagnosticsTest
 )
 
 set +e
@@ -51,6 +53,18 @@ if [[ -f build/test-results/test/TEST-it.amhs.service.protocol.p3.P3Asn1GatewayP
   cp build/test-results/test/TEST-it.amhs.service.protocol.p3.P3Asn1GatewayProtocolTest.xml \
     "${PUBLISH_DIR}/${STAMP}-TEST-P3Asn1GatewayProtocolTest.xml"
   ARTIFACTS+=("${STAMP}-TEST-P3Asn1GatewayProtocolTest.xml")
+fi
+
+if [[ -f build/test-results/test/TEST-it.amhs.service.CotpConnectionTpduTest.xml ]]; then
+  cp build/test-results/test/TEST-it.amhs.service.CotpConnectionTpduTest.xml \
+    "${PUBLISH_DIR}/${STAMP}-TEST-CotpConnectionTpduTest.xml"
+  ARTIFACTS+=("${STAMP}-TEST-CotpConnectionTpduTest.xml")
+fi
+
+if [[ -f build/test-results/test/TEST-it.amhs.service.protocol.rfc1006.RFC1006ServiceAcseDiagnosticsTest.xml ]]; then
+  cp build/test-results/test/TEST-it.amhs.service.protocol.rfc1006.RFC1006ServiceAcseDiagnosticsTest.xml \
+    "${PUBLISH_DIR}/${STAMP}-TEST-RFC1006ServiceAcseDiagnosticsTest.xml"
+  ARTIFACTS+=("${STAMP}-TEST-RFC1006ServiceAcseDiagnosticsTest.xml")
 fi
 
 {

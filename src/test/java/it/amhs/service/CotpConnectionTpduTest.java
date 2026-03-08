@@ -1,6 +1,7 @@
 package it.amhs.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -38,5 +39,24 @@ class CotpConnectionTpduTest {
         CotpConnectionTpdu cr = new CotpConnectionTpdu(CotpConnectionTpdu.PDU_CR, 1, 2, 0, Optional.empty(), List.of());
         assertTrue(cr.serialize().length >= 7);
         assertEquals(16_384, cr.negotiatedMaxUserData());
+    }
+
+    @Test
+    void shouldRejectMalformedTpduWithInvalidParameterLength() {
+        byte[] malformed = new byte[] {
+            0x08,
+            (byte) 0xE0,
+            0x00,
+            0x01,
+            0x00,
+            0x02,
+            0x00,
+            (byte) 0xC0,
+            0x05,
+            0x0C,
+        };
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> CotpConnectionTpdu.parse(malformed));
+        assertEquals("Invalid COTP parameter length", ex.getMessage());
     }
 }

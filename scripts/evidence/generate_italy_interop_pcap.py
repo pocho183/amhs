@@ -89,6 +89,7 @@ def main() -> None:
     scenarios = [
         ("ENAV-OPS", "BIND submit status report release", "127.0.0.11", 31021, "127.0.0.20", 102),
         ("MIL-NET", "RTSE/ROSE bind submit release", "127.0.0.12", 31022, "127.0.0.20", 102),
+        ("CERTIFIED-AMHS-LAB", "Cross-stack certified bind submit status report release", "127.0.0.14", 31024, "127.0.0.20", 102),
         ("METEO-LEGACY", "BER bind submit status with legacy directoryName", "127.0.0.13", 31023, "127.0.0.20", 102),
     ]
 
