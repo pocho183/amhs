@@ -1,0 +1,8 @@
+release=R2026.03
+timestamp=20260308T195757Z
+execution.log=20260308T195757Z-execution.log
+configuration.snapshot=20260308T195757Z-configuration-snapshot.txt
+verdict=20260308T195757Z-verdict.md
+1a28f250c56e26c610bb0895570deebe55c356614c8280adc4fad6466fd95371  20260308T195757Z-execution.log
+e4047498b53a26923f254fa6a183376edc224c1c609262a41bdb9711a6dd735e  20260308T195757Z-configuration-snapshot.txt
+b9f8a73b679bca1c137aaac59ef639d6cfaa2da9bd343e41cd431bb4bf2d1226  20260308T195757Z-verdict.md
