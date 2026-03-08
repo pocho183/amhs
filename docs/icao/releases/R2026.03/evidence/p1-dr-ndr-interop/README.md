@@ -20,3 +20,19 @@ Peer profiles covered in the trace ledger:
 - `MIL-NET`
 - `CERTIFIED-AMHS-LAB`
 - `METEO-LEGACY`
+
+Deterministic scenarios covered per run:
+
+- `SCN-DELIVERY-SUCCESS` (delivery success)
+- `SCN-NON-DELIVERY` (non-delivery)
+- `SCN-DELAY` (delay/deferred)
+- `SCN-REDIRECTION` (redirection loop)
+- `SCN-TRANSFER-FAILURE` (transfer failure)
+
+Each trace ledger includes a cross-peer trace-chain table linking:
+
+- ingress event
+- queue state transition
+- emitted DR/NDR
+- peer acknowledgment
+- correlation ID
