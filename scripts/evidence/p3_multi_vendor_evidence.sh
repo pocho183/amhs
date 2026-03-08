@@ -22,6 +22,20 @@ DECODED_TRACE_FILE="${PUBLISH_DIR}/${STAMP}-decoded-trace.txt"
 VERDICT_LEDGER_FILE="${PUBLISH_DIR}/${STAMP}-verdict-ledger.md"
 SIGNED_REPORT_FILE="${PUBLISH_DIR}/${STAMP}-signed-campaign-report.md"
 
+CERTIFIED_PEER="${AMHS_CERTIFIED_PEER:-CERTIFIED-AMHS-LAB}"
+HETEROGENEOUS_PEERS="${AMHS_HETEROGENEOUS_PEERS:-MIL-NET,ENAV-OPS,METEO-LEGACY}"
+KEEP_PCAP="${AMHS_EVIDENCE_KEEP_PCAP:-1}"
+
+IFS=',' read -r -a HETEROGENEOUS_PEER_ARRAY <<< "$HETEROGENEOUS_PEERS"
+if [[ -z "$CERTIFIED_PEER" ]]; then
+  echo "ERROR: AMHS_CERTIFIED_PEER must identify one certified external AMHS implementation." >&2
+  exit 2
+fi
+if [[ "${#HETEROGENEOUS_PEER_ARRAY[@]}" -lt 1 ]]; then
+  echo "ERROR: AMHS_HETEROGENEOUS_PEERS must include at least one heterogeneous stack." >&2
+  exit 2
+fi
+
 mkdir -p "$WORK_DIR" "$PUBLISH_DIR"
 
 LOG_FILE="${WORK_DIR}/run.log"
@@ -59,6 +73,7 @@ done
 
 scripts/evidence/generate_italy_interop_pcap.py "$PCAP_FILE"
 sha256sum "$PCAP_FILE" > "$PCAP_SHA_FILE"
+ARTIFACTS+=("${STAMP}-multi-vendor.pcap")
 ARTIFACTS+=("${STAMP}-multi-vendor.pcap.sha256")
 
 python3 scripts/evidence/decode_campaign_pcap.py "$PCAP_FILE" > "$DECODED_TRACE_FILE"
@@ -94,10 +109,12 @@ fi
   echo
   echo "| Track | Peer profile | Interop type | Verdict | Evidence |"
   echo "|---|---|---|---|---|"
-  echo "| V1 | CERTIFIED-AMHS-LAB | Certified external AMHS stack | ${TRACK_VERDICT} | ${STAMP}-decoded-trace.txt (CERTIFIED-AMHS-LAB), ${STAMP}-run.log |"
-  echo "| V2 | MIL-NET | Heterogeneous RTSE/ROSE stack | ${TRACK_VERDICT} | ${STAMP}-decoded-trace.txt (MIL-NET), ${STAMP}-run.log |"
-  echo "| V3 | ENAV-OPS | Modern BER APDU stack | ${TRACK_VERDICT} | ${STAMP}-decoded-trace.txt (ENAV-OPS), ${STAMP}-run.log |"
-  echo "| V4 | METEO-LEGACY | Legacy encoding-sensitive stack | ${TRACK_VERDICT} | ${STAMP}-decoded-trace.txt (METEO-LEGACY), ${STAMP}-run.log |"
+  echo "| V1 | ${CERTIFIED_PEER} | Certified external AMHS stack | ${TRACK_VERDICT} | ${STAMP}-decoded-trace.txt (${CERTIFIED_PEER}), ${STAMP}-run.log |"
+  track_number=2
+  for peer in "${HETEROGENEOUS_PEER_ARRAY[@]}"; do
+    echo "| V${track_number} | ${peer} | Heterogeneous RTSE/ROSE stack | ${TRACK_VERDICT} | ${STAMP}-decoded-trace.txt (${peer}), ${STAMP}-run.log |"
+    track_number=$((track_number + 1))
+  done
   echo
   if [[ "$RESULT" -ne 0 ]]; then
     echo "Overall verdict: FAIL (tests exited ${RESULT})"
@@ -115,6 +132,8 @@ ARTIFACTS+=("${STAMP}-signed-campaign-report.md")
   echo "- release: ${RELEASE_ID}"
   echo "- timestamp: ${STAMP}"
   echo "- objective: repeatable campaign with certified + heterogeneous AMHS stacks"
+  echo "- certified implementation under test: ${CERTIFIED_PEER}"
+  echo "- additional heterogeneous stacks: ${HETEROGENEOUS_PEERS}"
   echo
   echo "## Replay instructions"
   echo
@@ -151,7 +170,7 @@ ARTIFACTS+=("${STAMP}-signed-campaign-report.md")
   (cd "$PUBLISH_DIR" && sha256sum "${ARTIFACTS[@]}")
 } > "${PUBLISH_DIR}/${STAMP}-manifest.txt"
 
-if [[ "${AMHS_EVIDENCE_KEEP_PCAP:-0}" != "1" ]]; then
+if [[ "$KEEP_PCAP" != "1" ]]; then
   rm -f "$PCAP_FILE"
 fi
 

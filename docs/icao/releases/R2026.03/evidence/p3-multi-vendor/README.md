@@ -18,4 +18,4 @@ For each run, the script publishes:
 
 `latest-manifest.txt` points to the latest timestamped manifest.
 
-Binary `.pcap` artifacts are intentionally not versioned in this repository. They are generated locally by the campaign script and can be retained only when `AMHS_EVIDENCE_KEEP_PCAP=1` is set.
+Binary `.pcap` artifacts are intentionally not versioned in this repository. They are generated locally by the campaign script and retained by default so checksum manifests can reference them. Set `AMHS_EVIDENCE_KEEP_PCAP=0` to remove the local `.pcap` after publishing other evidence files.

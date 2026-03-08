@@ -1,0 +1,10 @@
+decoded_file=docs/icao/releases/R2026.03/evidence/p3-multi-vendor/20260308T203149Z-multi-vendor.pcap
+packet_count=8
+01 ts=1735689600.000000 127.0.0.11:31021 -> 127.0.0.20:102 payload=ENAV-OPS|REQ|BIND submit status report release
+02 ts=1735689601.000000 127.0.0.20:102 -> 127.0.0.11:31021 payload=ENAV-OPS|RSP|OK
+03 ts=1735689602.000000 127.0.0.12:31022 -> 127.0.0.20:102 payload=MIL-NET|REQ|RTSE/ROSE bind submit release
+04 ts=1735689603.000000 127.0.0.20:102 -> 127.0.0.12:31022 payload=MIL-NET|RSP|OK
+05 ts=1735689604.000000 127.0.0.14:31024 -> 127.0.0.20:102 payload=CERTIFIED-AMHS-LAB|REQ|Cross-stack certified bind submit status report release
+06 ts=1735689605.000000 127.0.0.20:102 -> 127.0.0.14:31024 payload=CERTIFIED-AMHS-LAB|RSP|OK
+07 ts=1735689606.000000 127.0.0.13:31023 -> 127.0.0.20:102 payload=METEO-LEGACY|REQ|BER bind submit status with legacy directoryName
+08 ts=1735689607.000000 127.0.0.20:102 -> 127.0.0.13:31023 payload=METEO-LEGACY|RSP|OK
