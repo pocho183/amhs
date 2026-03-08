@@ -7,7 +7,7 @@ This matrix is intended to close the "documentation layer" gap by mapping expect
 | Domain | Test objective | Current evidence | Gap to close |
 |---|---|---|---|
 | RFC1006/COTP | Validate CR/CC, segmentation, DR/ER, limits | `CotpConnectionTpduTest`, `RFC1006ServiceTest` | Add high-volume soak + malformed TPDU corpus results |
-| ACSE (X.227) | Validate AARQ/AARE, context handling, diagnostics | `AcseAssociationProtocolTest`, `AcseModelsTest`, `PresentationContextTest` | Add strict ATN ACSE profile vectors and negative diagnostics matrix, including unsupported/partial behavior declarations |
+| ACSE (X.227) | Validate AARQ/AARE, context handling, diagnostics | `AcseAssociationProtocolTest`, `AcseModelsTest`, `PresentationContextTest`, `RFC1006ServiceAcseDiagnosticsTest`, `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md` | Add strict ATN ACSE profile campaign vectors with executed verdict columns/log artifacts for each declared behavior vector |
 | ASN.1/BER | Validate tag/length/value robustness | `BerCodecTest`, `P1BerMessageParserTest` | Add official X.411 module tag traceability table |
 | ROSE/RTSE upper layers | Validate full operation/error semantics and transfer/session behavior | Gateway-focused APDU/session tests | Implement full profile-complete ROSE/RTSE coverage or maintain explicit non-claim |
 | P1/P3 gateway handling | Validate envelope/content, recipient and trace behaviors in gateway profile | `P1AssociationProtocolTest`, parser tests | Add interoperability captures against certified MTA and evidence of unsupported full P3 service semantics |
