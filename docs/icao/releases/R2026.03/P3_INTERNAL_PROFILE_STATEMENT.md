@@ -1,5 +1,7 @@
 # P3 Internal Profile Statement (Release R2026.03)
 
+Status for this release: **closed at minimum baseline** for internal-use gap closure.
+
 ## 1. Scope and baseline
 
 This release-specific statement freezes the internal P3 gateway operation profile for `R2026.03` and defines the deterministic diagnostics expected for supported and unsupported P3 APDUs.
@@ -35,7 +37,14 @@ Configuration binding for this statement is locked to:
 | Unsupported RTSE wrapper tag (e.g. inbound `RTOAC`/invalid path) | RTSE `RTORJ[18]` deterministic rejection mapping. |
 | Association release before bind or operation after release | Gateway `error[8]` family from session service, including `code=association` or `code=association-closed` depending on state. |
 
-## 4. Regression evidence (malformed/negative vectors)
+## 4. Release-bound diagnostics catalog
+
+The deterministic diagnostics listed in section 3 are validated by release-bound negative vectors in:
+
+- `src/test/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocolNegativeVectorsTest.java`
+- `src/test/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocolTest.java`
+
+## 5. Regression evidence (malformed/negative vectors)
 
 The release carries an automated negative vector run and publication script:
 
@@ -47,3 +56,6 @@ The release carries an automated negative vector run and publication script:
   - JUnit XML for `P3Asn1GatewayProtocolTest`
   - timestamped manifest with SHA-256 checksums (`latest-manifest.txt` updated to last run)
 
+For `R2026.03`, artifacts are release-bound under:
+
+- `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/`
