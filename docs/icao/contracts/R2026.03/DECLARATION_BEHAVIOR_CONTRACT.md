@@ -60,5 +60,7 @@ The following repository artifacts provide implementation-level and evidence-lev
 - `src/main/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocol.java`
 - `src/test/java/it/amhs/service/protocol/rfc1006/RFC1006ServiceAcseDiagnosticsTest.java`
 - `src/test/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocolNegativeVectorsTest.java`
+- `src/test/java/it/amhs/service/P1AssociationProtocolTest.java`
+- `docs/icao/releases/R2026.03/P1_INTERNAL_PROFILE_STATEMENT.md`
 - `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/`
 - `docs/icao/releases/R2026.03/evidence/p1-dr-ndr-interop/`

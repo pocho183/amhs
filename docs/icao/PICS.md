@@ -210,8 +210,8 @@ Implementation framing for the declaration profile:
 ### 7.1.1 P1 implementation work packages
 
 1. **MTS relay/interpersonal profile hardening**
-   - Finalize supported P1 service subset and explicitly encode unsupported behaviors with stable diagnostics.
-   - Lock message-transfer and interpersonal handling semantics to X.411 canonical module interpretation proven in ASN.1 evidence.
+   - ✅ Closed (`R2026.03`): supported inbound P1 relay/interpersonal APDU subset and explicit unsupported inbound APDU diagnostics are frozen in `docs/icao/releases/R2026.03/P1_INTERNAL_PROFILE_STATEMENT.md` with deterministic `unsupported-operation` semantics.
+   - ✅ Closed (`R2026.03`): message-transfer/interpersonal handling semantics are locked to the X.411 canonical module interpretation proven in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 2. **DR/NDR determinism evidence**
    - Build reproducible scenarios for delivery success, non-delivery, delay, redirection, and transfer-failure outcomes.
    - Capture cross-peer trace chain (ingress event → queue state → emitted DR/NDR → peer acknowledgment) with correlation IDs.

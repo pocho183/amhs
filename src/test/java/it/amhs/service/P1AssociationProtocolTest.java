@@ -146,6 +146,49 @@ class P1AssociationProtocolTest {
         assertTrue(bind.presentationContextPresent());
     }
 
+
+    @Test
+    void shouldDecodeDeliveryAndNonDeliveryReportPdus() {
+        byte[] ndrPayload = "ndr-evidence".getBytes(StandardCharsets.UTF_8);
+        byte[] drPayload = "dr-evidence".getBytes(StandardCharsets.UTF_8);
+
+        byte[] ndrPdu = BerCodec.encode(new BerTlv(2, true, 13, 0, ndrPayload.length, ndrPayload));
+        byte[] drPdu = BerCodec.encode(new BerTlv(2, true, 14, 0, drPayload.length, drPayload));
+
+        P1AssociationProtocol.NonDeliveryReportPdu ndr = assertInstanceOf(P1AssociationProtocol.NonDeliveryReportPdu.class, protocol.decode(ndrPdu));
+        P1AssociationProtocol.DeliveryReportPdu dr = assertInstanceOf(P1AssociationProtocol.DeliveryReportPdu.class, protocol.decode(drPdu));
+
+        assertArrayEquals(ndrPayload, ndr.reportPayload());
+        assertArrayEquals(drPayload, dr.reportPayload());
+    }
+
+    @Test
+    void shouldProvideStableUnsupportedOperationDiagnosticsForUnsupportedP1Subset() {
+        P1AssociationProtocol.Pdu[] unsupported = new P1AssociationProtocol.Pdu[] {
+            new P1AssociationProtocol.BindResultPdu(true, "ok"),
+            new P1AssociationProtocol.ReleaseResultPdu(),
+            new P1AssociationProtocol.TransferResultPdu(true, "accepted", java.util.Optional.of("MTS"), java.util.List.of()),
+            new P1AssociationProtocol.NonDeliveryReportPdu(new byte[] {0x01}),
+            new P1AssociationProtocol.DeliveryReportPdu(new byte[] {0x02})
+        };
+
+        for (P1AssociationProtocol.Pdu pdu : unsupported) {
+            String diagnostic = protocol.unsupportedRelayProfileDiagnostic(pdu).orElseThrow();
+            assertTrue(diagnostic.startsWith("unsupported-operation:"));
+        }
+
+        assertTrue(protocol.unsupportedRelayProfileDiagnostic(new P1AssociationProtocol.BindPdu(
+            java.util.Optional.empty(),
+            java.util.Optional.empty(),
+            "2.6.0.1.6.1",
+            1,
+            java.util.Optional.empty(),
+            java.util.Optional.empty(),
+            true,
+            true
+        )).isEmpty());
+    }
+
     @Test
     void shouldEncodeErrorPdu() {
         byte[] error = protocol.encodeError("association", "bind required");
