@@ -106,11 +106,11 @@ The fingerprint pins transport ports, TLS modes, listener profile, and route/pol
 
 The table below evaluates the current P3 posture for three declaration scopes requested by operators: internal use, national deployment (Italy), and ICAO-oriented external declaration.
 
-| Scope | Current verdict | Rationale from implemented evidence | Missing before declaration at that scope |
+| Scope | Current verdict | Rationale from implemented evidence | What is still missing |
 |---|---|---|---|
-| Internal use (single-organization / controlled peers) | **Conditionally acceptable** | Transport, ACSE bind lifecycle guards, gateway-profile ROSE/RTSE semantics, O/R normalization, and DR/NDR correlation are implemented and test-backed in this repository. | Formalize internal profile contract (supported operations/error codes), execute repeatable negative regression campaign per release, and freeze release-bound PICS/PIXIT fingerprint. |
-| National use (Italy, multi-organization operational use) | **Not yet declaration-ready** | Core protocol mechanics exist, but the current claim remains gateway-profile and evidence is not yet packaged as a national authority-facing declaration dossier. | Close ICAO/ATN profile traceability, execute multi-peer campaign including at least one externally recognized implementation, and complete Italy-specific oversight/security/operations packaging with accountable sign-off. |
-| ICAO-oriented external declaration | **Not yet compliant for claim** | P3 behavior is explicit for the declared gateway subset; full external profile breadth and certifiable evidence set are still open. | Close all items in Sections 6 and 7 (standards mapping, interoperability evidence, PKI/label policy evidence, operational assurance, and governance artifacts). |
+| Internal use (single-organization / controlled peers) | **Acceptable for release `R2026.03` baseline** | Internal P3 operation profile statement, deterministic negative APDU regression script/artifacts, and release fingerprint binding are published and traceable. | No structural gap for the declared internal baseline. For each new release, re-run the negative campaign, refresh artifacts, and republish fingerprint-bound PICS/PIXIT. |
+| National use (Italy, multi-organization operational use) | **Partially ready; declaration package still open** | Italy national-use requirement traceability map is published and closes the mapping action (`§5.2` item 4). | Complete `§5.2` items 5 and 6: (a) execute reproducible national interoperability campaign (multi-peer, pcaps/logs), and (b) produce authority-facing national declaration package (operations, security incl. PKI revocation, incident/failover approvals). |
+| ICAO-oriented external declaration | **Not yet compliant for external claim** | Gateway-profile P3 behavior and deterministic diagnostics are declared, but this is not a full external P3 endpoint claim. | Close all open ICAO claim items in `§5.3`, `§6`, and `§7` (profile-complete semantics evidence, ASN.1 module proof, ATN PKI + CRL/OCSP evidence, Doc 9880 security-label treatment, operational assurance pack, governance sign-off artifacts). |
 
 ### 5.1 Internal-use gap closure (minimum)
 
@@ -132,6 +132,20 @@ Status for `R2026.03`: **closed at minimum baseline** with release-bound artifac
 8. Complete canonical X.411 ASN.1 module traceability proof linked to runtime behavior and test vectors.
 9. Complete objective security evidence for ATN PKI path validation, CRL/OCSP handling, and Doc 9880-aligned security-label policy treatment.
 10. Complete operational assurance evidence set (performance/resilience, monitoring SLOs, failover drills, backup/restore verification).
+
+### 5.4 Consolidated “still missing” checklist for protocol P3
+
+This checklist summarizes only open items after the `R2026.03` baseline evaluation.
+
+- **Internal use**
+  - No open structural gap for the declared baseline profile.
+  - Recurring release obligation: regenerate evidence + fingerprint-bound declarations.
+- **National use (Italy)**
+  - Execute national interoperability campaign with reproducible artifacts (`§5.2` item 5).
+  - Complete authority-facing national declaration dossier (`§5.2` item 6).
+- **ICAO external claim**
+  - Complete `§5.3` items 7..10.
+  - Complete all mandatory evidence/governance items in `§6` and delivery steps in `§7`.
 
 ## 6. Missing points for ICAO compliance closure
 
