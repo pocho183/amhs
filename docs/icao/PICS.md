@@ -1,6 +1,6 @@
 # AMHS PICS (Protocol Implementation Conformance Statement)
 
-Document status: **gateway-profile baseline** for controlled interoperability.
+Document status: **gateway-profile baseline** for controlled interoperability, with an explicit closure plan toward ICAO-compliant AMHS server declarations for P1/P3 service areas.
 
 ## 1. Scope
 
@@ -128,7 +128,35 @@ The following items are currently open and should be treated as mandatory closur
 14. Conformance test matrix verdict completion with artifact references per row.
 15. National oversight packaging (including any EU/Italy-specific authority expectations) with traceable approval records.
 
-## 6. Evidence pointers in this repository
+## 6. P1/P3 ICAO-compliance build plan (implementation-oriented)
+
+This section translates open closure points into a concrete delivery plan for building an AMHS server profile that can be declared ICAO-compliant for P1/P3 scope once all evidence is complete.
+
+### 6.1 Target declaration profile
+
+- **P1 target**: externalized MTS relay/interpersonal handling profile aligned with X.411 module definitions and deterministic DR/NDR behavior.
+- **P3 target**: externally declared P3 endpoint profile (beyond gateway-only posture) with full documented operation/error semantics.
+- **Security target**: ATN PKI + Doc 9880-aligned operational evidence set suitable for oversight review.
+
+### 6.2 Required technical closure for P1
+
+1. Complete canonical ASN.1 module-level proof package for X.411, linked to runtime codec behavior and BER vectors.
+2. Freeze and sign-off extension handling rules (known + unknown elements) with backward-compatibility checks.
+3. Complete end-to-end DR/NDR interoperability traces proving correlation and semantic consistency across peers.
+
+### 6.3 Required technical closure for P3
+
+4. Expand ROSE operation/error coverage from the current declared subset to full profile-required semantics.
+5. Complete ACSE/presentation negotiation behavior matrix for external interoperability declaration.
+6. Produce reproducible multi-vendor bind/submit/status/report/release evidence with negative-path diagnostics.
+
+### 6.4 Compliance packaging required before claim
+
+7. Publish release-bound PICS + PIXIT with configuration fingerprint and feature flags.
+8. Link each conformance matrix row to executable test artifacts/logs/pcaps.
+9. Package authority-facing declaration dossier (technical evidence, security evidence, operational controls, residual-risk approvals).
+
+## 7. Evidence pointers in this repository
 
 - Transport and parser tests under `src/test/java/it/amhs/service/`.
 - BER codec tests under `src/test/java/it/amhs/asn1/`.
