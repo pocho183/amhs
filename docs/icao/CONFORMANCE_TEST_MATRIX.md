@@ -21,10 +21,12 @@ This matrix is intended to close the "documentation layer" gap by mapping expect
 
 1. PICS (`docs/icao/PICS.md`)
 2. PIXIT (`docs/icao/PIXIT.md`)
-3. This test matrix + filled verdict columns per campaign run
-4. Operational HA/failover evidence pack (`docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`) with signed release attachments
-5. Captured logs/pcaps for each mandatory negative scenario
-6. Interoperability report against at least one certified AMHS implementation
+3. ICAO/ATN requirement traceability map (`docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`)
+4. P3 external declaration matrix (`docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`)
+5. This test matrix + filled verdict columns per campaign run
+6. Operational HA/failover evidence pack (`docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`) with signed release attachments
+7. Captured logs/pcaps for each mandatory negative scenario
+8. Interoperability report against at least one certified AMHS implementation
 
 ## 3. Campaign completion criteria
 
