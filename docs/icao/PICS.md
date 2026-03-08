@@ -2,7 +2,7 @@
 
 Document status: **authority-ready release baseline (`R2026.03`)** for controlled interoperability, with technical and governance closure artifacts assembled for authority-facing review.
 
-Last updated: `2026-03-09` (synchronized with the release-bound wrapper `docs/icao/releases/R2026.03/PICS_R2026.03.md`).
+Last updated: `2026-03-08` (synchronized with the release-bound wrapper `docs/icao/releases/R2026.03/PICS_R2026.03.md`).
 
 ## 1. Scope
 
