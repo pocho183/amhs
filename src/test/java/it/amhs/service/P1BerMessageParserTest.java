@@ -130,6 +130,25 @@ class P1BerMessageParserTest {
         return BerCodec.encode(new BerTlv(2, false, tag, 0, bytes.length, bytes));
     }
 
+
+    @Test
+    void shouldDecodeLegacyConstructedPrintableAddressingVector() {
+        byte[] payloadContent = concat(
+            contextConstructed(0, printableUniversal("LIRRZQZX")),
+            contextConstructed(1, ia5Universal("LIIRYAYX")),
+            contextConstructed(2, printableUniversal("LEGACY BODY")),
+            contextConstructed(5, printableUniversal("OPS NOTICE"))
+        );
+
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, payloadContent.length, payloadContent));
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+
+        assertEquals("LIRRZQZX", parsed.from());
+        assertEquals("LIIRYAYX", parsed.to());
+        assertEquals("LEGACY BODY", parsed.body());
+        assertEquals("OPS NOTICE", parsed.subject());
+    }
+
     @Test
     void shouldParseEnvelopeSecurityParametersAndUnknownExtensions() {
         byte[] security = sequence(
@@ -197,6 +216,30 @@ class P1BerMessageParserTest {
         assertEquals(10, parsed.transferEnvelope().unknownExtensions().get(0).tagNumber());
     }
 
+
+    @Test
+    void shouldPreserveMultipleOperationalUnknownEnvelopeExtensions() {
+        byte[] legacySetPayload = printableUniversal("IGNORED");
+        byte[] envelope = sequence(
+            contextPrimitive(10, "opaque-extension"),
+            contextConstructed(11, sequence(contextPrimitive(0, "legacy-opaque"))),
+            BerCodec.encode(new BerTlv(0, true, 17, 0, legacySetPayload.length, legacySetPayload))
+        );
+
+        byte[] payloadContent = concat(
+            contextPrimitive(0, "LIRRZQZX"),
+            contextPrimitive(1, "LIIRYAYX"),
+            contextUtf8(2, "Hello"),
+            contextConstructed(9, envelope)
+        );
+        byte[] payload = BerCodec.encode(new BerTlv(0, true, 16, 0, payloadContent.length, payloadContent));
+
+        P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
+        assertEquals(2, parsed.transferEnvelope().unknownExtensions().size());
+        assertEquals(10, parsed.transferEnvelope().unknownExtensions().get(0).tagNumber());
+        assertEquals(11, parsed.transferEnvelope().unknownExtensions().get(1).tagNumber());
+    }
+
     @Test
     void shouldRejectUnsupportedSecurityClassification() {
         byte[] security = sequence(
@@ -246,6 +289,17 @@ class P1BerMessageParserTest {
         P1BerMessageParser.ParsedP1Message parsed = parser.parse(payload);
 
         assertEquals("/C=380/ADMD= /PRMD=ROMA/O=ENAV/OU1=LIRRZQZX/EXT-CTX-22=OPS-EXT", parsed.from());
+    }
+
+
+    private static byte[] ia5Universal(String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(new BerTlv(0, false, 22, 0, bytes.length, bytes));
+    }
+
+    private static byte[] printableUniversal(String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(new BerTlv(0, false, 19, 0, bytes.length, bytes));
     }
 
     private static byte[] utf8Universal(String value) {
