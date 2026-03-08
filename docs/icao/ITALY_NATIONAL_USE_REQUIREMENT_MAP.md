@@ -36,7 +36,7 @@ Legend:
 
 PICS §5.2 item 4 (“Build a traceable requirement map from adopted AMHS profile obligations to implementation/tests/evidence artifacts”) is now closed by this document for the `R2026.03` baseline.
 
-Remaining national-use items (§5.2 items 5 and 6) remain execution/package activities and are therefore tracked as ongoing campaign work.
+Remaining national-use item (§5.2 item 6) remains a declaration/package activity and is tracked as ongoing campaign work.
 
 ## 4. Maintenance rule
 

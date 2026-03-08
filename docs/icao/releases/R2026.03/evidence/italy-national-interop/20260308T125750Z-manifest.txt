@@ -1,0 +1,11 @@
+release=R2026.03
+timestamp=20260308T125750Z
+test_status=failed-environment
+run_log=20260308T125750Z-run.log
+pcap=20260308T125750Z-peer-diversity.pcap
+pcap_sha256=20260308T125750Z-peer-diversity.pcap.sha256
+pcap_storage=generated-local-not-versioned
+junit_dir=build/test-results/test
+html_report=build/reports/tests/test/index.html
+peer_profiles=ENAV-OPS, MIL-NET, METEO-LEGACY
+repro_command=scripts/evidence/italy_national_interop_campaign.sh R2026.03
