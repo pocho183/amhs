@@ -58,7 +58,7 @@ Legend:
 | SEC-01 | TLS transport protection | Y | Server TLS supported; optional client auth. |
 | SEC-02 | Certificate CN/OU channel policy | Y | Channel policy and sender binding checks. |
 | SEC-03 | Full PKI path validation profile | P | Baseline checks present; full ATN PKI profile evidence package remains to be completed. |
-| SEC-04 | CRL / OCSP runtime enforcement | P | Partial support may depend on runtime configuration; not asserted as complete profile enforcement. |
+| SEC-04 | CRL / OCSP runtime enforcement | P | Runtime support is implemented behind `tls.pkix.revocation-enabled` and JVM PKIX revocation settings; declared as profile-limited because enforcement strength depends on deployment policy/evidence, not asserted as complete profile enforcement. |
 | SEC-05 | Security label enforcement (Doc 9880) | P | Classification ordering + compartment dominance semantics are enforced for gateway security labels; full external profile claim remains out of scope. |
 | R-01 | Outbound relay routing table | Y | Prefix-based route selection implemented. |
 | R-02 | Alternate route fallback | Y | Alternate next-hop path supported. |
@@ -87,6 +87,7 @@ This implementation exposes a **gateway-oriented P3 profile** and does not curre
 - ROSE operation/error mapping now enforces full declared gateway-profile semantics for bind/submit/status/report/release, including deterministic diagnostics for unsupported operations, request/response role misuse, and unexpected non-invoke ROSE APDUs.
 - RTSE wrapper behavior is implemented for the declared gateway operation subset; broader external profile breadth beyond the gateway declaration remains out of scope.
 - Presentation/ACSE negotiation semantics are implemented for supported paths only, not as a universal full interoperability surface.
+- CRL/OCSP runtime checks are available via PKIX revocation toggles (`tls.pkix.revocation-enabled` + JVM security policy), but external-claim completeness still depends on release-bound objective evidence.
 - Security label behavior now enforces Doc 9880-style classification ordering and compartment dominance for gateway labels, but full certifiable policy scope remains pending.
 
 ### 4.3 Interoperability posture
