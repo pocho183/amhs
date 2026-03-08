@@ -803,7 +803,7 @@ public class P3GatewayServer {
                 tlv.tagClass(),
                 tlv.constructed(),
                 tlv.tagNumber(),
-                tlv.tagByteCount(),
+                tlv.headerLength(),
                 encodedChildren.length,
                 encodedChildren
             );
