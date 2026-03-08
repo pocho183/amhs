@@ -1,6 +1,7 @@
 package it.amhs.compliance;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,6 +49,24 @@ class SecurityLabelPolicyTest {
     void shouldNormalizeCaseAndWhitespaceForDoc9880Labels() {
         SecurityParameters params = new SecurityParameters("  secret | atfm | eur ", "TOKEN-1", "1.2.840.113549.1.1.1");
         assertTrue(policy.dominates(params.securityLabel(), "CONFIDENTIAL|ATFM"));
+    }
+
+    @Test
+    void shouldRejectMixedLabelTrafficWhenPolicyTailoringIntroducesInvalidCompartmentToken() {
+        assertThrows(IllegalArgumentException.class, () -> policy.parse("SECRET|ATFM|EU WEST"));
+    }
+
+    @Test
+    void shouldEnforceDowngradeUpgradeConstraintsThroughDominanceChecks() {
+        assertTrue(policy.dominates("TOP SECRET|ATFM|EUR", "SECRET|ATFM"));
+        assertFalse(policy.dominates("CONFIDENTIAL|ATFM", "SECRET|ATFM"));
+    }
+
+    @Test
+    void shouldExposeDoc9880ClassificationOrderingForOversightEvidence() {
+        assertNotNull(policy.supportedClassifications());
+        assertTrue(policy.supportedClassifications().contains("UNCLASSIFIED"));
+        assertTrue(policy.supportedClassifications().contains("TOP SECRET"));
     }
 
 }

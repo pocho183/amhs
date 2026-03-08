@@ -20,6 +20,7 @@ Release binding is fixed to:
 | CRL/OCSP handling is controllable and deterministic for runtime policy | `tls.pkix.revocation-enabled` enables PKIX revocation checking and uses `PKIXRevocationChecker` with CRL preference (`PREFER_CRLS`) | `src/main/java/it/amhs/security/TLSContextFactory.java`, `src/main/resources/application.properties`, `src/test/java/it/amhs/security/TLSContextFactoryTest.java` |
 | Doc 9880-style label parsing, classification ordering and compartment dominance are enforced for gateway policy checks | `SecurityLabelPolicy` implements classification hierarchy, compartment syntax, dominance semantics, and explicit rejection for unsupported classifications | `src/main/java/it/amhs/compliance/SecurityLabelPolicy.java`, `src/test/java/it/amhs/compliance/SecurityLabelPolicyTest.java`, `src/test/java/it/amhs/service/protocol/p3/P3GatewaySessionServiceTest.java` |
 | Security-label policy is exercised in P3 bind-path behavior with deterministic diagnostics | Gateway bind processing applies security-label policy checks and emits deterministic `security-policy` rejections when dominance/policy checks fail | `src/main/java/it/amhs/service/protocol/p3/P3GatewaySessionService.java`, `src/test/java/it/amhs/service/protocol/p3/P3GatewaySessionServiceTest.java` |
+| Mixed-label traffic operations (parse/dominance/downgrade-upgrade/reject semantics) are release-bound and oversight-traceable | Oversight record binds policy controls, mixed-label vectors, and residual-risk decisions with accountable-authority acceptance linkage | `docs/icao/releases/R2026.03/evidence/security-pki-label/20260308T152500Z-doc9880-label-operations-oversight-record.md`, `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-safety-security-residual-risk-acceptance.md` |
 | Subject identity binding from certificate attributes to sender O/R address remains enforced as companion PKI security control | ICAO unit binding checks against CN/OU/sender address | `src/main/java/it/amhs/compliance/AMHSComplianceValidator.java`, `src/test/java/it/amhs/compliance/AMHSComplianceValidatorTest.java` |
 
 ## 3. Release execution procedure (security evidence regeneration)
@@ -39,6 +40,10 @@ Per run, the script generates timestamped:
 - run log,
 - manifest,
 - JUnit XML copies for PKI and security-label tests.
+
+Release-bound oversight closure artifact for mixed-label operations and residual-risk linkage:
+
+- `docs/icao/releases/R2026.03/evidence/security-pki-label/20260308T152500Z-doc9880-label-operations-oversight-record.md`.
 
 ## 4. Statement
 
