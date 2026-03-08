@@ -248,7 +248,7 @@ Implementation framing for the declaration profile:
 
 ### 7.3 Required technical closure for P3
 
-4. ACSE/presentation negotiation behavior matrix completed and published (`docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md`) for external interoperability declaration vectors.
+4. ✅ Closed (`R2026.03`): ACSE/presentation negotiation behavior matrix is completed and published in `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md` for external interoperability declaration vectors.
 5. Produce reproducible multi-vendor bind/submit/status/report/release evidence with negative-path diagnostics.
 
 ### 7.4 Compliance packaging required before claim
