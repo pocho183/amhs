@@ -14,4 +14,8 @@ For each run, the script publishes:
 - `<timestamp>-TEST-it.amhs.compliance.SecurityLabelPolicyTest.xml`
 - `<timestamp>-TEST-it.amhs.compliance.AMHSComplianceValidatorTest.xml`
 
+Additional release-bound oversight artifact:
+
+- `20260308T152500Z-doc9880-label-operations-oversight-record.md`
+
 `latest-manifest.txt` points to the latest timestamped manifest.

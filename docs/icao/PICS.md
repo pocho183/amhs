@@ -234,8 +234,8 @@ Implementation framing for the declaration profile:
    - Demonstrate path validation, CRL/OCSP enforcement, revocation freshness, and failure behavior under degraded PKI reachability.
    - Tie each control to objective runtime proof (configuration snapshot + execution logs + verdict statement).
 2. **Doc 9880-aligned security-label operations**
-   - Validate label parsing, dominance decisions, downgrade/upgrade constraints, and rejection semantics under mixed-label traffic.
-   - Record residual-risk decisions for any local policy tailoring and obtain accountable-authority sign-off.
+   - ✅ Closed (`R2026.03`): label parsing, dominance decisions, downgrade/upgrade constraints, and rejection semantics under mixed-label traffic are evidenced in `docs/icao/releases/R2026.03/evidence/security-pki-label/20260308T152500Z-doc9880-label-operations-oversight-record.md`.
+   - ✅ Closed (`R2026.03`): residual-risk decisions for local policy tailoring are recorded with accountable-authority acceptance linkage (`AA-R2026.03-OPS-SEC-001`) in `docs/icao/releases/R2026.03/evidence/security-pki-label/20260308T152500Z-doc9880-label-operations-oversight-record.md` and `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-safety-security-residual-risk-acceptance.md`.
 3. **Authority-ready dossier assembly**
    - Package technical conformance evidence, operational assurance pack, security assurance pack, and governance approvals into one indexable dossier.
    - Include change-impact delta from prior declared release to support oversight revalidation.
