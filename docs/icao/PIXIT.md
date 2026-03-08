@@ -84,7 +84,7 @@ Behavior:
 
 ## 7. Test limitations to declare to lab
 
-1. No formal claim of a complete external P3 stack beyond the declared gateway profile (ROSE/RTSE semantics are complete within the declared profile surface).
+1. RTSE wrapper behavior is implemented for the declared gateway operation subset; broader external profile breadth beyond the gateway declaration remains out of scope.
 2. Presentation/session handling includes wrapper-preservation/rewrap strategies for supported gateway paths.
 3. ACSE support is implementation-focused and profile-limited, not a broad complete ACSE conformance claim.
 4. No formal claim of full X.411 ASN.1 module conformance.
@@ -98,4 +98,3 @@ Behavior:
 - Run negative BER/APDU robustness suite second.
 - Run routing/retry/DR scenarios with controlled peer outages.
 - Run security profile checks with mTLS + certificate policy mismatch cases.
-
