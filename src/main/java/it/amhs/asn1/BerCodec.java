@@ -40,6 +40,14 @@ public final class BerCodec {
         return out.toByteArray();
     }
 
+    public static byte[] encodeAll(List<BerTlv> values) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        for (BerTlv tlv : values) {
+            out.writeBytes(encode(tlv));
+        }
+        return out.toByteArray();
+    }
+
     public static Optional<BerTlv> findOptional(List<BerTlv> values, int tagClass, int tagNumber) {
         return values.stream()
             .filter(v -> v.tagClass() == tagClass && v.tagNumber() == tagNumber)
