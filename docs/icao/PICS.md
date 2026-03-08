@@ -244,7 +244,7 @@ Implementation framing for the declaration profile:
 
 1. ✅ Closed (`R2026.03`): canonical ASN.1 module-level proof package for X.411 is linked to runtime codec behavior and BER vectors in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
 2. Freeze and sign-off extension handling rules (known + unknown elements) with backward-compatibility checks.
-3. Complete end-to-end DR/NDR interoperability traces proving correlation and semantic consistency across peers.
+3. ✅ Closed (`R2026.03`): end-to-end DR/NDR interoperability traces proving correlation and semantic consistency across peers are published in `scripts/evidence/p1_dr_ndr_interop_traces.sh` and `docs/icao/releases/R2026.03/evidence/p1-dr-ndr-interop/`.
 
 ### 7.3 Required technical closure for P3
 
