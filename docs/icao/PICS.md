@@ -219,8 +219,8 @@ Implementation framing for the declaration profile:
 ### 7.1.2 P3 implementation work packages
 
 1. **External endpoint profile completion**
-   - Declare complete operation matrix: bind, submit, probe/status, report handling, release, abort, reject/error classes.
-   - Publish explicit semantics for unsupported operations and malformed inputs, including deterministic reject reason mapping.
+   - ✅ Closed (`R2026.03`): complete operation matrix (bind, submit, probe/status, report handling, release, abort, reject/error classes) is published in `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`.
+   - ✅ Closed (`R2026.03`): explicit unsupported/malformed input semantics with deterministic reject reason mapping are published in `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md` section 4 and release-locked to `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`.
 2. **Negotiation and error semantics closure**
    - Complete ACSE/presentation matrix with all selector/context-name/authentication permutations needed for external claim.
    - Attach packet-level and log-level evidence for success and failure paths, including negative vectors.
@@ -250,6 +250,7 @@ Implementation framing for the declaration profile:
 
 4. ✅ Closed (`R2026.03`): ACSE/presentation negotiation behavior matrix is completed and published in `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md` for external interoperability declaration vectors.
 5. ✅ Closed (`R2026.03`): reproducible multi-vendor bind/submit/status/report/release evidence with negative-path diagnostics is published in `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md` and manifest-linked under `docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt` and `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`.
+6. ✅ Closed (`R2026.03`): external endpoint profile completion (complete operation matrix + deterministic unsupported/malformed reject mapping) is published in `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`, with release-binding in `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`.
 
 ### 7.4 Compliance packaging required before claim
 
