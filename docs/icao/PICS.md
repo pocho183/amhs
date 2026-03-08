@@ -214,6 +214,7 @@ Implementation framing for the declaration profile:
 2. **DR/NDR determinism evidence**
    - Build reproducible scenarios for delivery success, non-delivery, delay, redirection, and transfer-failure outcomes.
    - Capture cross-peer trace chain (ingress event → queue state → emitted DR/NDR → peer acknowledgment) with correlation IDs.
+   - ✅ Closed (`R2026.03`): scenario and trace-chain evidence is published in `docs/icao/releases/R2026.03/evidence/p1-dr-ndr-interop/latest-manifest.txt` and the corresponding timestamped `*-dr-ndr-trace-ledger.md`.
 3. **Extension and compatibility governance**
    - Freeze extension handling policy (known/unknown elements, criticality handling, forward/backward compatibility).
    - Add regression vectors for legacy encodings observed in operational AMHS environments.
