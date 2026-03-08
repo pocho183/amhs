@@ -94,68 +94,97 @@ This implementation exposes a **gateway-oriented P3 profile** and does not curre
 - Intended for controlled integration and gateway scenarios where peer expectations are aligned with the declared profile.
 - External operational declaration as a fully conformant P3 endpoint requires closure of all items in Section 5.
 
-## 5. Missing points for ICAO compliance closure
+## 5. P3 compliance evaluation by usage scope
+
+The table below evaluates the current P3 posture for three declaration scopes requested by operators: internal use, national deployment (Italy), and ICAO-oriented external declaration.
+
+| Scope | Current verdict | Rationale from implemented evidence | Missing before declaration at that scope |
+|---|---|---|---|
+| Internal use (single-organization / controlled peers) | **Conditionally acceptable** | Transport, ACSE bind lifecycle guards, gateway-profile ROSE/RTSE semantics, O/R normalization, and DR/NDR correlation are implemented and test-backed in this repository. | Formalize internal profile contract (supported operations/error codes), execute repeatable negative regression campaign per release, and freeze release-bound PICS/PIXIT fingerprint. |
+| National use (Italy, multi-organization operational use) | **Not yet declaration-ready** | Core protocol mechanics exist, but the current claim remains gateway-profile and evidence is not yet packaged as a national authority-facing declaration dossier. | Close ICAO/ATN profile traceability, execute multi-peer campaign including at least one externally recognized implementation, and complete Italy-specific oversight/security/operations packaging with accountable sign-off. |
+| ICAO-oriented external declaration | **Not yet compliant for claim** | P3 behavior is explicit for the declared gateway subset; full external profile breadth and certifiable evidence set are still open. | Close all items in Sections 6 and 7 (standards mapping, interoperability evidence, PKI/label policy evidence, operational assurance, and governance artifacts). |
+
+### 5.1 Internal-use gap closure (minimum)
+
+1. Publish a release-specific internal profile statement listing exact P3 operations supported, unsupported, and associated diagnostics.
+2. Add automated regression evidence for malformed/negative APDU vectors and preserve artifacts per release.
+3. Tie PICS/PIXIT to a configuration fingerprint (ports, TLS mode, listener profile, route/policy flags).
+
+### 5.2 National-use (Italy) gap closure
+
+4. Build a traceable requirement map from adopted AMHS profile obligations to implementation/tests/evidence artifacts.
+5. Execute a national interoperability campaign with reproducible pcaps/logs and peer diversity representative of the expected Italian operational environment.
+6. Produce a national declaration package: operational responsibilities, security controls (PKI revocation behavior included), incident/failover procedures, and authority-facing approvals.
+
+### 5.3 ICAO external-claim gap closure
+
+7. Complete profile-complete P3 semantics evidence (or formalize non-claim boundaries with authority acceptance).
+8. Complete canonical X.411 ASN.1 module traceability proof linked to runtime behavior and test vectors.
+9. Complete objective security evidence for ATN PKI path validation, CRL/OCSP handling, and Doc 9880-aligned security-label policy treatment.
+10. Complete operational assurance evidence set (performance/resilience, monitoring SLOs, failover drills, backup/restore verification).
+
+## 6. Missing points for ICAO compliance closure
 
 The following items are currently open and should be treated as mandatory closure points before claiming ICAO-oriented external compliance.
 
-### 5.1 Standards/profile conformance evidence
+### 6.1 Standards/profile conformance evidence
 
 1. Formal requirement-by-requirement mapping from applicable ICAO/ATN AMHS profiles to implementation/test evidence.
 2. Full P3 service matrix with explicit supported/unsupported operation and error semantics, signed off for external declaration.
 3. ASN.1 traceability package proving canonical X.411 module/tag alignment (beyond runtime profile-table checks).
 
-### 5.2 Interoperability campaign evidence
+### 6.2 Interoperability campaign evidence
 
 4. Multi-peer interoperability campaign (including at least one certified AMHS implementation) with reproducible logs and pcaps.
 5. Negative-scenario campaign pack (malformed TPDU, ACSE rejection vectors, unsupported P3 operations) with deterministic verdicts.
 6. Evidence of behavior with legacy peer encodings for O/R and DirectoryName variants observed in operational networks.
 
-### 5.3 Security and PKI compliance
+### 6.3 Security and PKI compliance
 
 7. ATN PKI profile statement with objective evidence for certificate path validation behavior.
 8. CRL/OCSP enforcement tests and operational proof (including stale/unreachable responder handling).
 9. Formal security-label policy treatment aligned with applicable Doc 9880 expectations (or formally approved non-claim/risk acceptance).
 
-### 5.4 Operational assurance
+### 6.4 Operational assurance
 
 10. Performance/resilience qualification under sustained load, including retry/fallback and recovery behavior.
 11. Operational readiness execution artifacts per release: completed SLO declarations, monitoring/alerting exports, failover drill logs, and backup/restore verification reports (baseline package published in `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`).
 12. Safety/security assessment records with residual-risk acceptance by accountable authority.
 
-### 5.5 Governance and declaration artifacts
+### 6.5 Governance and declaration artifacts
 
 13. Completed PICS/PIXIT set tied to a specific release baseline and configuration fingerprint.
 14. Conformance test matrix verdict completion with artifact references per row.
 15. National oversight packaging (including any EU/Italy-specific authority expectations) with traceable approval records.
 
-## 6. P1/P3 ICAO-compliance build plan (implementation-oriented)
+## 7. P1/P3 ICAO-compliance build plan (implementation-oriented)
 
 This section translates open closure points into a concrete delivery plan for building an AMHS server profile that can be declared ICAO-compliant for P1/P3 scope once all evidence is complete.
 
-### 6.1 Target declaration profile
+### 7.1 Target declaration profile
 
 - **P1 target**: externalized MTS relay/interpersonal handling profile aligned with X.411 module definitions and deterministic DR/NDR behavior.
 - **P3 target**: externally declared P3 endpoint profile (beyond gateway-only posture) with full documented operation/error semantics.
 - **Security target**: ATN PKI + Doc 9880-aligned operational evidence set suitable for oversight review.
 
-### 6.2 Required technical closure for P1
+### 7.2 Required technical closure for P1
 
 1. Complete canonical ASN.1 module-level proof package for X.411, linked to runtime codec behavior and BER vectors.
 2. Freeze and sign-off extension handling rules (known + unknown elements) with backward-compatibility checks.
 3. Complete end-to-end DR/NDR interoperability traces proving correlation and semantic consistency across peers.
 
-### 6.3 Required technical closure for P3
+### 7.3 Required technical closure for P3
 
 4. ACSE/presentation negotiation behavior matrix completed and published (`docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md`) for external interoperability declaration vectors.
 5. Produce reproducible multi-vendor bind/submit/status/report/release evidence with negative-path diagnostics.
 
-### 6.4 Compliance packaging required before claim
+### 7.4 Compliance packaging required before claim
 
 7. Publish release-bound PICS + PIXIT with configuration fingerprint and feature flags.
 8. Link each conformance matrix row to executable test artifacts/logs/pcaps.
 9. Package authority-facing declaration dossier (technical evidence, security evidence, operational controls, residual-risk approvals).
 
-## 7. Evidence pointers in this repository
+## 8. Evidence pointers in this repository
 
 - Transport and parser tests under `src/test/java/it/amhs/service/`.
 - BER codec tests under `src/test/java/it/amhs/asn1/`.
