@@ -12,7 +12,7 @@ This matrix is intended to close the "documentation layer" gap by mapping expect
 | ROSE/RTSE upper layers | Validate full operation/error semantics and transfer/session behavior | Gateway-focused APDU/session tests | Implement full profile-complete ROSE/RTSE coverage or maintain explicit non-claim |
 | P1/P3 gateway handling | Validate envelope/content, recipient and trace behaviors in gateway profile | `P1AssociationProtocolTest`, parser tests | Add interoperability captures against certified MTA and evidence of unsupported full P3 service semantics |
 | O/R Address | Validate address grammar and policy checks | `ORAddressTest`, `AMHSComplianceValidatorTest`, `ORNameMapperTest` | Maintain interoperability vectors for additional peer-specific legacy encodings |
-| Security/PKI | Validate identity binding and TLS behavior | `AMHSComplianceValidatorTest`, TLS runtime config | Add CRL/OCSP tests and ATN PKI profile statement |
+| Security/PKI | Validate identity binding and TLS behavior | `AMHSComplianceValidatorTest`, TLS runtime config | Baseline checks present; full ATN PKI profile evidence package remains to be completed. |
 | Routing/S&F | Validate route selection, retries, fallback, loop detect | `RelayRoutingServiceTest`, `OutboundRelayEngineTest` | Add sustained-load and recovery tests |
 | DR/NDR | Validate report lifecycle and correlation | `AMHSDeliveryReportService` + repository/domain model | Maintain peer-wire campaign refresh per release; canonical gateway-profile ASN.1 module proof is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md` |
 | Operations | Validate 24/7 reliability and observability | `OPERATIONS_GUIDE.md` operational notes, `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md` | Attach executed per-release drill artifacts (SLO sheet, failover timeline, backup/restore report) |
@@ -33,4 +33,3 @@ A campaign is considered "assessment-ready" when:
 - All matrix rows have executed test IDs.
 - Each row includes pass/fail verdict and reproducible artifacts.
 - All open gaps are either closed or risk-accepted with formal rationale.
-
