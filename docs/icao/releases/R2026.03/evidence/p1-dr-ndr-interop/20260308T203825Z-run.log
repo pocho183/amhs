@@ -1,0 +1,6 @@
+# P1 DR/NDR interoperability traces
+release=R2026.03
+timestamp=20260308T203825Z
+JAVA_HOME=/root/.local/share/mise/installs/java/21.0.2
+command=./gradlew test --tests it.amhs.service.AMHSDeliveryReportServiceTest --tests it.amhs.service.X411DiagnosticMapperTest --tests it.amhs.service.X411DeliveryReportApduCodecTest --tests it.amhs.service.P1AssociationProtocolTest --tests it.amhs.service.Rfc1006OutboundP1ClientTest
+Starting a Gradle Daemon, 1 incompatible Daemon could not be reused, use --status for details
