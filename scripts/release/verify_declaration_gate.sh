@@ -56,8 +56,22 @@ manifest_release="$(awk -F= '/^release=/{print $2}' "$manifest_file")"
 [[ "$recorded_tag" == "$release_tag" ]] || { echo "[ERROR] release.git.tag mismatch in fingerprint" >&2; exit 1; }
 [[ "$manifest_release" == "$release_tag" ]] || { echo "[ERROR] release= mismatch in declaration artifact manifest" >&2; exit 1; }
 
+remotes=()
 if ! git -C "$repo_root" rev-parse --verify "$release_tag^{tag}" >/dev/null 2>&1; then
-  echo "[ERROR] Required annotated tag '$release_tag' is not present in git metadata" >&2
+  mapfile -t remotes < <(git -C "$repo_root" remote)
+  for remote in "${remotes[@]}"; do
+    git -C "$repo_root" fetch --force --tags "$remote" >/dev/null 2>&1 || true
+  done
+fi
+
+if ! git -C "$repo_root" rev-parse --verify "$release_tag^{tag}" >/dev/null 2>&1; then
+  echo "[ERROR] Required annotated tag '$release_tag' is not present in git metadata." >&2
+  if (( ${#remotes[@]} > 0 )); then
+    echo "[ERROR] Tried fetching tags from remotes (${remotes[*]}) but tag is still unavailable." >&2
+  else
+    echo "[ERROR] No git remotes are configured in this clone, so the tag cannot be fetched automatically." >&2
+  fi
+  echo "[ERROR] Restore/fetch the release tag and retry (for example: git fetch --tags --force <remote>)." >&2
   exit 1
 fi
 
