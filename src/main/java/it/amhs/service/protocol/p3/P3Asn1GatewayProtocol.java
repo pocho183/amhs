@@ -67,7 +67,13 @@ public class P3Asn1GatewayProtocol {
     }
 
     public byte[] handle(P3GatewaySessionService.SessionState session, byte[] encodedPdu) {
-        BerTlv apdu = BerCodec.decodeSingle(encodedPdu);
+        BerTlv apdu;
+        try {
+            apdu = BerCodec.decodeSingle(encodedPdu);
+        } catch (RuntimeException ex) {
+            logger.info("P3 ASN.1 malformed APDU decode failed: {}", ex.getMessage());
+            return error("malformed-apdu", "Unable to decode BER APDU");
+        }
         logger.info("P3 ASN.1 incoming APDU tagClass={} constructed={} tagNumber={} len={}", apdu.tagClass(), apdu.constructed(), apdu.tagNumber(), apdu.length());
 
         if (isRtseApdu(apdu)) {

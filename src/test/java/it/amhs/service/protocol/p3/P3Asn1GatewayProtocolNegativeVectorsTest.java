@@ -56,6 +56,18 @@ class P3Asn1GatewayProtocolNegativeVectorsTest {
         assertEquals(4, roseReject.tagNumber());
     }
 
+
+    @Test
+    void returnsMalformedApduErrorForInvalidBerPayload() {
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(new StubSessionService());
+
+        byte[] response = protocol.handle(new StubSessionService().newSession(), new byte[] { (byte) 0xA0, 0x02, 0x01 });
+
+        BerTlv error = BerCodec.decodeSingle(response);
+        assertEquals(P3Asn1GatewayProtocol.APDU_ERROR, error.tagNumber());
+        assertEquals("malformed-apdu", decodeErrorField(error, 0));
+    }
+
     @Test
     void readPduRejectsIndefiniteLength() {
         P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(new StubSessionService());
