@@ -3,10 +3,12 @@ package it.amhs.service.protocol.p3;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -102,7 +104,20 @@ public class P3GatewaySessionService {
 
         String[] segments = trimmed.split("\\s+", 2);
         String operation = segments[0].toUpperCase();
-        Map<String, String> attributes = segments.length > 1 ? parseAttributes(segments[1]) : Map.of();
+        ParsedAttributes parsedAttributes = segments.length > 1
+            ? parseAttributes(segments[1])
+            : new ParsedAttributes(Map.of(), null);
+        if (parsedAttributes.error() != null) {
+            logger.warn("P3 command op={} rejected due to malformed attributes detail={}", operation, parsedAttributes.error());
+            return parsedAttributes.error();
+        }
+
+        Map<String, String> attributes = parsedAttributes.attributes();
+        String attributeValidationError = validateAttributeNames(operation, attributes);
+        if (attributeValidationError != null) {
+            logger.warn("P3 command op={} rejected due to unsupported attribute set attrs={}", operation, redactSensitiveAttributes(attributes));
+            return attributeValidationError;
+        }
         logger.info(
             "P3 command op={} bound={} attrs={}",
             operation,
@@ -418,6 +433,15 @@ public class P3GatewaySessionService {
             return "ERR code=invalid-or-address detail=Missing recipient address";
         }
 
+        try {
+            ORAddress parsedRecipient = ORAddress.parse(recipient);
+            complianceValidator.validateIcaoOrAddress(parsedRecipient.toCanonicalString(), "recipient");
+            recipient = parsedRecipient.toCanonicalString();
+        } catch (IllegalArgumentException ex) {
+            logger.warn("P3 read rejected: invalid recipient reason={}", ex.getMessage());
+            return "ERR code=invalid-or-address detail=" + ex.getMessage();
+        }
+
         ParsedNumber waitTimeout = parseNonNegativeLong(attributes.get("wait-timeout-ms"), defaultStatusWaitTimeoutMs, "wait-timeout-ms");
         if (waitTimeout.error() != null) {
             return waitTimeout.error();
@@ -481,18 +505,62 @@ public class P3GatewaySessionService {
         return "OK code=release";
     }
 
-    private Map<String, String> parseAttributes(String rawAttributes) {
+    private ParsedAttributes parseAttributes(String rawAttributes) {
         Map<String, String> attributes = new LinkedHashMap<>();
-        Arrays.stream(rawAttributes.split(";"))
-            .map(String::trim)
-            .filter(StringUtils::hasText)
-            .forEach(token -> {
-                String[] kv = token.split("=", 2);
-                if (kv.length == 2) {
-                    attributes.put(kv[0].trim().toLowerCase(), kv[1].trim());
-                }
-            });
-        return attributes;
+        for (String token : Arrays.stream(rawAttributes.split(";")).map(String::trim).toList()) {
+            if (!StringUtils.hasText(token)) {
+                continue;
+            }
+
+            String[] kv = token.split("=", 2);
+            if (kv.length != 2 || !StringUtils.hasText(kv[0])) {
+                return new ParsedAttributes(Map.of(), "ERR code=invalid-command detail=Malformed attribute token '" + token + "'");
+            }
+
+            String key = kv[0].trim().toLowerCase();
+            if (attributes.containsKey(key)) {
+                return new ParsedAttributes(Map.of(), "ERR code=invalid-command detail=Duplicate attribute '" + key + "'");
+            }
+            attributes.put(key, kv[1].trim());
+        }
+        return new ParsedAttributes(attributes, null);
+    }
+
+    private String validateAttributeNames(String operation, Map<String, String> attributes) {
+        if (attributes.isEmpty()) {
+            return null;
+        }
+
+        Set<String> allowedAttributes = allowedAttributesForOperation(operation);
+        if (allowedAttributes == null) {
+            return null;
+        }
+
+        Set<String> unsupportedAttributes = new HashSet<>();
+        for (String key : attributes.keySet()) {
+            if (!allowedAttributes.contains(key)) {
+                unsupportedAttributes.add(key);
+            }
+        }
+
+        if (!unsupportedAttributes.isEmpty()) {
+            return "ERR code=invalid-command detail=Unsupported attribute(s) for "
+                + operation.toLowerCase()
+                + ": "
+                + String.join(",", unsupportedAttributes);
+        }
+        return null;
+    }
+
+    private Set<String> allowedAttributesForOperation(String operation) {
+        return switch (operation) {
+            case "BIND" -> Set.of("username", "password", "sender", "channel", "security-label", "gateway-policy-label", "external-profile-claim");
+            case "SUBMIT" -> Set.of("recipient", "subject", "body");
+            case "RETRIEVE", "STATUS" -> Set.of("submission-id", "wait-timeout-ms", "retry-interval-ms");
+            case "REPORT", "READ" -> Set.of("recipient", "wait-timeout-ms", "retry-interval-ms");
+            case "UNBIND", "RELEASE", "QUIT" -> Set.of();
+            default -> null;
+        };
     }
 
     private Map<String, String> redactSensitiveAttributes(Map<String, String> attributes) {
@@ -525,5 +593,8 @@ public class P3GatewaySessionService {
     }
 
     private record ParsedNumber(long value, String error) {
+    }
+
+    private record ParsedAttributes(Map<String, String> attributes, String error) {
     }
 }
