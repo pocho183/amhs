@@ -17,8 +17,8 @@ public final class AcseModels {
 
     public record AeQualifier(int value) {
         public AeQualifier {
-            if (value < 0 || value > 255) {
-                throw new IllegalArgumentException("ACSE AE-qualifier must fit in one octet (0..255)");
+            if (value < 0) {
+                throw new IllegalArgumentException("ACSE AE-qualifier must be non-negative");
             }
         }
     }
