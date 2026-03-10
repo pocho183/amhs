@@ -154,6 +154,25 @@ This checklist summarizes only open items after the `R2026.03` baseline evaluati
 - **ICAO external claim**
   - No structural baseline gap remains for `R2026.03`; maintain recurring authority acceptance workflow execution and release-to-release evidence refresh.
 
+### 5.5 Additional gaps for a **profile-complete** ICAO AMHS server (beyond the declared `R2026.03` baseline)
+
+The declared `R2026.03` baseline is authority-oriented and release-governed, but it is intentionally **not** a profile-complete external AMHS endpoint claim. For operators targeting a broader “full-service” posture, the following gaps remain open:
+
+1. **ACSE/presentation breadth completion**
+   - Complete profile-complete presentation-context negotiation semantics (beyond controlled/basic negotiation).
+   - Extend ACSE user-information handling beyond constrained EXTERNAL/OCTET STRING paths.
+   - Expand AP-title/AE-qualifier and authentication-value interoperability semantics to a full certifiable breadth.
+2. **Full X.411/P3 external semantics completion**
+   - Extend from deterministic gateway-profile behavior to profile-complete external P3 service semantics and error coverage.
+   - Promote current partial session/presentation handling from envelope preservation to full end-to-end semantics where required by external conformance profiles.
+3. **X.411 ASN.1 runtime breadth hardening**
+   - Promote current canonical-module proof + runtime profile-table checks into complete runtime module breadth across all externally claimed APDU/service variants.
+4. **Governance transition from “declared baseline + non-claim boundary” to “profile-complete claim”**
+   - Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
+   - Re-issue declaration matrices and authority dossier with explicit profile-complete scope wording and associated campaign evidence.
+
+Reference rows in the capability matrix that drive this expanded gap list: `A-03`, `A-04`, `A-05`, `A-06`, `U-03`, `U-04`, and `P1-06` (all currently `P`).
+
 ## 6. ICAO compliance closure status
 
 The following list tracks closure status for ICAO-oriented external compliance. For `R2026.03`, the technical artifacts and governance records are published in a release-bound authority dossier.
