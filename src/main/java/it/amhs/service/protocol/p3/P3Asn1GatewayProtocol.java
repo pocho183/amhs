@@ -56,6 +56,8 @@ public class P3Asn1GatewayProtocol {
     static final int APDU_RELEASE_RESPONSE = 7;
     static final int APDU_REPORT_REQUEST = 9;
     static final int APDU_REPORT_RESPONSE = 10;
+    static final int APDU_READ_REQUEST = 11;
+    static final int APDU_READ_RESPONSE = 12;
     static final int APDU_ERROR = 8;
 
     private final P3GatewaySessionService sessionService;
@@ -89,6 +91,7 @@ public class P3Asn1GatewayProtocol {
             case APDU_SUBMIT_REQUEST -> mapSubmit(session, apdu.value());
             case APDU_STATUS_REQUEST -> mapStatus(session, apdu.value());
             case APDU_REPORT_REQUEST -> mapReport(session, apdu.value());
+            case APDU_READ_REQUEST -> mapRead(session, apdu.value());
             case APDU_RELEASE_REQUEST -> mapRelease(session);
             default -> error("unsupported-operation", "Unsupported APDU " + apdu.tagNumber());
         };
@@ -137,7 +140,22 @@ public class P3Asn1GatewayProtocol {
     }
 
     private boolean isGatewayApduTag(int tagNumber) {
-        return tagNumber >= APDU_BIND_REQUEST && tagNumber <= APDU_REPORT_RESPONSE;
+        return switch (tagNumber) {
+            case APDU_BIND_REQUEST,
+                APDU_BIND_RESPONSE,
+                APDU_SUBMIT_REQUEST,
+                APDU_SUBMIT_RESPONSE,
+                APDU_STATUS_REQUEST,
+                APDU_STATUS_RESPONSE,
+                APDU_RELEASE_REQUEST,
+                APDU_RELEASE_RESPONSE,
+                APDU_ERROR,
+                APDU_REPORT_REQUEST,
+                APDU_REPORT_RESPONSE,
+                APDU_READ_REQUEST,
+                APDU_READ_RESPONSE -> true;
+            default -> false;
+        };
     }
 
     private byte[] wrapRtseResponse(int inboundRtseTag, byte[] nestedResponse) {
@@ -247,8 +265,9 @@ public class P3Asn1GatewayProtocol {
             case APDU_SUBMIT_REQUEST -> mapSubmit(session, argument);
             case APDU_STATUS_REQUEST -> mapStatus(session, argument);
             case APDU_REPORT_REQUEST -> mapReport(session, argument);
+            case APDU_READ_REQUEST -> mapRead(session, argument);
             case APDU_RELEASE_REQUEST -> mapRelease(session);
-            case APDU_BIND_RESPONSE, APDU_SUBMIT_RESPONSE, APDU_STATUS_RESPONSE, APDU_ERROR, APDU_RELEASE_RESPONSE, APDU_REPORT_RESPONSE ->
+            case APDU_BIND_RESPONSE, APDU_SUBMIT_RESPONSE, APDU_STATUS_RESPONSE, APDU_ERROR, APDU_RELEASE_RESPONSE, APDU_REPORT_RESPONSE, APDU_READ_RESPONSE ->
                 error("invalid-operation-role", "ROSE invoke requires a request operation code, got " + operationCode);
             default -> error("unsupported-operation", "Unsupported ROSE operation " + operationCode);
         };
@@ -404,6 +423,27 @@ public class P3Asn1GatewayProtocol {
         return errorFromResponse(response);
     }
 
+    private byte[] mapRead(P3GatewaySessionService.SessionState session, byte[] payload) {
+        Map<Integer, String> fields = decodeContextUtf8Fields(payload);
+        logger.info(
+            "P3 ASN.1 read request fields recipient={} wait-timeout-ms={} retry-interval-ms={} ",
+            safe(fields.get(0)),
+            safe(fields.get(1)),
+            safe(fields.get(2))
+        );
+        String command = "READ"
+            + " recipient=" + value(fields.get(0))
+            + ";wait-timeout-ms=" + value(fields.get(1))
+            + ";retry-interval-ms=" + value(fields.get(2));
+        String response = sessionService.handleCommand(session, command);
+        logger.info("P3 ASN.1 read gateway-response={}", response);
+
+        if (response.startsWith("OK")) {
+            return envelope(APDU_READ_RESPONSE, encodeKeyValuePayload(parseResponse(response)));
+        }
+        return errorFromResponse(response);
+    }
+
     private byte[] mapRelease(P3GatewaySessionService.SessionState session) {
         String response = sessionService.handleCommand(session, "UNBIND");
         logger.info("P3 ASN.1 release gateway-response={}", response);
@@ -434,7 +474,12 @@ public class P3Asn1GatewayProtocol {
     }
 
     private boolean isRetryable(String code) {
-        return "interrupted".equals(code) || "routing-policy".equals(code);
+        return "interrupted".equals(code)
+            || "routing-policy".equals(code)
+            || "resource-exhausted".equals(code)
+            || "temporarily-unavailable".equals(code)
+            || "transient-failure".equals(code)
+            || "timeout".equals(code);
     }
 
     private byte[] envelope(int tagNumber, byte[] payload) {
