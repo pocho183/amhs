@@ -14,7 +14,7 @@ This matrix publishes the declared external P3 endpoint behavior and transition 
 
 ### 2.1 Transition gate from non-claim boundary to profile-complete declaration
 
-- Transition gate: retain the external non-claim boundary as the governing declaration control until ACSE/presentation breadth, full X.411/P3 external semantics, and ASN.1 runtime breadth hardening are fully implemented and objectively evidenced in a release-bound dossier.
+- Transition gate: retain the external non-claim boundary as the governing declaration control until items 1-3 in `docs/icao/PICS.md` §5.5 are fully implemented and objectively evidenced in a release-bound dossier.
 - Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
 - Re-issue declaration matrices and authority dossier with explicit profile-complete scope wording and associated campaign evidence when the gate closes.
 
