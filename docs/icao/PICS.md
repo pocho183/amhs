@@ -41,7 +41,7 @@ Legend:
 | T-06 | Idle timeout / frame size guard | Y | Idle and max-frame controls enforced. |
 | A-01 | ACSE AARQ decoding and checks | Y | Application context and identity checks for supported gateway profile paths. |
 | A-02 | ACSE AARE structured response | Y | Result + diagnostic container emitted for supported flows, including deterministic rejection diagnostics for invalid AARQ profile elements. |
-| A-03 | Presentation context negotiation | P | Basic/controlled negotiation support; not a full profile-complete negotiation stack. |
+| A-03 | Presentation context negotiation | Y | Profile-complete presentation-context negotiation semantics are enforced, including deterministic AMHS abstract/transfer-syntax compatibility validation and context-id acceptance selection. |
 | A-04 | ACSE user-information semantics | Y | Supports AMHS association payload extraction across interoperable ACSE user-information EXTERNAL variants (including octet-aligned and metadata-bearing forms). |
 | A-05 | AP-title / AE-qualifier structures | C | Certifiable interoperability breadth is declared for AP-title ↔ AE-title/AE-qualifier pairing semantics, including positive and negative deterministic diagnostics. |
 | A-06 | Authentication-value semantics | C | Certifiable interoperability breadth is declared for optional/required/expected authentication-value permutations with deterministic acceptance/rejection diagnostics. |
@@ -159,7 +159,7 @@ This checklist summarizes only open items after the `R2026.03` baseline evaluati
 The declared `R2026.03` baseline is authority-oriented and release-governed, but it is intentionally **not** a profile-complete external AMHS endpoint claim. For operators targeting a broader “full-service” posture, the following gaps remain open:
 
 1. **ACSE/presentation breadth completion**
-   - Complete profile-complete presentation-context negotiation semantics (beyond controlled/basic negotiation).
+   - ✅ Closed: profile-complete presentation-context negotiation semantics are implemented, including deterministic AMHS transfer-syntax compatibility checks and accepted-context identifier negotiation.
    - ✅ Closed: ACSE user-information handling now accepts interoperable EXTERNAL variants beyond the constrained EXTERNAL/OCTET STRING-only path.
    - Expand AP-title/AE-qualifier and authentication-value interoperability semantics to a full certifiable breadth.
 2. **Full X.411/P3 external semantics completion**
@@ -171,7 +171,7 @@ The declared `R2026.03` baseline is authority-oriented and release-governed, but
    - Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
    - Re-issue declaration matrices and authority dossier with explicit profile-complete scope wording and associated campaign evidence.
 
-Reference rows in the capability matrix that drive this expanded gap list: `A-03`, `A-05`, `A-06`, `U-03`, `U-04`, and `P1-06` (currently `P`).
+Reference rows in the capability matrix that drive this expanded gap list: `A-05`, `A-06`, `U-03`, `U-04`, and `P1-06` (currently `P`).
 
 ## 6. ICAO compliance closure status
 
