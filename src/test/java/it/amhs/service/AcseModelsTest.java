@@ -73,9 +73,9 @@ class AcseModelsTest {
     }
 
     @Test
-    void shouldRejectOutOfRangeAeQualifier() {
+    void shouldRejectNegativeAeQualifier() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-            () -> new AcseModels.AeQualifier(256));
-        assertEquals("ACSE AE-qualifier must fit in one octet (0..255)", ex.getMessage());
+            () -> new AcseModels.AeQualifier(-1));
+        assertEquals("ACSE AE-qualifier must be non-negative", ex.getMessage());
     }
 }
