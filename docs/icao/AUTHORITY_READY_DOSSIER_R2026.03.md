@@ -1,10 +1,10 @@
 # Authority-Ready Oversight Dossier (R2026.03)
 
-Document status: **submission-ready oversight dossier index** for release `R2026.03`.
+Document status: **submission-ready oversight dossier index (profile-complete claim scope)** for release `R2026.03`.
 
 ## 1. Dossier objective
 
-This dossier assembles the authority-facing work packages into one indexable release bundle so oversight teams can review conformance, assurance evidence, and approvals without cross-document hunting.
+This dossier assembles the authority-facing work packages into one indexable release bundle so oversight teams can review conformance, assurance evidence, campaign results, and approvals without cross-document hunting.
 
 Included work packages:
 
@@ -31,7 +31,7 @@ Included work packages:
 |---|---|---|---|
 | TC-01 | Technical conformance evidence | Is implementation/profile conformance declared, traceable, and reproducibly tested? | `docs/icao/PICS.md`; `docs/icao/PIXIT.md`; `docs/icao/releases/R2026.03/PICS_R2026.03.md`; `docs/icao/releases/R2026.03/PIXIT_R2026.03.md`; `docs/icao/CONFORMANCE_TEST_MATRIX.md`; `docs/icao/ICAO_ATN_PROFILE_REQUIREMENT_TRACEABILITY.md`; `docs/icao/X411_MODULE_TRACEABILITY.md`; `docs/icao/ICAO_INTEROPERABILITY_CLOSURE_EVIDENCE.md`; `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`; `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`; `docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt`. |
 | OA-01 | Operational assurance pack | Is service operation resilient, measured, and runbook-governed for release use? | `docs/icao/OPERATIONAL_HA_FAILOVER_EVIDENCE_PACK.md`; `OPERATIONS_GUIDE.md`; `docs/icao/releases/R2026.03/evidence/operational-assurance/README.md`; `docs/icao/releases/R2026.03/evidence/operational-assurance/latest-manifest.txt`; failover/SLO/backup/performance artifacts under `docs/icao/releases/R2026.03/evidence/operational-assurance/`. |
-| SA-01 | Security assurance pack | Are PKI, labels, negotiation, and security boundary controls declared with evidence? | `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`; `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md`; `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md`; `docs/icao/releases/R2026.03/evidence/security-pki-label/README.md`. |
+| SA-01 | Security assurance pack | Are PKI, labels, and negotiation controls declared with profile-complete claim wording and evidence? | `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`; `docs/icao/ACSE_PRESENTATION_NEGOTIATION_MATRIX.md`; `docs/icao/releases/R2026.03/evidence/security-pki-label/README.md`; `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/latest-manifest.txt`. |
 | GOV-01 | Governance approvals | Is accountable approval recorded for authority submission and residual risk acceptance? | `docs/icao/ITALY_NATIONAL_DECLARATION_PACKAGE.md`; `docs/icao/releases/R2026.03/evidence/italy-national-interop/20260308T150500Z-approval-register.md`; `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-safety-security-residual-risk-acceptance.md`. |
 
 ## 4. Work package assembly checklist (submission gate)
@@ -70,4 +70,4 @@ For the next declared release (`R_next`), publish an explicit prior-to-current d
 
 ## 6. Authority submission statement
 
-Release `R2026.03` is packaged as one indexable oversight dossier through this document and its referenced evidence artifacts. The declared scope is submission-ready as a baseline release with full revalidation expected due to absence of a prior declared release baseline in repository history.
+Release `R2026.03` is packaged as one indexable oversight dossier through this document and its referenced evidence artifacts. The declared scope is submission-ready with explicit profile-complete claim wording, with full revalidation expected due to absence of a prior declared release baseline in repository history.

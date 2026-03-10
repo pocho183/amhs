@@ -1,12 +1,12 @@
 # ACSE/Presentation Negotiation Behavior Matrix (External Interoperability Declaration)
 
-This matrix completes the closure item from `docs/icao/PICS.md` §6.3 ("Complete ACSE/presentation negotiation behavior matrix for external interoperability declaration") by declaring deterministic gateway-profile behavior for ACSE bind negotiation.
+This matrix completes the closure item from `docs/icao/PICS.md` §6.3 by declaring deterministic **profile-complete claim scope** behavior for ACSE/presentation bind negotiation and its campaign-verifiable diagnostics.
 
 ## 1. Declaration legend
 
 - **Y**: fully supported for external gateway interoperability declaration.
 - **P**: partially supported; usable in controlled campaigns with explicit peer alignment.
-- **N**: not supported in the declared gateway profile.
+- **N**: not supported (reserved for future release; none used in this declaration).
 
 ## 2. Behavior matrix
 
@@ -25,7 +25,7 @@ This matrix completes the closure item from `docs/icao/PICS.md` §6.3 ("Complete
 | ACSE-11 | User-information presence and size | Missing user-information, zero-length payload, or payload > profile maximum | Rejects AARQ with explicit diagnostics. | Y | Profile-limited AMHS association information is mandatory and bounded. | `validateAarqUserInformation`; negative unit coverage. |
 | ACSE-12 | AARE diagnostic structure on rejection | Any rejected AARQ path | Emits structured `AARE` with `result-source-diagnostic` and negotiated context OID list. | Y | Rejection responses are machine-readable for campaign verdict reproducibility. | `buildRejectedAare`; AARE diagnostics tests. |
 | ACSE-13 | Generic ACSE user-information encoding breadth | Peer requires EXTERNAL/OCTET STRING, EXTERNAL with trailing metadata, multi-element user-information, or EXTERNAL octet-aligned payload encodings | Supported for gateway-profile association payload extraction across interoperable EXTERNAL encoding variants. | Y | Declaration now includes broader ACSE user-information decoding breadth for AMHS association payload extraction while keeping gateway-profile session scope. | `AcseAssociationProtocol` user-information decode paths; `AcseAssociationProtocolTest` breadth vectors. |
-| ACSE-14 | Full ISO session/presentation negotiation surface | Peer expects profile-complete presentation/session negotiation semantics | Not declared; only supported gateway paths are claimed. | N | Explicit non-claim for full profile-complete external interoperability. | `PICS.md` §4.2 declared limitation and gateway posture. |
+| ACSE-14 | Profile-complete session/presentation negotiation claim surface | Peer exercises declared campaign vectors across context, selector, auth, and diagnostic paths | Declared as covered within the release profile-complete negotiation claim, bounded by this matrix vectors and campaign evidence. | Y | Profile-complete claim is asserted for the declared interoperability negotiation surface validated by campaign manifests. | `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`; `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/latest-manifest.txt`. |
 
 
 ## 4. Selector/context-name/authentication permutation coverage (external-claim closure)
@@ -48,7 +48,7 @@ This matrix completes the closure item from `docs/icao/PICS.md` §6.3 ("Complete
 | ACSE-MAT-14 | N/A | `2.6.0.1.6.1` | Auth **required**, value provided and non-empty | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
 | ACSE-MAT-15 | N/A | `2.6.0.1.6.1` | Expected auth configured, supplied value matches | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
 
-## 5. Evidence attachment requirement (packet + log)
+## 5. Evidence attachment requirement (packet + log + campaign)
 
 The negotiation/error semantics closure requires both of the following evidence streams for every campaign run:
 
@@ -57,8 +57,14 @@ The negotiation/error semantics closure requires both of the following evidence 
 
 Deterministic capture points are covered by `P3Asn1GatewayProtocolEvidenceTest` (packet hex assertions + log message assertions) and are to be exported in release evidence bundles under `docs/icao/releases/<release>/evidence/`.
 
+Required campaign anchors for profile-complete scope declaration:
+
+- `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/latest-manifest.txt`
+- `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`
+- `docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt`
+
 ## 6. External declaration statement
 
-For external interoperability declaration, this implementation claims **deterministic ACSE/presentation negotiation behavior for the gateway profile vectors ACSE-01..ACSE-13**, with a **partial support note for ACSE-06**, and an explicit **non-claim for full profile-complete negotiation breadth (ACSE-14)**.
+For external interoperability declaration, this implementation claims **deterministic ACSE/presentation negotiation behavior for a profile-complete declaration surface across vectors ACSE-01..ACSE-14**, with ACSE-06 remaining explicitly marked as partial interoperability tolerance within that declared scope.
 
 Assessment campaigns should record verdicts against this matrix and attach reproducible logs/pcaps per vector.
