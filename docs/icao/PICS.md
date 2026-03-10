@@ -159,7 +159,10 @@ Readiness estimate (engineering judgment): **~70-80%** for controlled internal u
 Major remaining gaps:
 1. Directory capability for scalable AMHS addressing/distribution/routing policy authority.
 
-Readiness estimate (engineering judgment): **~30-40%** for national operational deployment without additional platform layers.
+Recently closed baseline (still recurring per-release obligation):
+5. Security/PKI operations hardening and authority-governed lifecycle controls are now documented with explicit role approvals, lifecycle gates, and release evidence obligations in `docs/icao/PKI_LIFECYCLE_GOVERNANCE_CONTROLS.md`.
+
+Readiness estimate (engineering judgment): **~35-45%** for national operational deployment without additional platform layers.
 
 #### C) ICAO-compliant external declaration/use
 
