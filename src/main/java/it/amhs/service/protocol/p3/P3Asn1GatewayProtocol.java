@@ -162,6 +162,10 @@ public class P3Asn1GatewayProtocol {
         return null;
     }
 
+    static Set<Integer> externalClaimedApduVariants() {
+        return EXTERNAL_CLAIMED_APDU_VARIANTS;
+    }
+
     private boolean isGatewayApduTag(int tagNumber) {
         return EXTERNAL_CLAIMED_APDU_VARIANTS.contains(tagNumber);
     }

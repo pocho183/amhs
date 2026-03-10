@@ -111,6 +111,10 @@ public final class X411TagMap {
         return tagNumber > ENVELOPE_EXTENSIONS;
     }
 
+    public static Set<Integer> associationApduTags() {
+        return ASSOCIATION_APDU_TAGS;
+    }
+
     public record BerApduTag(int tagClass, int tagNumber) {
     }
 

@@ -49,13 +49,13 @@ Legend:
 | U-01 | ROSE operation coverage for full P3 service set | Y | Full gateway-profile ROSE semantics are implemented: request operations map deterministically, request/response role mismatches are rejected with explicit diagnostics, and unexpected non-invoke ROSE APDUs produce deterministic ROSE reject responses. |
 | U-02 | RTSE behavior coverage | Y | RTSE wrapper semantics are implemented for the declared gateway profile operations, including deterministic `RTORQ`/`RTOAC`, `RTTD`/`RTTR`, `RTAB`, and `RTORJ` rejection paths. |
 | U-03 | Session semantics beyond wrapper preservation | Y | Session/presentation responses are emitted with deterministic external semantics (session connect→accept mapping, presentation connect→CPA mapping, and ACSE AARQ→AARE mapping) while preserving declared gateway payload behavior. |
-| U-04 | Complete X.411/P3 service behavior and error semantics | P | Gateway service now provides explicit bind/submit/status/report/read/release behavior with deterministic error semantics; full externally certifiable profile breadth remains pending. |
+| U-04 | Complete X.411/P3 service behavior and error semantics | C | Runtime breadth coverage now hardens all externally claimed APDU/service variants (direct gateway APDUs plus ROSE/RTSE claim surface) with deterministic success/error role semantics. |
 | P1-01 | BER parsing for P1-like envelope | Y | Structured BER/TLV support in parser. |
 | P1-02 | Envelope/content separation | Y | Envelope and content are separated. |
 | P1-03 | Per-recipient handling | Y | Per-recipient routing state supported. |
 | P1-04 | Trace information handling | Y | Trace extraction/injection supported. |
 | P1-05 | Unknown extension preservation | Y | Unknown extension containers retained. |
-| P1-06 | Full X.411 ASN.1 module conformance | P | Runtime profile tag-table checks, DR/NDR BER evidence, and canonical module-level ASN.1 proof-pack traceability are implemented for the declared gateway profile (`docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`). |
+| P1-06 | Full X.411 ASN.1 module conformance | C | Canonical module proof, runtime tag-table checks, and executable breadth coverage now span all externally claimed P1/P3 APDU-service variants for the declared profile (`docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`). |
 | OR-01 | Structured O/R Address parsing | Y | Supports keyed O/R attribute model. |
 | OR-02 | OU sequencing validation (OU1..OU4) | Y | Enforces non-skipping OU order. |
 | OR-03 | ISO/Numeric country validation | Y | Country checks for C attribute. |
@@ -166,13 +166,13 @@ The declared `R2026.03` baseline is authority-oriented and release-governed, but
    - ✅ Closed: external P3 service semantics now enforce deterministic malformed attribute handling, duplicate/unsupported attribute rejection, and recipient-address validation across bind/submit/status/report/read/release operations.
    - ✅ Closed (`R2026.03`): session/presentation response paths now perform deterministic end-to-end semantic mapping for declared external conformance vectors (instead of envelope-only preservation).
 3. **X.411 ASN.1 runtime breadth hardening**
-   - Promote current canonical-module proof + runtime profile-table checks into complete runtime module breadth across all externally claimed APDU/service variants.
+   - ✅ Closed: canonical-module proof + runtime profile-table checks are promoted to complete runtime breadth coverage across all externally claimed APDU/service variants.
 4. **Governance transition from “declared baseline + non-claim boundary” to “profile-complete claim”**
    - Transition gate: retain the external non-claim boundary as the governing declaration control until items 1-3 above are fully implemented and objectively evidenced in a release-bound dossier.
    - Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
    - Re-issue declaration matrices and authority dossier with explicit profile-complete scope wording and associated campaign evidence.
 
-Reference rows in the capability matrix that drive this expanded gap list: `A-05`, `A-06`, `U-03`, `U-04`, and `P1-06` (currently `P`).
+Reference rows in the capability matrix that drive this expanded gap list: `A-05`, `A-06`, and `U-03` (remaining profile-complete expansion items beyond the declared baseline).
 
 ## 6. ICAO compliance closure status
 

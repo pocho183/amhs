@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -50,6 +51,12 @@ class P1RuntimeProfileBreadthTest {
             X411TagMap.APDU_DELIVERY_REPORT,
             "unsupported-operation: delivery-report APDU is not accepted on inbound relay association traffic"
         );
+
+        Set<Integer> claimedApduTags = X411TagMap.associationApduTags();
+        Set<Integer> exercisedApduTags = new java.util.HashSet<>();
+        exercisedApduTags.addAll(inboundSupportedVectors.keySet());
+        exercisedApduTags.addAll(inboundUnsupportedDiagnostics.keySet());
+        assertEquals(claimedApduTags, exercisedApduTags);
 
         assertEquals(
             inboundUnsupportedDiagnostics.get(X411TagMap.APDU_BIND_RESULT),

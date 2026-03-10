@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +29,23 @@ class P3RuntimeProfileBreadthTest {
             P3Asn1GatewayProtocol.APDU_READ_REQUEST, readPayload(),
             P3Asn1GatewayProtocol.APDU_RELEASE_REQUEST, new byte[0]
         );
+
+        Set<Integer> expectedClaimedVariants = Set.of(
+            P3Asn1GatewayProtocol.APDU_BIND_REQUEST,
+            P3Asn1GatewayProtocol.APDU_BIND_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_SUBMIT_REQUEST,
+            P3Asn1GatewayProtocol.APDU_SUBMIT_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_STATUS_REQUEST,
+            P3Asn1GatewayProtocol.APDU_STATUS_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_RELEASE_REQUEST,
+            P3Asn1GatewayProtocol.APDU_RELEASE_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_REPORT_REQUEST,
+            P3Asn1GatewayProtocol.APDU_REPORT_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_READ_REQUEST,
+            P3Asn1GatewayProtocol.APDU_READ_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_ERROR
+        );
+        assertEquals(expectedClaimedVariants, P3Asn1GatewayProtocol.externalClaimedApduVariants());
 
         Map<Integer, Integer> successTags = Map.of(
             P3Asn1GatewayProtocol.APDU_SUBMIT_REQUEST, P3Asn1GatewayProtocol.APDU_SUBMIT_RESPONSE,
