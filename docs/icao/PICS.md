@@ -2,9 +2,9 @@
 
 Document status: **authority-ready release baseline (`R2026.03`)** for controlled interoperability, with technical and governance closure artifacts assembled for authority-facing review.
 
-Last updated: `2026-03-08` (editorial refresh; synchronized with the release-bound wrapper `docs/icao/releases/R2026.03/PICS_R2026.03.md`).
+Last updated: `2026-03-10` (capability wording refresh after recent ACSE/P3 interoperability and operation-coverage commits; synchronized with the release-bound wrapper `docs/icao/releases/R2026.03/PICS_R2026.03.md`).
 
-Revision note (`2026-03-08`): clarified the status legend and declaration-bound wording for easier authority review, with no protocol behavior delta.
+Revision note (`2026-03-10`): updated declared gateway-profile semantics wording to explicitly include mailbox read handling in the P3 operation surface and harmonize matrix/section wording with current implementation evidence.
 
 ## 1. Scope
 
@@ -49,7 +49,7 @@ Legend:
 | U-01 | ROSE operation coverage for full P3 service set | Y | Full gateway-profile ROSE semantics are implemented: request operations map deterministically, request/response role mismatches are rejected with explicit diagnostics, and unexpected non-invoke ROSE APDUs produce deterministic ROSE reject responses. |
 | U-02 | RTSE behavior coverage | Y | RTSE wrapper semantics are implemented for the declared gateway profile operations, including deterministic `RTORQ`/`RTOAC`, `RTTD`/`RTTR`, `RTAB`, and `RTORJ` rejection paths. |
 | U-03 | Session semantics beyond wrapper preservation | P | Session/presentation envelopes are preserved/rewrapped in supported gateway paths. |
-| U-04 | Complete X.411/P3 service behavior and error semantics | P | Gateway service now provides explicit bind/submit/status/report/release behavior with deterministic error semantics; full externally certifiable profile breadth remains pending. |
+| U-04 | Complete X.411/P3 service behavior and error semantics | P | Gateway service now provides explicit bind/submit/status/report/read/release behavior with deterministic error semantics; full externally certifiable profile breadth remains pending. |
 | P1-01 | BER parsing for P1-like envelope | Y | Structured BER/TLV support in parser. |
 | P1-02 | Envelope/content separation | Y | Envelope and content are separated. |
 | P1-03 | Per-recipient handling | Y | Per-recipient routing state supported. |
@@ -85,13 +85,13 @@ This implementation exposes a **gateway-oriented P3 profile** and does not curre
   - single active bind per association,
   - re-bind rejection while bound,
   - explicit diagnostics for operations attempted before bind or after release.
-- Submission-oriented message ingress mapped into the internal AMHS canonical message model.
+- Submission-oriented message ingress and deterministic status/report/read query handling mapped into the internal AMHS canonical model.
 - O/R Name and O/R Address normalization with ICAO-oriented validation hooks.
 - Delivery/Non-delivery report persistence with protocol-level correlation fields (`related_mts_identifier`, `correlation_token`).
 
 ### 4.2 Declared limitations for P3
 
-- ROSE operation/error mapping now enforces full declared gateway-profile semantics for bind/submit/status/report/release, including deterministic diagnostics for unsupported operations, request/response role misuse, and unexpected non-invoke ROSE APDUs.
+- ROSE operation/error mapping now enforces full declared gateway-profile semantics for bind/submit/status/report/read/release, including deterministic diagnostics for unsupported operations, request/response role misuse, and unexpected non-invoke ROSE APDUs.
 - RTSE wrapper behavior is implemented for the declared gateway operation subset; broader external profile breadth beyond the gateway declaration remains out of scope.
 - Presentation/ACSE negotiation semantics are implemented for supported paths only, not as a universal full interoperability surface.
 - CRL/OCSP runtime checks are available via PKIX revocation toggles (`tls.pkix.revocation-enabled` + JVM security policy), but external-claim completeness still depends on release-bound objective evidence.
