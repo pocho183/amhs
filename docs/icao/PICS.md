@@ -144,9 +144,11 @@ Major remaining gaps:
 2. Full operational service breadth expectations beyond the constrained gateway profile.
 3. Migration-grade gateway and lifecycle tooling expected in mixed AFTN/AMHS environments.
 4. Stronger HA/DR posture (dual-node orchestration, replicated operations model, formal DR drills as recurring obligations).
-5. Security/PKI operations hardening and authority-governed lifecycle controls.
 
-Readiness estimate (engineering judgment): **~30-40%** for national operational deployment without additional platform layers.
+Recently closed baseline (still recurring per-release obligation):
+5. Security/PKI operations hardening and authority-governed lifecycle controls are now documented with explicit role approvals, lifecycle gates, and release evidence obligations in `docs/icao/PKI_LIFECYCLE_GOVERNANCE_CONTROLS.md`.
+
+Readiness estimate (engineering judgment): **~35-45%** for national operational deployment without additional platform layers.
 
 #### C) ICAO-compliant external declaration/use
 
