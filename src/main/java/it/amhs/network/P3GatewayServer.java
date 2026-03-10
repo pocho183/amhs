@@ -53,6 +53,8 @@ public class P3GatewayServer {
     private static final int TAG_CLASS_CONTEXT = 2;
     private static final int TAG_CLASS_UNIVERSAL = 0;
     private static final int TAG_CLASS_APPLICATION = 1;
+    private static final int GATEWAY_APDU_MIN_TAG = 0;
+    private static final int GATEWAY_APDU_MAX_TAG = 10;
 
     private final String host;
     private final int port;
@@ -701,7 +703,7 @@ public class P3GatewayServer {
         }
         try {
             BerTlv tlv = BerCodec.decodeSingle(data);
-            if (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() <= 8) {
+            if (isGatewayApdu(tlv)) {
                 int totalLength = tlv.headerLength() + tlv.length();
                 return Arrays.copyOfRange(data, 0, totalLength);
             }
@@ -709,7 +711,7 @@ public class P3GatewayServer {
                 return null;
             }
             for (BerTlv nested : BerCodec.decodeAll(tlv.value())) {
-                if (nested.tagClass() == TAG_CLASS_CONTEXT && nested.constructed() && nested.tagNumber() <= 8) {
+                if (isGatewayApdu(nested)) {
                     return BerCodec.encode(nested);
                 }
             }
@@ -723,7 +725,7 @@ public class P3GatewayServer {
     private byte[] findGatewayApduRecursive(byte[] data) {
         try {
             BerTlv tlv = BerCodec.decodeSingle(data);
-            if (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() <= 8) {
+            if (isGatewayApdu(tlv)) {
                 return BerCodec.encode(tlv);
             }
             if (!tlv.constructed()) {
@@ -807,7 +809,7 @@ public class P3GatewayServer {
     }
 
     private BerTlv replaceGatewayApduInTlv(BerTlv tlv, byte[] replacement) {
-        if (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() <= 8) {
+        if (isGatewayApdu(tlv)) {
             return BerCodec.decodeSingle(replacement);
         }
         if (!tlv.constructed()) {
@@ -892,6 +894,13 @@ public class P3GatewayServer {
             logger.debug("Failed to preserve inbound ACSE envelope: {}", ex.getMessage());
         }
         return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, 1, 0, userInfo.length, userInfo));
+    }
+
+    private boolean isGatewayApdu(BerTlv tlv) {
+        return tlv.tagClass() == TAG_CLASS_CONTEXT
+            && tlv.constructed()
+            && tlv.tagNumber() >= GATEWAY_APDU_MIN_TAG
+            && tlv.tagNumber() <= GATEWAY_APDU_MAX_TAG;
     }
 
     private enum ProtocolKind {

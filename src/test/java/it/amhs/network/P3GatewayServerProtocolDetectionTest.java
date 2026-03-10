@@ -209,6 +209,31 @@ class P3GatewayServerProtocolDetectionTest {
     }
 
     @Test
+    void extractsReportRequestApduFromPresentationEnvelope() throws Exception {
+        byte[] gatewayApdu = new byte[] {(byte) 0xA9, 0x03, 0x0C, 0x01, 0x41};
+        byte[] acse = new byte[] {0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xA9, 0x03, 0x0C, 0x01, 0x41};
+        byte[] presentation = new byte[] {0x61, 0x0D, (byte) 0xBE, 0x0B, 0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xA9, 0x03, 0x0C, 0x01, 0x41};
+
+        byte[] extracted = (byte[]) extractApplicationPduFromRfc1006Payload.invoke(server, presentation, "OSI_PRESENTATION_PPDU");
+
+        assertArrayEquals(gatewayApdu, extracted);
+    }
+
+    @Test
+    void rewrapPreservesEnvelopeForReportRequestAndInjectsReportResponse() throws Exception {
+        Method rewrap = P3GatewayServer.class.getDeclaredMethod("rewrapApplicationPduForRfc1006Response", byte[].class, String.class, byte[].class);
+        rewrap.setAccessible(true);
+
+        byte[] gatewayResponse = new byte[] {(byte) 0xAA, 0x03, 0x0C, 0x01, 0x42};
+        byte[] presentation = new byte[] {0x61, 0x0D, (byte) 0xBE, 0x0B, 0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xA9, 0x03, 0x0C, 0x01, 0x41};
+
+        byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "OSI_PRESENTATION_PPDU", presentation);
+        byte[] extracted = (byte[]) extractApplicationPduFromRfc1006Payload.invoke(server, wrapped, "OSI_PRESENTATION_PPDU");
+
+        assertArrayEquals(gatewayResponse, extracted);
+    }
+
+    @Test
     void standardProfileRejectsTextAndBer() throws Exception {
         P3GatewayServer strictServer = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "STANDARD_P3", null, null, null);
         Method isProtocolAllowed = P3GatewayServer.class.getDeclaredMethod("isProtocolAllowed", Class.forName("it.amhs.network.P3GatewayServer$ProtocolKind"));
