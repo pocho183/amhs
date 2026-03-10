@@ -490,14 +490,24 @@ public class RFC1006Service {
 
         if (!aarq.presentationContexts().isEmpty()) {
             java.util.Set<Integer> matched = new java.util.LinkedHashSet<>();
+            java.util.Set<Integer> seenIdentifiers = new java.util.LinkedHashSet<>();
+            java.util.Set<String> detailedAbstractSyntaxes = new java.util.LinkedHashSet<>();
             for (it.amhs.service.protocol.acse.PresentationContext context : aarq.presentationContexts()) {
                 context.validate();
+                if (!seenIdentifiers.add(context.identifier())) {
+                    throw new IllegalArgumentException("ACSE presentation context identifier must be unique odd positive integer");
+                }
+                detailedAbstractSyntaxes.add(context.abstractSyntaxOid());
                 if (ICAO_AMHS_P1_OID.equals(context.abstractSyntaxOid())) {
                     matched.add(context.identifier());
                 }
             }
             if (matched.isEmpty()) {
                 throw new IllegalArgumentException("ACSE presentation contexts do not negotiate AMHS P1 abstract syntax");
+            }
+            java.util.Set<String> flatAbstractSyntaxes = new java.util.LinkedHashSet<>(aarq.presentationContextOids());
+            if (!flatAbstractSyntaxes.equals(detailedAbstractSyntaxes)) {
+                throw new IllegalArgumentException("ACSE presentation context OID list does not match detailed presentation-context definitions");
             }
         }
     }

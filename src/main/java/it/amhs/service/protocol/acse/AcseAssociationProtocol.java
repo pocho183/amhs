@@ -337,6 +337,7 @@ public class AcseAssociationProtocol {
         List<String> oids = new ArrayList<>();
         List<PresentationContext> proposed = new ArrayList<>();
         Set<Integer> accepted = new LinkedHashSet<>();
+        Set<Integer> proposedIds = new LinkedHashSet<>();
         for (BerTlv item : BerCodec.decodeAll(seq.value())) {
             if (item.isUniversal() && !item.constructed() && item.tagNumber() == 2 && item.value().length == 1) {
                 int id = item.value()[0] & 0xFF;
@@ -360,12 +361,18 @@ public class AcseAssociationProtocol {
                 oids.add(decodeOidValue(oidTlv.value()));
                 continue;
             }
+            if (contextFields.size() != 3) {
+                throw new IllegalArgumentException("ACSE presentation context item must contain identifier, abstract syntax and transfer syntax list");
+            }
 
             BerTlv id = contextFields.get(0);
             if (!id.isUniversal() || id.tagNumber() != 2 || id.value().length != 1) {
                 throw new IllegalArgumentException("ACSE presentation context item must start with INTEGER identifier");
             }
             int identifier = id.value()[0] & 0xFF;
+            if (!proposedIds.add(identifier)) {
+                throw new IllegalArgumentException("ACSE presentation context identifier must be unique odd positive integer");
+            }
 
             BerTlv abstractSyntaxTlv = contextFields.get(1);
             if (!abstractSyntaxTlv.isUniversal() || abstractSyntaxTlv.tagNumber() != 6) {
