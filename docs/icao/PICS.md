@@ -143,6 +143,9 @@ Major remaining gaps:
 1. Directory capability for scalable AMHS addressing/distribution/routing policy authority.
 2. Full operational service breadth expectations beyond the constrained gateway profile.
 3. Migration-grade gateway and lifecycle tooling expected in mixed AFTN/AMHS environments.
+   - Controlled dual-stack coexistence patterns (AFTN fallback/parallel-routing with deterministic cutover criteria).
+   - Replay-safe migration tooling (idempotent queue draining, correlation-aware retransmission, and rollback playbooks).
+   - Operational lifecycle coverage (change windows, versioned runbooks, and authority-auditable migration evidence packs).
 4. Stronger HA/DR posture (dual-node orchestration, replicated operations model, formal DR drills as recurring obligations).
 5. Security/PKI operations hardening and authority-governed lifecycle controls.
 
