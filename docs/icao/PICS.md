@@ -141,10 +141,6 @@ Readiness estimate (engineering judgment): **~70-80%** for controlled internal u
 
 Major remaining gaps:
 1. Directory capability for scalable AMHS addressing/distribution/routing policy authority.
-2. Full operational service breadth expectations beyond the constrained gateway profile.
-3. Migration-grade gateway and lifecycle tooling expected in mixed AFTN/AMHS environments.
-4. Stronger HA/DR posture (dual-node orchestration, replicated operations model, formal DR drills as recurring obligations).
-5. Security/PKI operations hardening and authority-governed lifecycle controls.
 
 Readiness estimate (engineering judgment): **~30-40%** for national operational deployment without additional platform layers.
 
