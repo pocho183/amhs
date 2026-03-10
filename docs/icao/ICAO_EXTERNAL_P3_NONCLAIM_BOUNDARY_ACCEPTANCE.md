@@ -79,6 +79,6 @@ For each subsequent release:
 
 ## 9. Governance transition guardrail
 
-Retirement or narrowing of this external non-claim boundary is permitted only after profile-complete technical breadth is implemented and objectively evidenced, specifically including ACSE/presentation breadth completion, full X.411/P3 external semantics completion, and runtime ASN.1 breadth hardening as tracked in `docs/icao/PICS.md` §5.5.
+Retirement or narrowing of this external non-claim boundary is permitted only after the technical breadth tracked in items 1-3 of `docs/icao/PICS.md` §5.5 is fully implemented and objectively evidenced in a release-bound dossier.
 
 Until that condition is met, this boundary remains the normative control for authority-facing external declaration scope.
