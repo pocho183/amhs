@@ -54,7 +54,7 @@ public class P3GatewayServer {
     private static final int TAG_CLASS_UNIVERSAL = 0;
     private static final int TAG_CLASS_APPLICATION = 1;
     private static final int GATEWAY_APDU_MIN_TAG = 0;
-    private static final int GATEWAY_APDU_MAX_TAG = 10;
+    private static final int GATEWAY_APDU_MAX_TAG = 12;
 
     private final String host;
     private final int port;
@@ -93,10 +93,7 @@ public class P3GatewayServer {
         this.textWelcomeEnabled = textWelcomeEnabled;
         this.listenerProfile = ListenerProfile.from(listenerProfile);
         if (this.listenerProfile == ListenerProfile.STANDARD_P3) {
-            logger.warn(
-                "amhs.p3.gateway.listener-profile=STANDARD_P3 restricts transport ingress to RFC1006/TPKT only, "
-                    + "and enforces the declared external gateway profile semantics (ROSE/RTSE/ACSE/session/presentation paths are release-scoped)"
-            );
+            logger.info("amhs.p3.gateway.listener-profile=STANDARD_P3 enforces RFC1006/TPKT ingress with external X.411 P3 envelope semantics enabled");
         }
         this.tls = tls;
         this.sessionService = sessionService;

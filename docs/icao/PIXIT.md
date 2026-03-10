@@ -86,7 +86,7 @@ Behavior:
 
 1. RTSE wrapper behavior is implemented for the declared gateway operation subset; broader external profile breadth beyond the gateway declaration remains out of scope.
 2. Presentation/session handling includes wrapper-preservation/rewrap strategies for supported gateway paths.
-3. ACSE support is implementation-focused and profile-limited, not a broad complete ACSE conformance claim.
+3. ACSE support remains profile-limited overall; however AP-title/AE-qualifier pairing semantics and authentication-value interoperability semantics are declared at certifiable breadth for the gateway profile matrix.
 4. No formal claim of full X.411 ASN.1 module conformance.
 5. No complete security label enforcement profile.
 6. CRL / OCSP runtime enforcement: Partial support may depend on runtime configuration; not asserted as complete profile enforcement.

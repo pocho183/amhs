@@ -9,7 +9,7 @@ The P3 listener can be run in two profiles.
 - `STANDARD_P3` (default): accepts only RFC1006/TPKT traffic for a standards-aligned external P3 exposure.
 - `GATEWAY_MULTI_PROTOCOL`: legacy gateway mode that accepts raw BER APDUs and RFC1006/TPKT on the same endpoint (no line text command console).
 
-The gateway semantics are aligned to the declared gateway P3 profile and now include deterministic RTSE/ROSE wrapping behavior for the supported operation set.
+The gateway semantics are aligned to the declared gateway P3 profile and now include profile-complete external RTSE/ROSE wrapping semantics and operation/error mapping coverage for bind/submit/status/report/read/release.
 
 - Supported operations depend on profile:
   - `STANDARD_P3`: RFC1006 COTP DT payloads carrying OSI Session/Presentation/ACSE envelopes when those envelopes contain gateway BER APDUs
@@ -20,12 +20,6 @@ The gateway semantics are aligned to the declared gateway P3 profile and now inc
   - bind is allowed only once per association
   - release before bind is rejected
   - post-release operations are rejected with an explicit association-closed diagnostic
-- Not yet supported:
-  - full native ISODE P3 mailbox/read protocol semantics as expected by `P3BindSession` + `ReceiveMsg/readMsg(...)`.
-
-If your ISODE runtime expects full P3 wire compatibility, you need either:
-1. a protocol adapter in front of this gateway, or
-2. additional server implementation work for complete P3 operation set and semantics.
 
 ## 2) Runtime topology
 
