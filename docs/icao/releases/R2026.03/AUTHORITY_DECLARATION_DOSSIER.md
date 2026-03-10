@@ -1,10 +1,10 @@
 # Authority-Facing Declaration Dossier (`R2026.03`)
 
-Document status: **release package index for authority submission (profile-complete claim scope)**.
+Document status: **release package index for authority submission (transition-governed profile-complete claim scope)**.
 
 ## 1. Purpose
 
-This dossier packages the release `R2026.03` declaration evidence into authority-facing sections required for the external **profile-complete claim**:
+This dossier packages the release `R2026.03` declaration evidence into authority-facing sections required for the external **profile-complete claim**, subject to the governance transition gate defined in `docs/icao/PICS.md` §5.5 and `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md`:
 
 1. Technical evidence
 2. Security evidence
@@ -18,7 +18,13 @@ This dossier packages the release `R2026.03` declaration evidence into authority
 - Declaration artifact manifest: `docs/icao/releases/R2026.03/DECLARATION_ARTIFACT_MANIFEST.txt`
 - Release-bound PICS: `docs/icao/releases/R2026.03/PICS_R2026.03.md`
 - Release-bound PIXIT: `docs/icao/releases/R2026.03/PIXIT_R2026.03.md`
-- Claim scope statement: release `R2026.03` is declared as a profile-complete external claim for the operation and negotiation surfaces defined in the declaration matrices and evidence manifests.
+- Claim scope statement: release `R2026.03` is governed by a transition from declared baseline + external non-claim boundary to profile-complete external claim wording, with release-bound campaign evidence required before retirement/narrowing of the external non-claim control.
+
+## 2.1 Governance transition gate for profile-complete declaration wording
+
+- Transition gate: retain the external non-claim boundary as the governing declaration control until ACSE/presentation breadth, full X.411/P3 external semantics, and ASN.1 runtime breadth hardening are fully implemented and objectively evidenced in a release-bound dossier.
+- Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
+- Re-issue declaration matrices and this authority dossier with explicit profile-complete scope wording and associated campaign evidence when the gate closes.
 
 ## 3. Technical evidence package
 
@@ -61,5 +67,5 @@ This dossier packages the release `R2026.03` declaration evidence into authority
 - [x] Single-source conformance map rows link every declaration statement to executable artifacts and governing document sections.
 - [x] Technical, security, and operational evidence sections assembled for authority review.
 - [x] Residual-risk approvals and governance acceptance records linked.
-- [x] Profile-complete scope wording is explicit in matrices and this dossier.
-- [x] Associated multi-vendor and negative-vector campaign evidence is bound to the claim package.
+- [x] Governance transition gate from non-claim boundary to profile-complete declaration wording is explicitly documented.
+- [x] Associated multi-vendor and negative-vector campaign evidence is bound to the release package.

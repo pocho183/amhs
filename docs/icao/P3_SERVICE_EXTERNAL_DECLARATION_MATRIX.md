@@ -1,19 +1,24 @@
 # P3 Service External Declaration Matrix (R2026.03)
 
-Document status: **mandatory profile-complete external-claim artifact**.
+Document status: **mandatory transition-governed external declaration artifact**.
 
 ## 1. Purpose
 
-This matrix publishes the declared external P3 endpoint behavior for a **profile-complete claim scope**, including the complete operation matrix, deterministic success semantics, and deterministic reject/error mapping for malformed or out-of-contract vectors observed in campaign testing.
+This matrix publishes the declared external P3 endpoint behavior and transition target for a **profile-complete claim scope**, including the complete operation matrix, deterministic success semantics, and deterministic reject/error mapping for malformed or out-of-contract vectors observed in campaign testing.
 
-## 2. Profile-complete declaration scope
+## 2. Declaration scope and governance transition gate
 
 - This matrix applies to release `R2026.03` and its fingerprint in `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`.
-- Coverage is declared as profile-complete for the externally declared P3 service operation set in this matrix and the release package.
 - The implementation scope and release binding remain anchored by `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md` and `docs/icao/releases/R2026.03/DECLARATION_ARTIFACT_MANIFEST.txt`.
-- Out-of-contract vectors (malformed encodings, invalid role use, or undefined wrappers) are still required to produce deterministic reject/error behavior as part of the profile-complete robustness claim.
+- Out-of-contract vectors (malformed encodings, invalid role use, or undefined wrappers) are required to produce deterministic reject/error behavior as part of the profile-complete robustness target.
 
-## 3. Complete declared operation matrix
+### 2.1 Transition gate from non-claim boundary to profile-complete declaration
+
+- Transition gate: retain the external non-claim boundary as the governing declaration control until ACSE/presentation breadth, full X.411/P3 external semantics, and ASN.1 runtime breadth hardening are fully implemented and objectively evidenced in a release-bound dossier.
+- Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
+- Re-issue declaration matrices and authority dossier with explicit profile-complete scope wording and associated campaign evidence when the gate closes.
+
+## 3. Complete operation matrix for transition-controlled external declaration
 
 | Family | Operation / APDU | Support status | Deterministic success semantics | Deterministic reject/error semantics | Implementation/test evidence |
 |---|---|---|---|---|---|
@@ -45,9 +50,9 @@ This matrix publishes the declared external P3 endpoint behavior for a **profile
 | Unsupported inbound RTSE request-path wrapper/tag | RTSE `RTORJ[18]` | Deterministic RTSE wrapper reject class (`RTORJ`). |
 | Association operation attempted in invalid lifecycle state | Gateway `error[8]` | `code=association` or `code=association-closed` by state transition. |
 
-## 5. Campaign evidence binding for profile-complete claim
+## 5. Campaign evidence binding for gate closure and profile-complete claim
 
-The profile-complete declaration is valid only when campaign evidence below is present and release-bound:
+Gate closure and profile-complete declaration wording are valid only when campaign evidence below is present and release-bound:
 
 - `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/latest-manifest.txt`
 - `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/20260308T203149Z-signed-campaign-report.md`
