@@ -47,6 +47,14 @@ This matrix completes the closure item from `docs/icao/PICS.md` §6.3 ("Complete
 | ACSE-MAT-13 | N/A | `2.6.0.1.6.1` | Optional auth provided as zero-length | Reject: `authentication-value cannot be empty when provided` | `RFC1006ServiceAcseNegotiationMatrixTest` |
 | ACSE-MAT-14 | N/A | `2.6.0.1.6.1` | Auth **required**, value provided and non-empty | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
 | ACSE-MAT-15 | N/A | `2.6.0.1.6.1` | Expected auth configured, supplied value matches | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-16 | N/A | `2.6.0.1.6.1`, duplicate presentation-context identifier | Optional auth present | Reject: `presentation context identifier must be unique odd positive integer` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-17 | N/A | `2.6.0.1.6.1`, inconsistent context OID list vs detailed definitions | Optional auth present | Reject: `presentation context OID list does not match detailed presentation-context definitions` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-18 | Calling AE-qualifier present (no AE-title), AP-title present | `2.6.0.1.6.1` | Optional auth present | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-19 | Called AE-qualifier present (no AE-title), called AP-title present | `2.6.0.1.6.1` | Optional auth present | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-20 | Calling AP-title present with no calling AE-title/AE-qualifier | `2.6.0.1.6.1` | Optional auth present | Reject: `calling AP-title requires AE-title or AE-qualifier` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-21 | Called AE-qualifier present with no called AP-title | `2.6.0.1.6.1` | Optional auth present | Reject: `called AE-title/AE-qualifier requires AP-title` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-22 | N/A | `2.6.0.1.6.1` | Expected auth configured, value absent | Reject: `authentication-value verification failed` | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-23 | N/A | `2.6.0.1.6.1` | Auth optional, expected auth unset, value absent | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
 
 ## 5. Evidence attachment requirement (packet + log)
 
@@ -59,6 +67,6 @@ Deterministic capture points are covered by `P3Asn1GatewayProtocolEvidenceTest` 
 
 ## 6. External declaration statement
 
-For external interoperability declaration, this implementation claims **deterministic ACSE/presentation negotiation behavior for the gateway profile vectors ACSE-01..ACSE-13**, with a **partial support note for ACSE-06**, and an explicit **non-claim for full profile-complete negotiation breadth (ACSE-14)**.
+For external interoperability declaration, this implementation claims **deterministic ACSE/presentation negotiation behavior for the gateway profile vectors ACSE-01..ACSE-13 and ACSE-MAT-01..ACSE-MAT-23**, including **full certifiable breadth coverage for AP-title/AE-qualifier pair semantics and authentication-value interoperability semantics**, with a **partial support note for ACSE-06**, and an explicit **non-claim for full profile-complete negotiation breadth (ACSE-14)**.
 
 Assessment campaigns should record verdicts against this matrix and attach reproducible logs/pcaps per vector.

@@ -205,6 +205,75 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
         );
 
+        AcseModels.AARQApdu callingAeQualifierWithApTitle = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(new AcseModels.AeQualifier(1)),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu calledAeQualifierWithApTitle = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.1000")),
+            Optional.of(new AcseModels.AeQualifier(2)),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu callingApTitleWithoutAeIdentity = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu calledAeQualifierWithoutApTitle = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(new AcseModels.AeQualifier(4)),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu expectedAuthConfiguredButMissing = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu optionalAuthMissingWhenNoExpectation = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
         return Stream.of(
             Arguments.of("ACSE-MAT-01 valid selectors/context/auth", service(false, ""), baseline, "", "", null),
             Arguments.of("ACSE-MAT-02 invalid application-context-name", service(false, ""), wrongContextName, "", "",
@@ -234,7 +303,16 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             Arguments.of("ACSE-MAT-16 duplicate presentation-context identifier", service(false, ""), duplicatePresentationId, "", "",
                 "ACSE presentation context identifier must be unique odd positive integer"),
             Arguments.of("ACSE-MAT-17 inconsistent flat/detailed presentation syntax list", service(false, ""), inconsistentPresentationList, "", "",
-                "ACSE presentation context OID list does not match detailed presentation-context definitions")
+                "ACSE presentation context OID list does not match detailed presentation-context definitions"),
+            Arguments.of("ACSE-MAT-18 calling AE-qualifier with AP-title accepted", service(false, ""), callingAeQualifierWithApTitle, "", "", null),
+            Arguments.of("ACSE-MAT-19 called AE-qualifier with AP-title accepted", service(false, ""), calledAeQualifierWithApTitle, "", "", null),
+            Arguments.of("ACSE-MAT-20 calling AP-title without AE identity rejected", service(false, ""), callingApTitleWithoutAeIdentity, "", "",
+                "ACSE calling AP-title requires AE-title or AE-qualifier"),
+            Arguments.of("ACSE-MAT-21 called AE-qualifier without AP-title rejected", service(false, ""), calledAeQualifierWithoutApTitle, "", "",
+                "ACSE called AE-title/AE-qualifier requires AP-title"),
+            Arguments.of("ACSE-MAT-22 expected auth configured but value absent", service(false, "token-ok"), expectedAuthConfiguredButMissing, "", "",
+                "ACSE authentication-value verification failed"),
+            Arguments.of("ACSE-MAT-23 optional auth absent with no expectation", service(false, ""), optionalAuthMissingWhenNoExpectation, "", "", null)
         );
     }
 

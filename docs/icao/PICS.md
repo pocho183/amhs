@@ -43,8 +43,8 @@ Legend:
 | A-02 | ACSE AARE structured response | Y | Result + diagnostic container emitted for supported flows, including deterministic rejection diagnostics for invalid AARQ profile elements. |
 | A-03 | Presentation context negotiation | P | Basic/controlled negotiation support; not a full profile-complete negotiation stack. |
 | A-04 | ACSE user-information semantics | Y | Supports AMHS association payload extraction across interoperable ACSE user-information EXTERNAL variants (including octet-aligned and metadata-bearing forms). |
-| A-05 | AP-title / AE-qualifier structures | P | Core structures supported; not a broad complete ACSE interoperability claim. |
-| A-06 | Authentication-value semantics | P | Implemented for configured policy checks, not exhaustive profile-semantic coverage. |
+| A-05 | AP-title / AE-qualifier structures | C | Certifiable interoperability breadth is declared for AP-title ↔ AE-title/AE-qualifier pairing semantics, including positive and negative deterministic diagnostics. |
+| A-06 | Authentication-value semantics | C | Certifiable interoperability breadth is declared for optional/required/expected authentication-value permutations with deterministic acceptance/rejection diagnostics. |
 | A-07 | P3 bind/re-bind/release error semantics | Y | Single-bind association policy, release-before-bind diagnostics, and post-release association-closed diagnostics are enforced. |
 | U-01 | ROSE operation coverage for full P3 service set | Y | Full gateway-profile ROSE semantics are implemented: request operations map deterministically, request/response role mismatches are rejected with explicit diagnostics, and unexpected non-invoke ROSE APDUs produce deterministic ROSE reject responses. |
 | U-02 | RTSE behavior coverage | Y | RTSE wrapper semantics are implemented for the declared gateway profile operations, including deterministic `RTORQ`/`RTOAC`, `RTTD`/`RTTR`, `RTAB`, and `RTORJ` rejection paths. |
