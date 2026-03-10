@@ -144,6 +144,10 @@ Major remaining gaps:
 2. Full operational service breadth expectations beyond the constrained gateway profile.
 3. Migration-grade gateway and lifecycle tooling expected in mixed AFTN/AMHS environments.
 4. Stronger HA/DR posture (dual-node orchestration, replicated operations model, formal DR drills as recurring obligations).
+   - Target operating pattern: two production nodes in active/passive topology with deterministic role-election owned by external orchestrator and published runbooks.
+   - Replication baseline: message-state repository replication with bounded RPO/RTO targets, periodic integrity reconciliation, and documented split-brain prevention controls.
+   - DR governance: scheduled failover and region-loss drills as a recurring control (minimum quarterly), with signed drill reports, corrective-action tracking, and release-gate linkage.
+   - Observable acceptance criteria: evidence bundle per release showing successful switchover, data-consistency validation, alerting/telemetry continuity, and rollback rehearsal.
 5. Security/PKI operations hardening and authority-governed lifecycle controls.
 
 Readiness estimate (engineering judgment): **~30-40%** for national operational deployment without additional platform layers.
