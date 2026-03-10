@@ -168,6 +168,7 @@ The declared `R2026.03` baseline is authority-oriented and release-governed, but
 3. **X.411 ASN.1 runtime breadth hardening**
    - Promote current canonical-module proof + runtime profile-table checks into complete runtime module breadth across all externally claimed APDU/service variants.
 4. **Governance transition from “declared baseline + non-claim boundary” to “profile-complete claim”**
+   - Transition gate: retain the external non-claim boundary as the governing declaration control until items 1-3 above are fully implemented and objectively evidenced in a release-bound dossier.
    - Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
    - Re-issue declaration matrices and authority dossier with explicit profile-complete scope wording and associated campaign evidence.
 
