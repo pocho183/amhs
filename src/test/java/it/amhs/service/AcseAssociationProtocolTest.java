@@ -165,6 +165,50 @@ class AcseAssociationProtocolTest {
     }
 
     @Test
+    void shouldRejectPresentationContextDefinitionWithTrailingFields() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+
+        byte[] contextId = BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] {0x01}));
+        byte[] abstractSyntax = BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}));
+        byte[] transferSyntax = BerCodec.encode(new BerTlv(0, false, 6, 0, 2, new byte[] {0x51, 0x01}));
+        byte[] transferSyntaxList = BerCodec.encode(new BerTlv(0, true, 16, 0, transferSyntax.length, transferSyntax));
+        byte[] trailing = BerCodec.encode(new BerTlv(0, false, 5, 0, 0, new byte[0]));
+        byte[] contextItemPayload = concat(contextId, abstractSyntax, transferSyntaxList, trailing);
+        byte[] contextItem = BerCodec.encode(new BerTlv(0, true, 16, 0, contextItemPayload.length, contextItemPayload));
+        byte[] contextList = BerCodec.encode(new BerTlv(0, true, 16, 0, contextItem.length, contextItem));
+        byte[] wrappedContextList = BerCodec.encode(new BerTlv(2, true, 29, 0, contextList.length, contextList));
+
+        byte[] apduPayload = concat(appCtx, wrappedContextList);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, apduPayload.length, apduPayload));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> protocol.decode(encoded));
+        assertTrue(ex.getMessage().contains("identifier, abstract syntax and transfer syntax list"));
+    }
+
+    @Test
+    void shouldRejectDuplicatePresentationContextIdentifiers() {
+        PresentationContext first = new PresentationContext(1, "2.6.0.1.6.1.1", List.of("2.1.1"));
+        PresentationContext duplicate = new PresentationContext(1, "1.3.12.2.1011.1.1", List.of("2.1.1"));
+        AcseModels.AARQApdu aarq = new AcseModels.AARQApdu(
+            "2.6.0.1.6.1",
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            List.of("2.6.0.1.6.1.1", "1.3.12.2.1011.1.1"),
+            List.of(first, duplicate)
+        );
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> protocol.decode(protocol.encode(aarq)));
+        assertTrue(ex.getMessage().contains("unique odd positive integer"));
+    }
+
+    @Test
     void shouldRejectNonApplicationClassApdus() {
         byte[] invalidApdu = new byte[] {0x30, 0x00};
         assertThrows(IllegalArgumentException.class, () -> protocol.decode(invalidApdu));

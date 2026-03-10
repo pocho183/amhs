@@ -179,6 +179,32 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
         );
 
+        AcseModels.AARQApdu duplicatePresentationId = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(
+                new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")),
+                new PresentationContext(1, "1.3.12.2.1011.1.1", List.of("2.1.1"))
+            )
+        );
+
+        AcseModels.AARQApdu inconsistentPresentationList = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID, "1.0.9506.2.3"),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
         return Stream.of(
             Arguments.of("ACSE-MAT-01 valid selectors/context/auth", service(false, ""), baseline, "", "", null),
             Arguments.of("ACSE-MAT-02 invalid application-context-name", service(false, ""), wrongContextName, "", "",
@@ -204,7 +230,11 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             Arguments.of("ACSE-MAT-13 authentication value provided as zero-length", service(false, ""), emptyAuthProvided, "", "",
                 "ACSE authentication-value cannot be empty when provided"),
             Arguments.of("ACSE-MAT-14 auth-required policy with valid value", service(true, ""), requiredAuthProvided, "", "", null),
-            Arguments.of("ACSE-MAT-15 expected authentication value matched", service(false, "token-ok"), expectedAuthMatched, "", "", null)
+            Arguments.of("ACSE-MAT-15 expected authentication value matched", service(false, "token-ok"), expectedAuthMatched, "", "", null),
+            Arguments.of("ACSE-MAT-16 duplicate presentation-context identifier", service(false, ""), duplicatePresentationId, "", "",
+                "ACSE presentation context identifier must be unique odd positive integer"),
+            Arguments.of("ACSE-MAT-17 inconsistent flat/detailed presentation syntax list", service(false, ""), inconsistentPresentationList, "", "",
+                "ACSE presentation context OID list does not match detailed presentation-context definitions")
         );
     }
 
