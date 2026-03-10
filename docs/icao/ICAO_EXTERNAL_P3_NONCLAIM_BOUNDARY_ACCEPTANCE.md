@@ -55,7 +55,7 @@ A boundary is considered accepted only when all records below are completed for 
 
 | Release | Fingerprint ref | Boundary document ref | Operations | Security | Engineering | Accountable authority | Date (UTC) | Result |
 |---|---|---|---|---|---|---|---|---|
-| R2026.03 | `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt` | `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md` | Pending | Pending | Pending | Pending | - | Draft baseline |
+| R2026.03 | `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt` | `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md` | Pending | Pending | Pending | Pending | - | Draft baseline (all authority acceptance sign-offs still pending in the external P3 non-claim boundary register) |
 
 ## 6. Objective evidence pointers supporting boundary integrity
 
