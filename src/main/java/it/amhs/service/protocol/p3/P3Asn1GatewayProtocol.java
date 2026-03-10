@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +60,22 @@ public class P3Asn1GatewayProtocol {
     static final int APDU_READ_REQUEST = 11;
     static final int APDU_READ_RESPONSE = 12;
     static final int APDU_ERROR = 8;
+
+    private static final Set<Integer> EXTERNAL_CLAIMED_APDU_VARIANTS = Set.of(
+        APDU_BIND_REQUEST,
+        APDU_BIND_RESPONSE,
+        APDU_SUBMIT_REQUEST,
+        APDU_SUBMIT_RESPONSE,
+        APDU_STATUS_REQUEST,
+        APDU_STATUS_RESPONSE,
+        APDU_RELEASE_REQUEST,
+        APDU_RELEASE_RESPONSE,
+        APDU_ERROR,
+        APDU_REPORT_REQUEST,
+        APDU_REPORT_RESPONSE,
+        APDU_READ_REQUEST,
+        APDU_READ_RESPONSE
+    );
 
     private final P3GatewaySessionService sessionService;
 
@@ -146,22 +163,7 @@ public class P3Asn1GatewayProtocol {
     }
 
     private boolean isGatewayApduTag(int tagNumber) {
-        return switch (tagNumber) {
-            case APDU_BIND_REQUEST,
-                APDU_BIND_RESPONSE,
-                APDU_SUBMIT_REQUEST,
-                APDU_SUBMIT_RESPONSE,
-                APDU_STATUS_REQUEST,
-                APDU_STATUS_RESPONSE,
-                APDU_RELEASE_REQUEST,
-                APDU_RELEASE_RESPONSE,
-                APDU_ERROR,
-                APDU_REPORT_REQUEST,
-                APDU_REPORT_RESPONSE,
-                APDU_READ_REQUEST,
-                APDU_READ_RESPONSE -> true;
-            default -> false;
-        };
+        return EXTERNAL_CLAIMED_APDU_VARIANTS.contains(tagNumber);
     }
 
     private byte[] wrapRtseResponse(int inboundRtseTag, byte[] nestedResponse) {
