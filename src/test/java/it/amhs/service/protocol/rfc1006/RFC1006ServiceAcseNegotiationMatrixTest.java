@@ -215,6 +215,75 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
         );
 
+        AcseModels.AARQApdu callingAeQualifierWithApTitle = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(new AcseModels.AeQualifier(1)),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu calledAeQualifierWithApTitle = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.1000")),
+            Optional.of(new AcseModels.AeQualifier(2)),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu callingApTitleWithoutAeIdentity = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu calledAeQualifierWithoutApTitle = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(new AcseModels.AeQualifier(4)),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu expectedAuthConfiguredButMissing = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu optionalAuthMissingWhenNoExpectation = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
         return Stream.of(
             Arguments.of("ACSE-MAT-01 valid selectors/context/auth", service(false, ""), baseline, "", "", null),
             Arguments.of("ACSE-MAT-02 invalid application-context-name", service(false, ""), wrongContextName, "", "",
