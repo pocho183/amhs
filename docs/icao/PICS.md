@@ -48,7 +48,7 @@ Legend:
 | A-07 | P3 bind/re-bind/release error semantics | Y | Single-bind association policy, release-before-bind diagnostics, and post-release association-closed diagnostics are enforced. |
 | U-01 | ROSE operation coverage for full P3 service set | Y | Full gateway-profile ROSE semantics are implemented: request operations map deterministically, request/response role mismatches are rejected with explicit diagnostics, and unexpected non-invoke ROSE APDUs produce deterministic ROSE reject responses. |
 | U-02 | RTSE behavior coverage | Y | RTSE wrapper semantics are implemented for the declared gateway profile operations, including deterministic `RTORQ`/`RTOAC`, `RTTD`/`RTTR`, `RTAB`, and `RTORJ` rejection paths. |
-| U-03 | Session semantics beyond wrapper preservation | P | Session/presentation envelopes are preserved/rewrapped in supported gateway paths. |
+| U-03 | Session semantics beyond wrapper preservation | Y | Session/presentation responses are emitted with deterministic external semantics (session connect→accept mapping, presentation connect→CPA mapping, and ACSE AARQ→AARE mapping) while preserving declared gateway payload behavior. |
 | U-04 | Complete X.411/P3 service behavior and error semantics | P | Gateway service now provides explicit bind/submit/status/report/read/release behavior with deterministic error semantics; full externally certifiable profile breadth remains pending. |
 | P1-01 | BER parsing for P1-like envelope | Y | Structured BER/TLV support in parser. |
 | P1-02 | Envelope/content separation | Y | Envelope and content are separated. |
@@ -164,7 +164,7 @@ The declared `R2026.03` baseline is authority-oriented and release-governed, but
    - Expand AP-title/AE-qualifier and authentication-value interoperability semantics to a full certifiable breadth.
 2. **Full X.411/P3 external semantics completion**
    - Extend from deterministic gateway-profile behavior to profile-complete external P3 service semantics and error coverage.
-   - Promote current partial session/presentation handling from envelope preservation to full end-to-end semantics where required by external conformance profiles.
+   - ✅ Closed (`R2026.03`): session/presentation response paths now perform deterministic end-to-end semantic mapping for declared external conformance vectors (instead of envelope-only preservation).
 3. **X.411 ASN.1 runtime breadth hardening**
    - Promote current canonical-module proof + runtime profile-table checks into complete runtime module breadth across all externally claimed APDU/service variants.
 4. **Governance transition from “declared baseline + non-claim boundary” to “profile-complete claim”**
