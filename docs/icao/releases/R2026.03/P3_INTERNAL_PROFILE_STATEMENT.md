@@ -18,6 +18,7 @@ Configuration binding for this statement is locked to:
 | Gateway submit-request | context `[2]` | Supported | Returns submit-response `[3]` with submission metadata. |
 | Gateway status-request | context `[4]` | Supported | Returns status-response `[5]` with queue/status fields. |
 | Gateway report-request | context `[9]` | Supported | Returns report-response `[10]` with delivery/report fields. |
+| Gateway read-request | context `[11]` | Supported | Returns read-response `[12]` with mailbox/read-result fields. |
 | Gateway release-request | context `[6]` | Supported | Returns release-response `[7]` when association lifecycle allows release. |
 | ROSE invoke | application/context `invoke[1]` | Supported (request opcodes only) | Returns ROSE returnResult `[2]` wrapping the gateway response APDU. |
 | RTSE transfer wrappers | `RTORQ[16]` and `RTTD[22]` | Supported | Wrapper response tag mapping is deterministic: `RTORQ->RTOAC[17]`, `RTTD->RTTR[21]`, carrying nested gateway/ROSE response. |
@@ -29,7 +30,7 @@ Configuration binding for this statement is locked to:
 |---|---|
 | Unknown context APDU tag | Gateway `error[8]` with `code=unsupported-operation`. |
 | Primitive/non-constructed context APDU for gateway path | Gateway `error[8]` with `code=invalid-apdu` and detail `Expected context-specific constructed APDU`. |
-| ROSE invoke using response-only opcodes (`1,3,5,7,8,10`) | ROSE `returnError[3]` wrapping gateway `error[8]` with `code=invalid-operation-role`. |
+| ROSE invoke using response-only opcodes (`1,3,5,7,8,10,12`) | ROSE `returnError[3]` wrapping gateway `error[8]` with `code=invalid-operation-role`. |
 | ROSE invoke with unknown opcode | ROSE `returnError[3]` wrapping gateway `error[8]` with `code=unsupported-operation`. |
 | Unexpected non-invoke ROSE APDU (`returnResult`, `returnError`, `reject`) received inbound | ROSE `reject[4]` with reason `unexpected-rose-apdu`. |
 | Malformed ROSE invoke (missing invoke-id/operation-code, decode failure) | ROSE `reject[4]` with reason `malformed-rose-invoke`. |

@@ -14,7 +14,7 @@ import it.amhs.asn1.BerTlv;
 class P3Asn1GatewayProtocolTest {
 
     @Test
-    void mapsBindAndSubmitAndStatusToSessionService() {
+    void mapsBindAndSubmitAndStatusAndReadToSessionService() {
         StubSessionService sessionService = new StubSessionService();
         P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
         P3GatewaySessionService.SessionState session = sessionService.newSession();
@@ -34,6 +34,10 @@ class P3Asn1GatewayProtocolTest {
         byte[] reportResponse = protocol.handle(session, reportRequest("/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice", 1000, 200));
         BerTlv report = BerCodec.decodeSingle(reportResponse);
         assertEquals(P3Asn1GatewayProtocol.APDU_REPORT_RESPONSE, report.tagNumber());
+
+        byte[] readResponse = protocol.handle(session, readRequest("/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice", 1000, 200));
+        BerTlv read = BerCodec.decodeSingle(readResponse);
+        assertEquals(P3Asn1GatewayProtocol.APDU_READ_RESPONSE, read.tagNumber());
     }
 
     @Test
@@ -324,6 +328,15 @@ class P3Asn1GatewayProtocolTest {
             integerContext(2, retryMs)
         );
         return BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_REPORT_REQUEST, 0, payload.length, payload));
+    }
+
+    private static byte[] readRequest(String recipient, int waitMs, int retryMs) {
+        byte[] payload = concat(
+            utf8Context(0, recipient),
+            integerContext(1, waitMs),
+            integerContext(2, retryMs)
+        );
+        return BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_READ_REQUEST, 0, payload.length, payload));
     }
 
     private static byte[] utf8Context(int tagNumber, String value) {
