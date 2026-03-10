@@ -1,12 +1,12 @@
 # ACSE/Presentation Negotiation Behavior Matrix (External Interoperability Declaration)
 
-This matrix completes the closure item from `docs/icao/PICS.md` §6.3 ("Complete ACSE/presentation negotiation behavior matrix for external interoperability declaration") by declaring deterministic gateway-profile behavior for ACSE bind negotiation.
+This matrix completes the closure item from `docs/icao/PICS.md` §6.3 by declaring deterministic **profile-complete claim scope** behavior for ACSE/presentation bind negotiation and its campaign-verifiable diagnostics.
 
 ## 1. Declaration legend
 
 - **Y**: fully supported for external gateway interoperability declaration.
 - **P**: partially supported; usable in controlled campaigns with explicit peer alignment.
-- **N**: not supported in the declared gateway profile.
+- **N**: not supported (reserved for future release; none used in this declaration).
 
 ## 2. Behavior matrix
 
@@ -49,7 +49,7 @@ This matrix completes the closure item from `docs/icao/PICS.md` §6.3 ("Complete
 | ACSE-MAT-15 | N/A | `2.6.0.1.6.1` | Expected auth configured, supplied value matches | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
 | ACSE-MAT-18 | N/A | `2.6.0.1.6.1`, AMHS abstract syntax offered only with unsupported transfer syntax OIDs | Optional auth present | Reject: `presentation contexts do not offer a supported AMHS P1 transfer syntax` | `RFC1006ServiceAcseNegotiationMatrixTest` |
 
-## 5. Evidence attachment requirement (packet + log)
+## 5. Evidence attachment requirement (packet + log + campaign)
 
 The negotiation/error semantics closure requires both of the following evidence streams for every campaign run:
 
@@ -57,6 +57,12 @@ The negotiation/error semantics closure requires both of the following evidence 
 - **Log-level** evidence: gateway protocol logs that include APDU classification plus field-level outcome diagnostics.
 
 Deterministic capture points are covered by `P3Asn1GatewayProtocolEvidenceTest` (packet hex assertions + log message assertions) and are to be exported in release evidence bundles under `docs/icao/releases/<release>/evidence/`.
+
+Required campaign anchors for profile-complete scope declaration:
+
+- `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/latest-manifest.txt`
+- `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`
+- `docs/icao/releases/R2026.03/evidence/italy-national-interop/latest-manifest.txt`
 
 ## 6. External declaration statement
 

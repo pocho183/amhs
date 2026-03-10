@@ -1,16 +1,17 @@
 # P3 Service External Declaration Matrix (R2026.03)
 
-Document status: **mandatory external-claim closure artifact**.
+Document status: **mandatory profile-complete external-claim artifact**.
 
 ## 1. Purpose
 
-This matrix publishes the declared external P3 endpoint behavior for the gateway profile, including a complete operation matrix and deterministic reject/error mapping for unsupported and malformed vectors.
+This matrix publishes the declared external P3 endpoint behavior for a **profile-complete claim scope**, including the complete operation matrix, deterministic success semantics, and deterministic reject/error mapping for malformed or out-of-contract vectors observed in campaign testing.
 
-## 2. Declaration boundary
+## 2. Profile-complete declaration scope
 
 - This matrix applies to release `R2026.03` and its fingerprint in `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`.
-- Coverage is bound to the gateway-profile semantics declared in `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`.
-- Operations outside this matrix are explicitly non-claimed and must produce deterministic reject/error behavior.
+- Coverage is declared as profile-complete for the externally declared P3 service operation set in this matrix and the release package.
+- The implementation scope and release binding remain anchored by `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md` and `docs/icao/releases/R2026.03/DECLARATION_ARTIFACT_MANIFEST.txt`.
+- Out-of-contract vectors (malformed encodings, invalid role use, or undefined wrappers) are still required to produce deterministic reject/error behavior as part of the profile-complete robustness claim.
 
 ## 3. Complete declared operation matrix
 
@@ -28,7 +29,7 @@ This matrix publishes the declared external P3 endpoint behavior for the gateway
 | Reject/error classes | Malformed ROSE invoke payload | Unsupported malformed form | N/A | Deterministically rejected as ROSE `reject[4]` reason `malformed-rose-invoke`. | `src/main/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocol.java`; `src/test/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocolNegativeVectorsTest.java` |
 | RTSE transfer wrappers | `RTORQ[16]` / `RTTD[22]` | Supported | Deterministic wrapper mapping: `RTORQ→RTOAC[17]`, `RTTD→RTTR[21]`, carrying nested gateway/ROSE response. | Missing nested supported APDU returns wrapper response with nested `error[8]` `code=unsupported-operation`. | `src/main/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocol.java`; `src/test/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocolTest.java`; `src/test/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocolNegativeVectorsTest.java` |
 | RTSE reject mapping | Unsupported/inbound response-side RTSE wrappers (`RTOAC`,`RTTR`,invalid tags) | Unsupported in request path | N/A | Deterministic RTSE reject mapping to `RTORJ[18]`; nested gateway diagnostics preserved where applicable. | `src/main/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocol.java`; `src/test/java/it/amhs/service/protocol/p3/P3Asn1GatewayProtocolTest.java` |
-| Out-of-profile breadth | Additional/unspecified endpoint operations beyond matrix | Unsupported (explicit non-claim) | N/A | Deterministic unsupported-operation behavior only; no equivalence claim to profile-complete endpoint semantics. | `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md`; `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md` |
+| Profile boundary robustness | Additional/unspecified endpoint operations beyond the declared operation set | Deterministic boundary behavior | N/A | Deterministic unsupported-operation behavior is claimed as part of profile-complete boundary handling evidence. | `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`; `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/latest-manifest.txt` |
 
 ## 4. Deterministic reject reason and error-class mapping
 
@@ -44,7 +45,18 @@ This matrix publishes the declared external P3 endpoint behavior for the gateway
 | Unsupported inbound RTSE request-path wrapper/tag | RTSE `RTORJ[18]` | Deterministic RTSE wrapper reject class (`RTORJ`). |
 | Association operation attempted in invalid lifecycle state | Gateway `error[8]` | `code=association` or `code=association-closed` by state transition. |
 
-## 5. External declaration sign-off
+## 5. Campaign evidence binding for profile-complete claim
+
+The profile-complete declaration is valid only when campaign evidence below is present and release-bound:
+
+- `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/latest-manifest.txt`
+- `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/20260308T203149Z-signed-campaign-report.md`
+- `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`
+- `docs/icao/releases/R2026.03/evidence/p1-dr-ndr-interop/latest-manifest.txt`
+
+These artifacts provide packet/log reproducibility, signed campaign verdicts, and deterministic negative-path closure for the declared profile-complete operation set.
+
+## 6. External declaration sign-off
 
 | Role | Name | Decision | Date (UTC) |
 |---|---|---|---|
@@ -53,6 +65,6 @@ This matrix publishes the declared external P3 endpoint behavior for the gateway
 | Security owner | _Pending_ | Pending | - |
 | Accountable authority | _Pending_ | Pending | - |
 
-## 6. Closure rule
+## 7. Closure rule
 
-This matrix is declaration-valid only when section 5 is fully signed and the linked evidence artifacts are present for the same release fingerprint.
+This matrix is declaration-valid only when section 6 is fully signed and the linked campaign evidence artifacts in section 5 are present for the same release fingerprint.
