@@ -1,10 +1,10 @@
 # AMHS PICS (Protocol Implementation Conformance Statement)
 
-Document status: **authority-ready release baseline (`R2026.03`)** for controlled interoperability, with technical and governance closure artifacts assembled for authority-facing review.
+Document status: **profile-limited implementation baseline (`R2026.03`)** with explicit gap-oriented assessment for internal, national, and ICAO deployment contexts.
 
-Last updated: `2026-03-10` (capability wording refresh after recent ACSE/P3 interoperability and operation-coverage commits; release-wrapper synchronization note added for declaration package traceability).
+Last updated: `2026-03-10` (added a repository-based reality-check for internal, national, and ICAO usage scopes and adjusted readiness wording to reflect implemented-vs-missing capability boundaries).
 
-Revision note (`2026-03-10`): updated declared gateway-profile semantics wording to explicitly include mailbox read handling in the P3 operation surface, harmonized matrix/section wording with current implementation evidence, and added release-wrapper traceability wording for the authority package review set.
+Revision note (`2026-03-10`): integrated a verification section that classifies requested capability statements as true/partial/false against codebase evidence, and replaced scope-readiness text with a conservative gap-oriented assessment for internal, national, and ICAO deployment contexts.
 
 ## 1. Scope
 
@@ -110,69 +110,53 @@ This PICS baseline is bound to release fingerprint material in:
 
 The fingerprint pins transport ports, TLS modes, listener profile, and route/policy feature flags that scope the declared behavior for this release.
 
-## 5. P3 compliance evaluation by usage scope
+## 5. Reality-check assessment (internal / national / ICAO)
 
-The table below evaluates the current P3 posture for three declaration scopes requested by operators: internal use, national deployment (Italy), and ICAO-oriented external declaration.
+This section validates the requested assessment against what is actually implemented in this repository.
 
-| Scope | Current verdict | Rationale from implemented evidence | What is still missing |
-|---|---|---|---|
-| Internal use (single-organization / controlled peers) | **Acceptable for release `R2026.03` baseline** | Internal P3 operation profile statement, deterministic negative APDU regression script/artifacts, and release fingerprint binding are published and traceable. | No structural gap for the declared internal baseline. For each new release, re-run the negative campaign, refresh artifacts, and republish fingerprint-bound PICS/PIXIT. |
-| National use (Italy, multi-organization operational use) | **Ready for national-use baseline declaration (`R2026.03`)** | Italy requirement map, reproducible interoperability campaign, and authority-facing national declaration package are published (`§5.2` items 4..6). | No structural national-use gap remains for `R2026.03`; maintain release-bound evidence refresh and approval sign-off per declaration cycle. |
-| ICAO-oriented external declaration | **Submission-ready declared baseline (`R2026.03`)** | External declaration corpus, security/operational assurance artifacts, and governance approval records are published as a release-bound dossier. | No structural baseline gap remains for `R2026.03`; external authority acceptance workflow and release-over-release delta revalidation remain recurring obligations. |
+### 5.1 Verification of statements
 
-### 5.1 Internal-use gap closure (minimum)
+| Statement from assessment | Verification | Evidence in this repository |
+|---|---|---|
+| The project is a simplified AMHS gateway/server, not a complete AMHS ecosystem. | **True** | Runtime documentation explicitly describes a non-web AMHS simulator/profile-limited stack, not a full ICAO Doc 9880/9705 AMHS implementation. |
+| Core message transfer (MTA-like/gateway routing) exists. | **True** | RFC1006 service + relay/outbound engine + P1/P3 gateway handlers are implemented. |
+| Message Store (MS) is only partial compared with full AMHS mailbox services. | **Mostly true** | Messages are persisted via repositories and can be retrieved with simple commands, but there is no full P7 mailbox service surface. |
+| User Agent (UA) and operator console are missing. | **True** | Runtime is explicitly non-web and no UA/UI component is implemented in code. |
+| Directory Service (X.500/LDAP directory role for AMHS addressing) is missing. | **True** | No X.500 directory-server subsystem, address-book/distribution-list authority, or AMHS directory integration is implemented. |
+| Full X.400 stack (especially complete P1/P3/P7 semantics) is not fully implemented. | **True (with partial P1/P3 support)** | Project implements constrained/profile-limited P1/P3 gateway behavior; it does not claim complete certified end-to-end X.400 service scope. |
+| Security exists but not full ICAO operational PKI/compliance stack. | **Partially true** | TLS and certificate checks are implemented; full operational ICAO compliance depends on broader governance, interop, and authority acceptance activities. |
+| High-availability capabilities are incomplete for carrier-grade operations. | **True** | Documented HA mode is active/passive with external orchestration limits; no in-process cluster coordination/leader-election fabric. |
 
-Status for `R2026.03`: **closed at minimum baseline** with release-bound artifacts:
+### 5.2 Missing capabilities by deployment scope
 
-1. Release-specific internal P3 operation profile + diagnostics: `docs/icao/releases/R2026.03/P3_INTERNAL_PROFILE_STATEMENT.md`.
-2. Automated malformed/negative APDU regression + artifact preservation: `scripts/evidence/p3_negative_apdu_regression.sh` publishing under `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/`.
-3. PICS/PIXIT release fingerprint binding: `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`.
+#### A) Internal use (lab/training/local ATC integration)
 
-### 5.2 National-use (Italy) gap closure
+Current state:
+- Available: message ingest/relay, persistence, retrieval primitives, delivery-report persistence, basic TLS/mTLS policy hooks.
+- Missing or weak for day-to-day operator use: full UA/operator console, rich ATS templates/UI workflow, advanced audit/monitoring dashboards, and turnkey HA automation.
 
-4. ✅ Closed (`R2026.03`): traceable requirement map published in `docs/icao/ITALY_NATIONAL_USE_REQUIREMENT_MAP.md` from adopted AMHS profile obligations to implementation/tests/evidence artifacts.
-5. ✅ Closed (`R2026.03`): national interoperability campaign executed with reproducible logs + pcaps and peer-diversity model, published in `docs/icao/NATIONAL_INTEROP_CAMPAIGN_ITALY.md` and `docs/icao/releases/R2026.03/evidence/italy-national-interop/`.
-6. ✅ Closed (`R2026.03`): national declaration package published in `docs/icao/ITALY_NATIONAL_DECLARATION_PACKAGE.md` covering operational responsibilities, security controls (PKI revocation behavior included), incident/failover procedures, and authority-facing approvals.
+Readiness estimate (engineering judgment): **~70-80%** for controlled internal usage.
 
-### 5.3 ICAO external-claim gap closure
+#### B) National operational use (ANSP multi-node production)
 
-7. ✅ Closed (`R2026.03`): non-claim boundary for external P3 profile-complete semantics is formalized with an authority-acceptance workflow in `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md`.
-8. ✅ Closed (`R2026.03`): canonical X.411 ASN.1 module traceability proof pack linked to runtime behavior and test vectors is published in `docs/icao/X411_CANONICAL_ASN1_MODULE_PROOF.md`.
-9. ✅ Closed (`R2026.03`): objective security evidence for ATN PKI path validation, CRL/OCSP handling, and Doc 9880-aligned security-label policy treatment is published in `docs/icao/ATN_PKI_SECURITY_LABEL_EVIDENCE.md`.
-10. ✅ Closed (`R2026.03`): operational assurance evidence set is published under `docs/icao/releases/R2026.03/evidence/operational-assurance/` including performance/resilience qualification, SLO declaration, monitoring/alerting export summary, failover drill report, and backup/restore verification.
+Major remaining gaps:
+1. Directory capability for scalable AMHS addressing/distribution/routing policy authority.
+2. Full operational service breadth expectations beyond the constrained gateway profile.
+3. Migration-grade gateway and lifecycle tooling expected in mixed AFTN/AMHS environments.
+4. Stronger HA/DR posture (dual-node orchestration, replicated operations model, formal DR drills as recurring obligations).
+5. Security/PKI operations hardening and authority-governed lifecycle controls.
 
-### 5.4 Consolidated “still missing” checklist for protocol P3
+Readiness estimate (engineering judgment): **~30-40%** for national operational deployment without additional platform layers.
 
-This checklist summarizes only open items after the `R2026.03` baseline evaluation.
+#### C) ICAO-compliant external declaration/use
 
-- **Internal use**
-  - No open structural gap for the declared baseline profile.
-  - Recurring release obligation: regenerate evidence + fingerprint-bound declarations.
-- **National use (Italy)**
-  - No open structural gap for the declared national-use baseline.
-  - Recurring release obligation: refresh campaign/declaration artifacts and approval records.
-- **ICAO external claim**
-  - No structural baseline gap remains for `R2026.03`; maintain recurring authority acceptance workflow execution and release-to-release evidence refresh.
+Critical remaining expectations (system-level):
+1. Complete profile conformance posture against Doc 9880 and applicable regional profiles.
+2. Full operational directory, security, and lifecycle evidence accepted by oversight authorities.
+3. Formal conformance/interoperability campaign closure under authority-recognized procedures.
+4. End-to-end operational assurance posture (auditability, redundancy, measurable SLO/performance governance).
 
-### 5.5 Additional gaps for a **profile-complete** ICAO AMHS server (beyond the declared `R2026.03` baseline)
-
-The declared `R2026.03` baseline is authority-oriented and release-governed, but it is intentionally **not** a profile-complete external AMHS endpoint claim. For operators targeting a broader “full-service” posture, the following gaps remain open:
-
-1. **ACSE/presentation breadth completion**
-   - ✅ Closed: profile-complete presentation-context negotiation semantics are implemented, including deterministic AMHS transfer-syntax compatibility checks and accepted-context identifier negotiation.
-   - ✅ Closed: ACSE user-information handling now accepts interoperable EXTERNAL variants beyond the constrained EXTERNAL/OCTET STRING-only path.
-   - Expand AP-title/AE-qualifier and authentication-value interoperability semantics to a full certifiable breadth.
-2. **Full X.411/P3 external semantics completion**
-   - ✅ Closed: external P3 service semantics now enforce deterministic malformed attribute handling, duplicate/unsupported attribute rejection, and recipient-address validation across bind/submit/status/report/read/release operations.
-   - ✅ Closed (`R2026.03`): session/presentation response paths now perform deterministic end-to-end semantic mapping for declared external conformance vectors (instead of envelope-only preservation).
-3. **X.411 ASN.1 runtime breadth hardening**
-   - ✅ Closed: canonical-module proof + runtime profile-table checks are promoted to complete runtime breadth coverage across all externally claimed APDU/service variants.
-4. **Governance transition from “declared baseline + non-claim boundary” to “profile-complete claim”**
-   - Transition gate: retain the external non-claim boundary as the governing declaration control until items 1-3 above are fully implemented and objectively evidenced in a release-bound dossier.
-   - Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
-   - Re-issue declaration matrices and authority dossier with explicit profile-complete scope wording and associated campaign evidence.
-
-Reference rows in the capability matrix that drive this expanded gap list: `A-05`, `A-06`, and `U-03` (remaining profile-complete expansion items beyond the declared baseline).
+Readiness estimate (engineering judgment): **not yet at full ICAO production-compliance state** without additional implementation, validation, and authority acceptance closure.
 
 ## 6. ICAO compliance closure status
 
