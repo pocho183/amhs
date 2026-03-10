@@ -42,7 +42,7 @@ Legend:
 | A-01 | ACSE AARQ decoding and checks | Y | Application context and identity checks for supported gateway profile paths. |
 | A-02 | ACSE AARE structured response | Y | Result + diagnostic container emitted for supported flows, including deterministic rejection diagnostics for invalid AARQ profile elements. |
 | A-03 | Presentation context negotiation | P | Basic/controlled negotiation support; not a full profile-complete negotiation stack. |
-| A-04 | ACSE user-information semantics | P | Supported through constrained EXTERNAL/OCTET STRING handling path. |
+| A-04 | ACSE user-information semantics | Y | Supports AMHS association payload extraction across interoperable ACSE user-information EXTERNAL variants (including octet-aligned and metadata-bearing forms). |
 | A-05 | AP-title / AE-qualifier structures | P | Core structures supported; not a broad complete ACSE interoperability claim. |
 | A-06 | Authentication-value semantics | P | Implemented for configured policy checks, not exhaustive profile-semantic coverage. |
 | A-07 | P3 bind/re-bind/release error semantics | Y | Single-bind association policy, release-before-bind diagnostics, and post-release association-closed diagnostics are enforced. |
@@ -160,7 +160,7 @@ The declared `R2026.03` baseline is authority-oriented and release-governed, but
 
 1. **ACSE/presentation breadth completion**
    - Complete profile-complete presentation-context negotiation semantics (beyond controlled/basic negotiation).
-   - Extend ACSE user-information handling beyond constrained EXTERNAL/OCTET STRING paths.
+   - ✅ Closed: ACSE user-information handling now accepts interoperable EXTERNAL variants beyond the constrained EXTERNAL/OCTET STRING-only path.
    - Expand AP-title/AE-qualifier and authentication-value interoperability semantics to a full certifiable breadth.
 2. **Full X.411/P3 external semantics completion**
    - Extend from deterministic gateway-profile behavior to profile-complete external P3 service semantics and error coverage.
@@ -171,7 +171,7 @@ The declared `R2026.03` baseline is authority-oriented and release-governed, but
    - Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
    - Re-issue declaration matrices and authority dossier with explicit profile-complete scope wording and associated campaign evidence.
 
-Reference rows in the capability matrix that drive this expanded gap list: `A-03`, `A-04`, `A-05`, `A-06`, `U-03`, `U-04`, and `P1-06` (all currently `P`).
+Reference rows in the capability matrix that drive this expanded gap list: `A-03`, `A-05`, `A-06`, `U-03`, `U-04`, and `P1-06` (currently `P`).
 
 ## 6. ICAO compliance closure status
 
