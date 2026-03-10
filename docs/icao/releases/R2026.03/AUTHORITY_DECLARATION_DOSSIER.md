@@ -1,26 +1,27 @@
 # Authority-Facing Declaration Dossier (`R2026.03`)
 
-Document status: **release package index for authority submission (transition-governed profile-complete claim scope)**.
+Document status: **release package index for authority submission (profile-complete claim scope)**.
 
 ## 1. Purpose
 
-This dossier packages the release `R2026.03` declaration evidence into authority-facing sections required for the external **profile-complete claim**, subject to the governance transition gate defined in `docs/icao/PICS.md` §5.5 and `docs/icao/ICAO_EXTERNAL_P3_NONCLAIM_BOUNDARY_ACCEPTANCE.md`:
+This dossier packages the release `R2026.03` declaration evidence into authority-facing sections required for the external **profile-complete claim**, with explicit claim wording and campaign controls bound to this release package:
 
 1. Technical evidence
 2. Security evidence
 3. Operational controls
 4. Residual-risk approvals
 
-## 2. Release binding and claim scope wording
+## 2. Release binding and explicit profile-complete claim scope wording
 
 - Release: `R2026.03`
 - Configuration fingerprint: `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`
 - Declaration artifact manifest: `docs/icao/releases/R2026.03/DECLARATION_ARTIFACT_MANIFEST.txt`
 - Release-bound PICS: `docs/icao/releases/R2026.03/PICS_R2026.03.md`
 - Release-bound PIXIT: `docs/icao/releases/R2026.03/PIXIT_R2026.03.md`
-- Claim scope statement: release `R2026.03` is governed by a transition from declared baseline + external non-claim boundary to profile-complete external claim wording, with release-bound campaign evidence required before retirement/narrowing of the external non-claim control.
+- Claim scope statement: release `R2026.03` is declared as **profile-complete for external P3 claim scope** across bind, submit, status, report, read, release, abort, and deterministic malformed/unsupported vector handling as listed in `docs/icao/P3_SERVICE_EXTERNAL_DECLARATION_MATRIX.md`.
+- Claim controls: declaration validity requires release-bound campaign evidence manifests and signed reports referenced in sections 3 and 6 to remain present, reproducible, and fingerprint-aligned.
 
-## 2.1 Governance transition gate for profile-complete declaration wording
+## 2.1 Profile-complete declaration maintenance controls
 
 - Transition gate: retain the external non-claim boundary as the governing declaration control until items 1-3 in `docs/icao/PICS.md` §5.5 are fully implemented and objectively evidenced in a release-bound dossier.
 - Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
@@ -67,5 +68,5 @@ This dossier packages the release `R2026.03` declaration evidence into authority
 - [x] Single-source conformance map rows link every declaration statement to executable artifacts and governing document sections.
 - [x] Technical, security, and operational evidence sections assembled for authority review.
 - [x] Residual-risk approvals and governance acceptance records linked.
-- [x] Governance transition gate from non-claim boundary to profile-complete declaration wording is explicitly documented.
+- [x] Explicit profile-complete claim wording and maintenance controls are documented.
 - [x] Associated multi-vendor and negative-vector campaign evidence is bound to the release package.
