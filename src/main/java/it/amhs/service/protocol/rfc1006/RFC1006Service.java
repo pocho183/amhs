@@ -68,6 +68,8 @@ public class RFC1006Service {
     public static final String ICAO_AMHS_P1_OID = "2.6.0.1.6.1";
     static final int RFC1006_CLASS_0 = 0;
     static final int RFC1006_CLASS_0_LEGACY_OPTIONS = 0x0A;
+    static final String ACSE_TRANSFER_SYNTAX_ASE_1 = "2.1.1";
+    static final Set<String> SUPPORTED_PRESENTATION_TRANSFER_SYNTAXES = Set.of(ACSE_TRANSFER_SYNTAX_ASE_1);
 
     private final AMHSMessageRepository amhsMessagesRepository;
     private final MTAService mtaService;
@@ -372,15 +374,7 @@ public class RFC1006Service {
             associationState.bound = true;
             associationState.active = true;
             logger.info("Accepted ACSE AARQ for application context {}", aarq.applicationContextName());
-            java.util.Set<Integer> acceptedPresentationContextIds = aarq.presentationContexts().isEmpty()
-                ? java.util.Set.of(1)
-                : aarq.presentationContexts().stream()
-                    .filter(ctx -> ICAO_AMHS_P1_OID.equals(ctx.abstractSyntaxOid()))
-                    .map(it.amhs.service.protocol.acse.PresentationContext::identifier)
-                    .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
-            if (acceptedPresentationContextIds.isEmpty() && aarq.presentationContextOids().contains(ICAO_AMHS_P1_OID)) {
-                acceptedPresentationContextIds = java.util.Set.of(1);
-            }
+            java.util.Set<Integer> acceptedPresentationContextIds = negotiateAcceptedPresentationContextIds(aarq);
             AcseModels.AAREApdu accept = new AcseModels.AAREApdu(
                 true,
                 java.util.Optional.of("accepted"),
@@ -488,28 +482,59 @@ public class RFC1006Service {
             }
         }
 
-        if (!aarq.presentationContexts().isEmpty()) {
-            java.util.Set<Integer> matched = new java.util.LinkedHashSet<>();
-            java.util.Set<Integer> seenIdentifiers = new java.util.LinkedHashSet<>();
-            java.util.Set<String> detailedAbstractSyntaxes = new java.util.LinkedHashSet<>();
-            for (it.amhs.service.protocol.acse.PresentationContext context : aarq.presentationContexts()) {
-                context.validate();
-                if (!seenIdentifiers.add(context.identifier())) {
-                    throw new IllegalArgumentException("ACSE presentation context identifier must be unique odd positive integer");
-                }
-                detailedAbstractSyntaxes.add(context.abstractSyntaxOid());
-                if (ICAO_AMHS_P1_OID.equals(context.abstractSyntaxOid())) {
-                    matched.add(context.identifier());
+        if (aarq.presentationContexts().isEmpty()) {
+            return;
+        }
+
+        java.util.Set<Integer> matched = new java.util.LinkedHashSet<>();
+        java.util.Set<Integer> seenIdentifiers = new java.util.LinkedHashSet<>();
+        java.util.Set<String> detailedAbstractSyntaxes = new java.util.LinkedHashSet<>();
+        boolean hasSupportedAmhsTransferSyntax = false;
+        for (it.amhs.service.protocol.acse.PresentationContext context : aarq.presentationContexts()) {
+            context.validate();
+            if (!seenIdentifiers.add(context.identifier())) {
+                throw new IllegalArgumentException("ACSE presentation context identifier must be unique odd positive integer");
+            }
+            detailedAbstractSyntaxes.add(context.abstractSyntaxOid());
+            for (String transferSyntaxOid : context.transferSyntaxOids()) {
+                if (!StringUtils.hasText(transferSyntaxOid)) {
+                    throw new IllegalArgumentException("ACSE presentation context transfer syntax OID must not be empty");
                 }
             }
-            if (matched.isEmpty()) {
-                throw new IllegalArgumentException("ACSE presentation contexts do not negotiate AMHS P1 abstract syntax");
-            }
-            java.util.Set<String> flatAbstractSyntaxes = new java.util.LinkedHashSet<>(aarq.presentationContextOids());
-            if (!flatAbstractSyntaxes.equals(detailedAbstractSyntaxes)) {
-                throw new IllegalArgumentException("ACSE presentation context OID list does not match detailed presentation-context definitions");
+            if (ICAO_AMHS_P1_OID.equals(context.abstractSyntaxOid())) {
+                matched.add(context.identifier());
+                if (context.transferSyntaxOids().stream().anyMatch(SUPPORTED_PRESENTATION_TRANSFER_SYNTAXES::contains)) {
+                    hasSupportedAmhsTransferSyntax = true;
+                }
             }
         }
+        if (matched.isEmpty()) {
+            throw new IllegalArgumentException("ACSE presentation contexts do not negotiate AMHS P1 abstract syntax");
+        }
+        if (!hasSupportedAmhsTransferSyntax) {
+            throw new IllegalArgumentException("ACSE presentation contexts do not offer a supported AMHS P1 transfer syntax");
+        }
+        java.util.Set<String> flatAbstractSyntaxes = new java.util.LinkedHashSet<>(aarq.presentationContextOids());
+        if (!flatAbstractSyntaxes.equals(detailedAbstractSyntaxes)) {
+            throw new IllegalArgumentException("ACSE presentation context OID list does not match detailed presentation-context definitions");
+        }
+    }
+
+    private java.util.Set<Integer> negotiateAcceptedPresentationContextIds(AcseModels.AARQApdu aarq) {
+        if (aarq.presentationContexts().isEmpty()) {
+            return java.util.Set.of(1);
+        }
+
+        java.util.Set<Integer> accepted = aarq.presentationContexts().stream()
+            .filter(ctx -> ICAO_AMHS_P1_OID.equals(ctx.abstractSyntaxOid()))
+            .filter(ctx -> ctx.transferSyntaxOids().stream().anyMatch(SUPPORTED_PRESENTATION_TRANSFER_SYNTAXES::contains))
+            .map(it.amhs.service.protocol.acse.PresentationContext::identifier)
+            .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+
+        if (accepted.isEmpty() && aarq.presentationContextOids().contains(ICAO_AMHS_P1_OID)) {
+            throw new IllegalArgumentException("ACSE presentation contexts do not offer a supported AMHS P1 transfer syntax");
+        }
+        return accepted;
     }
 
     private void validateAarqEntityTitles(AcseModels.AARQApdu aarq) {
