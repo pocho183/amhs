@@ -2,9 +2,9 @@
 
 Document status: **authority-ready release baseline (`R2026.03`)** for controlled interoperability, with technical and governance closure artifacts assembled for authority-facing review.
 
-Last updated: `2026-03-10` (capability wording refresh after recent ACSE/P3 interoperability and operation-coverage commits; synchronized with the release-bound wrapper `docs/icao/releases/R2026.03/PICS_R2026.03.md`).
+Last updated: `2026-03-10` (capability wording refresh after recent ACSE/P3 interoperability and operation-coverage commits; release-wrapper synchronization note added for declaration package traceability).
 
-Revision note (`2026-03-10`): updated declared gateway-profile semantics wording to explicitly include mailbox read handling in the P3 operation surface and harmonize matrix/section wording with current implementation evidence.
+Revision note (`2026-03-10`): updated declared gateway-profile semantics wording to explicitly include mailbox read handling in the P3 operation surface, harmonized matrix/section wording with current implementation evidence, and added release-wrapper traceability wording for the authority package review set.
 
 ## 1. Scope
 

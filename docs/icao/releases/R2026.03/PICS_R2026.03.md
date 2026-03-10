@@ -43,3 +43,8 @@ The complete capability-by-capability PICS answers for this release are inherite
 - `docs/icao/PICS.md`
 
 This release-bound wrapper does not widen claim scope; it fixes claim scope to `R2026.03` through the fingerprint above.
+
+## 5. Release synchronization note (`2026-03-10`)
+
+- Functional baseline wording for P3 operation semantics and declaration-governance traceability was refreshed in `docs/icao/PICS.md`.
+- This release-bound wrapper remains scope-invariant and continues to bind claims to fingerprint `491e00414f349ac9321005b480b6a1026169222e9a5554606b15096e8ef1a52f`.
