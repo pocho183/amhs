@@ -266,6 +266,25 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
         );
 
+
+        AcseModels.AARQApdu emptyCallingApTitle = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu blankCallingAeTitle = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("   "),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
         AcseModels.AARQApdu expectedAuthConfiguredButMissing = aarq(
             RFC1006Service.ICAO_AMHS_P1_OID,
             Optional.of("ALICE"),
@@ -315,7 +334,20 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             Arguments.of("ACSE-MAT-17 inconsistent flat/detailed presentation syntax list", service(false, ""), inconsistentPresentationList, "", "",
                 "ACSE presentation context OID list does not match detailed presentation-context definitions"),
             Arguments.of("ACSE-MAT-18 AMHS transfer syntax not supported", service(false, ""), unsupportedTransferSyntax, "", "",
-                "ACSE presentation contexts do not offer a supported AMHS P1 transfer syntax")
+                "ACSE presentation contexts do not offer a supported AMHS P1 transfer syntax"),
+            Arguments.of("ACSE-MAT-19 calling AE-qualifier with AP-title accepted", service(false, ""), callingAeQualifierWithApTitle, "", "", null),
+            Arguments.of("ACSE-MAT-20 called AE-qualifier with AP-title accepted", service(false, ""), calledAeQualifierWithApTitle, "", "", null),
+            Arguments.of("ACSE-MAT-21 calling AP-title missing AE identity", service(false, ""), callingApTitleWithoutAeIdentity, "", "",
+                "ACSE calling AP-title requires AE-title or AE-qualifier"),
+            Arguments.of("ACSE-MAT-22 called AE-qualifier without AP-title", service(false, ""), calledAeQualifierWithoutApTitle, "", "",
+                "ACSE called AE-title/AE-qualifier requires AP-title"),
+            Arguments.of("ACSE-MAT-23 expected auth configured but missing", service(false, "token-ok"), expectedAuthConfiguredButMissing, "", "",
+                "ACSE authentication-value verification failed"),
+            Arguments.of("ACSE-MAT-24 optional auth omitted when policy allows", service(false, ""), optionalAuthMissingWhenNoExpectation, "", "", null),
+            Arguments.of("ACSE-MAT-25 calling AP-title must not be empty", service(false, ""), emptyCallingApTitle, "", "",
+                "ACSE calling AP-title object identifier must not be empty"),
+            Arguments.of("ACSE-MAT-26 calling AE-title must not be empty", service(false, ""), blankCallingAeTitle, "", "",
+                "ACSE calling AE-title must not be empty")
         );
     }
 
