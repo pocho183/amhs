@@ -163,7 +163,7 @@ The declared `R2026.03` baseline is authority-oriented and release-governed, but
    - ✅ Closed: ACSE user-information handling now accepts interoperable EXTERNAL variants beyond the constrained EXTERNAL/OCTET STRING-only path.
    - Expand AP-title/AE-qualifier and authentication-value interoperability semantics to a full certifiable breadth.
 2. **Full X.411/P3 external semantics completion**
-   - Extend from deterministic gateway-profile behavior to profile-complete external P3 service semantics and error coverage.
+   - ✅ Closed: external P3 service semantics now enforce deterministic malformed attribute handling, duplicate/unsupported attribute rejection, and recipient-address validation across bind/submit/status/report/read/release operations.
    - ✅ Closed (`R2026.03`): session/presentation response paths now perform deterministic end-to-end semantic mapping for declared external conformance vectors (instead of envelope-only preservation).
 3. **X.411 ASN.1 runtime breadth hardening**
    - Promote current canonical-module proof + runtime profile-table checks into complete runtime module breadth across all externally claimed APDU/service variants.

@@ -576,6 +576,121 @@ class P3GatewaySessionServiceTest {
         assertEquals("OK code=report-empty recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test", response);
     }
 
+    @Test
+    void submitRejectsMalformedAttributeToken() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+        assertTrue(sessionService.handleCommand(session,
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test")
+            .startsWith("OK code=bind-accepted"));
+
+        String response = sessionService.handleCommand(session,
+            "SUBMIT recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIRRZZZX/CN=Bob Test;body=DATA;invalid-token");
+        assertEquals("ERR code=invalid-command detail=Malformed attribute token 'invalid-token'", response);
+    }
+
+    @Test
+    void submitRejectsDuplicateAttributeKeys() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+        assertTrue(sessionService.handleCommand(session,
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test")
+            .startsWith("OK code=bind-accepted"));
+
+        String response = sessionService.handleCommand(session,
+            "SUBMIT recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIRRZZZX/CN=Bob Test;recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIRRZZZX/CN=Bob Test;body=DATA");
+        assertEquals("ERR code=invalid-command detail=Duplicate attribute 'recipient'", response);
+    }
+
+    @Test
+    void submitRejectsUnsupportedAttributeForOperation() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+        assertTrue(sessionService.handleCommand(session,
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test")
+            .startsWith("OK code=bind-accepted"));
+
+        String response = sessionService.handleCommand(session,
+            "SUBMIT recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIRRZZZX/CN=Bob Test;body=DATA;priority=high");
+        assertEquals("ERR code=invalid-command detail=Unsupported attribute(s) for submit: priority", response);
+    }
+
+    @Test
+    void readRejectsInvalidRecipientAddress() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            true,
+            "LIMCZZZX",
+            "secret",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+        assertTrue(sessionService.handleCommand(session,
+            "BIND username=LIMCZZZX;password=secret;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test")
+            .startsWith("OK code=bind-accepted"));
+
+        String response = sessionService.handleCommand(session, "READ recipient=/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIRRZZZX/CN=Bob Test");
+        assertTrue(response.startsWith("ERR code=invalid-or-address detail="));
+    }
+
 
     private static AMHSChannelService enabledChannelService() {
         AMHSChannel channel = new AMHSChannel();
