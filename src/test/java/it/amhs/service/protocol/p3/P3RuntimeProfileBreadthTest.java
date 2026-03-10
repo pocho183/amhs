@@ -74,6 +74,29 @@ class P3RuntimeProfileBreadthTest {
         assertEquals(18, BerCodec.decodeSingle(protocol.handle(sessionService.newSession(), unsupportedRtse)).tagNumber());
     }
 
+    @Test
+    void shouldRejectInboundResponseAndErrorApduOpcodesAsUnsupportedOperations() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+
+        for (int unsupportedInboundOpcode : new int[] {
+            P3Asn1GatewayProtocol.APDU_BIND_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_SUBMIT_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_STATUS_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_RELEASE_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_REPORT_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_READ_RESPONSE,
+            P3Asn1GatewayProtocol.APDU_ERROR
+        }) {
+            BerTlv response = BerCodec.decodeSingle(protocol.handle(
+                sessionService.newSession(),
+                gatewayRequest(unsupportedInboundOpcode, new byte[0])
+            ));
+            assertEquals(P3Asn1GatewayProtocol.APDU_ERROR, response.tagNumber());
+            assertEquals("unsupported-operation", decodeErrorField(response, 0));
+        }
+    }
+
     private static byte[] gatewayRequest(int tagNumber, byte[] payload) {
         return BerCodec.encode(new BerTlv(2, true, tagNumber, 0, payload.length, payload));
     }
@@ -150,5 +173,11 @@ class P3RuntimeProfileBreadthTest {
             offset += chunk.length;
         }
         return out;
+    }
+
+    private static String decodeErrorField(BerTlv errorApdu, int tagNumber) {
+        return BerCodec.findOptional(BerCodec.decodeAll(errorApdu.value()), 2, tagNumber)
+            .map(value -> new String(value.value(), StandardCharsets.UTF_8))
+            .orElse("");
     }
 }
