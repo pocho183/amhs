@@ -133,7 +133,24 @@ This section validates the requested assessment against what is actually impleme
 
 Current state:
 - Available: message ingest/relay, persistence, retrieval primitives, delivery-report persistence, basic TLS/mTLS policy hooks.
-- Missing or weak for day-to-day operator use: full UA/operator console, rich ATS templates/UI workflow, advanced audit/monitoring dashboards, and turnkey HA automation.
+- Missing or weak for day-to-day operator use:
+  1. Full UA/operator console for operational handling workflows.
+  2. Rich ATS templates and UI-assisted composition/review paths.
+  3. Advanced audit and monitoring dashboards for continuous oversight.
+  4. Turnkey HA automation suitable for routine operational operations.
+
+Priority capability gaps to close for stable internal operations:
+1. **Operator workflow surface**: provide a practical UA/operator console (compose, submit, queue status, DR/NDR inspection, resend/cancel where policy allows).
+2. **Operational observability**: add first-class dashboards/alerts for association health, queue depth/age, retry churn, and per-peer reject/error rates.
+3. **Directory-backed addressing convenience**: even for internal scope, add managed address-book/distribution-list workflows (or lightweight directory integration) to reduce manual O/R addressing errors.
+4. **Controlled failover runbooks**: package active/passive failover, backup/restore, and restart procedures as repeatable operator playbooks with evidence logs.
+5. **Policy-admin ergonomics**: simplify TLS/mTLS trust-anchor and certificate lifecycle operations for non-developer administrators.
+
+Minimum closure criteria before broad internal rollout:
+- Internal operator UAT pass for end-to-end compose→relay→DR/NDR lifecycle.
+- 24x7 monitoring baseline with actionable alert thresholds and on-call handoff notes.
+- Demonstrated restore-from-backup and planned failover drill under representative traffic.
+- Documented SOPs for peer onboarding, certificate rotation, and incident triage.
 
 Readiness estimate (engineering judgment): **~70-80%** for controlled internal usage.
 
@@ -141,9 +158,6 @@ Readiness estimate (engineering judgment): **~70-80%** for controlled internal u
 
 Major remaining gaps:
 1. Directory capability for scalable AMHS addressing/distribution/routing policy authority.
-2. Full operational service breadth expectations beyond the constrained gateway profile.
-3. Migration-grade gateway and lifecycle tooling expected in mixed AFTN/AMHS environments.
-4. Stronger HA/DR posture (dual-node orchestration, replicated operations model, formal DR drills as recurring obligations).
 
 Recently closed baseline (still recurring per-release obligation):
 5. Security/PKI operations hardening and authority-governed lifecycle controls are now documented with explicit role approvals, lifecycle gates, and release evidence obligations in `docs/icao/PKI_LIFECYCLE_GOVERNANCE_CONTROLS.md`.
