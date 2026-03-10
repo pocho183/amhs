@@ -103,12 +103,12 @@ For each campaign/drill window, collect and archive:
 
 A package is ready for external review when all below are present:
 
-- [ ] Release identifier and configuration fingerprint.
-- [ ] Signed SLO/RTO/RPO declaration sheet.
-- [ ] Most recent failover drill report with raw artifacts attached.
-- [ ] Backup/restore verification report for the same release window.
-- [ ] CAPA (corrective/preventive action) status for open findings.
-- [ ] Approval signatures (operations owner, security owner, accountable manager).
+- [x] Release identifier and configuration fingerprint (`R2026.03`; `docs/icao/releases/R2026.03/CONFIGURATION_FINGERPRINT.txt`).
+- [x] Signed SLO/RTO/RPO declaration sheet (`docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-slo-declaration.md`).
+- [x] Most recent failover drill report with raw artifacts attached (`docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-failover-drill-report.md`; `docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-manifest.txt`).
+- [x] Backup/restore verification report for the same release window (`docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-backup-restore-verification.md`).
+- [x] CAPA (corrective/preventive action) status for open findings (`docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-performance-resilience-report.md` indicates no blocking corrective action; failover drill shows zero open anomalies).
+- [x] Approval signatures (operations owner, security owner, accountable manager) recorded (`docs/icao/releases/R2026.03/evidence/operational-assurance/20260308T141500Z-safety-security-residual-risk-acceptance.md`; `docs/icao/releases/R2026.03/evidence/italy-national-interop/20260308T150500Z-approval-register.md`).
 
 ## 9. Governance cadence
 
