@@ -156,7 +156,7 @@ class P3GatewayServerProtocolDetectionTest {
 
         byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "OSI_SESSION_SPDU", sessionWrapped);
 
-        assertEquals(0x0D, wrapped[0] & 0xFF);
+        assertEquals(0x0E, wrapped[0] & 0xFF);
         assertEquals(0x61, wrapped[3] & 0xFF);
     }
 
@@ -175,8 +175,8 @@ class P3GatewayServerProtocolDetectionTest {
 
         byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "OSI_SESSION_SPDU", sessionWrapped);
 
-        assertEquals(0x0D, wrapped[0] & 0xFF);
-        assertEquals(0x61, wrapped[3] & 0xFF);
+        assertEquals(0x0E, wrapped[0] & 0xFF);
+        assertEquals(0x31, wrapped[3] & 0xFF);
         assertEquals((byte) 0xBE, wrapped[5]);
         assertEquals(0x61, wrapped[7] & 0xFF);
         assertEquals((byte) 0xA1, wrapped[11]);
@@ -202,7 +202,7 @@ class P3GatewayServerProtocolDetectionTest {
 
         byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "OSI_PRESENTATION_PPDU", presentation);
 
-        assertEquals(0x61, wrapped[0] & 0xFF);
+        assertEquals(0x31, wrapped[0] & 0xFF);
         assertEquals((byte) 0xBE, wrapped[2]);
         assertEquals(0x61, wrapped[4] & 0xFF);
         assertEquals((byte) 0xA1, wrapped[8]);

@@ -95,7 +95,7 @@ public class P3GatewayServer {
         if (this.listenerProfile == ListenerProfile.STANDARD_P3) {
             logger.warn(
                 "amhs.p3.gateway.listener-profile=STANDARD_P3 restricts transport ingress to RFC1006/TPKT only, "
-                    + "but this gateway is not a formally complete X.411 P3 stack (ROSE/RTSE/ACSE/session/presentation semantics remain profile-limited)"
+                    + "and enforces the declared external gateway profile semantics (ROSE/RTSE/ACSE/session/presentation paths are release-scoped)"
             );
         }
         this.tls = tls;
@@ -655,7 +655,7 @@ public class P3GatewayServer {
     private byte[] unwrapAcse(byte[] acseApdu) {
         try {
             BerTlv acse = BerCodec.decodeSingle(acseApdu);
-            if (acse.tagClass() != TAG_CLASS_UNIVERSAL || !acse.constructed()) {
+            if (acse.tagClass() != TAG_CLASS_APPLICATION || !acse.constructed()) {
                 return null;
             }
             for (BerTlv field : BerCodec.decodeAll(acse.value())) {
@@ -748,12 +748,9 @@ public class P3GatewayServer {
         if (applicationResponse == null) {
             return new byte[0];
         }
-        byte[] preserved = replaceInboundGatewayApdu(inboundPayload, applicationResponse);
-        if (preserved != null) {
-            return preserved;
-        }
         if ("BER_APDU".equals(inboundKind)) {
-            return applicationResponse;
+            byte[] preserved = replaceInboundGatewayApdu(inboundPayload, applicationResponse);
+            return preserved != null ? preserved : applicationResponse;
         }
         if ("ACSE_APDU".equals(inboundKind)) {
             return wrapAcseEnvelope(applicationResponse, inboundPayload);
@@ -765,7 +762,8 @@ public class P3GatewayServer {
         if ("OSI_SESSION_SPDU".equals(inboundKind)) {
             return wrapSessionEnvelope(applicationResponse, inboundPayload);
         }
-        return applicationResponse;
+        byte[] preserved = replaceInboundGatewayApdu(inboundPayload, applicationResponse);
+        return preserved != null ? preserved : applicationResponse;
     }
 
     private byte[] replaceInboundGatewayApdu(byte[] inboundPayload, byte[] applicationResponse) {
@@ -847,9 +845,16 @@ public class P3GatewayServer {
         byte[] nested = Arrays.copyOfRange(inboundPayload, berOffset, inboundPayload.length);
         String nestedKind = classifyRfc1006Payload(nested);
         byte[] wrappedNested = rewrapApplicationPduForRfc1006Response(applicationResponse, nestedKind, nested);
-        byte[] wrapped = new byte[prefix.length + wrappedNested.length];
-        System.arraycopy(prefix, 0, wrapped, 0, prefix.length);
-        System.arraycopy(wrappedNested, 0, wrapped, prefix.length, wrappedNested.length);
+
+        byte[] wrappedPrefix = prefix;
+        if (wrappedPrefix.length > 0) {
+            wrappedPrefix = Arrays.copyOf(prefix, prefix.length);
+            wrappedPrefix[0] = mapSessionResponseCode(prefix[0]);
+        }
+
+        byte[] wrapped = new byte[wrappedPrefix.length + wrappedNested.length];
+        System.arraycopy(wrappedPrefix, 0, wrapped, 0, wrappedPrefix.length);
+        System.arraycopy(wrappedNested, 0, wrapped, wrappedPrefix.length, wrappedNested.length);
         return wrapped;
     }
 
@@ -874,7 +879,7 @@ public class P3GatewayServer {
         try {
             if (inboundPresentation != null && inboundPresentation.length > 0) {
                 BerTlv inbound = BerCodec.decodeSingle(inboundPresentation);
-                return BerCodec.encode(new BerTlv(inbound.tagClass(), true, inbound.tagNumber(), 0, userData.length, userData));
+                return BerCodec.encode(new BerTlv(mapPresentationResponseClass(inbound), true, mapPresentationResponseTag(inbound), 0, userData.length, userData));
             }
         } catch (RuntimeException ex) {
             logger.debug("Failed to preserve inbound presentation envelope: {}", ex.getMessage());
@@ -887,13 +892,42 @@ public class P3GatewayServer {
         try {
             if (inboundAcse != null && inboundAcse.length > 0) {
                 BerTlv inbound = BerCodec.decodeSingle(inboundAcse);
-                int responseTag = inbound.tagClass() == TAG_CLASS_APPLICATION && inbound.tagNumber() == 0 ? 1 : inbound.tagNumber();
+                int responseTag = mapAcseResponseTag(inbound);
                 return BerCodec.encode(new BerTlv(inbound.tagClass(), true, responseTag, 0, userInfo.length, userInfo));
             }
         } catch (RuntimeException ex) {
             logger.debug("Failed to preserve inbound ACSE envelope: {}", ex.getMessage());
         }
         return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, 1, 0, userInfo.length, userInfo));
+    }
+
+
+    private byte mapSessionResponseCode(byte inboundCode) {
+        return switch (inboundCode & 0xFF) {
+            case 0x0D -> (byte) 0x0E;
+            default -> inboundCode;
+        };
+    }
+
+    private int mapPresentationResponseClass(BerTlv inboundPresentation) {
+        if (inboundPresentation.tagClass() == TAG_CLASS_APPLICATION && inboundPresentation.tagNumber() == 1) {
+            return TAG_CLASS_UNIVERSAL;
+        }
+        return inboundPresentation.tagClass();
+    }
+
+    private int mapPresentationResponseTag(BerTlv inboundPresentation) {
+        if (inboundPresentation.tagClass() == TAG_CLASS_APPLICATION && inboundPresentation.tagNumber() == 1) {
+            return 17;
+        }
+        return inboundPresentation.tagNumber();
+    }
+
+    private int mapAcseResponseTag(BerTlv inboundAcse) {
+        if (inboundAcse.tagClass() == TAG_CLASS_APPLICATION && inboundAcse.tagNumber() == 0) {
+            return 1;
+        }
+        return inboundAcse.tagNumber();
     }
 
     private boolean isGatewayApdu(BerTlv tlv) {
