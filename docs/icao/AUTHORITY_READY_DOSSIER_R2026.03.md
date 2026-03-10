@@ -1,6 +1,6 @@
 # Authority-Ready Oversight Dossier (R2026.03)
 
-Document status: **submission-ready oversight dossier index (profile-complete claim scope)** for release `R2026.03`.
+Document status: **submission-ready oversight dossier index (transition-governed claim scope)** for release `R2026.03`.
 
 ## 1. Dossier objective
 
@@ -70,4 +70,4 @@ For the next declared release (`R_next`), publish an explicit prior-to-current d
 
 ## 6. Authority submission statement
 
-Release `R2026.03` is packaged as one indexable oversight dossier through this document and its referenced evidence artifacts. The declared scope is submission-ready with explicit profile-complete claim wording, with full revalidation expected due to absence of a prior declared release baseline in repository history.
+Release `R2026.03` is packaged as one indexable oversight dossier through this document and its referenced evidence artifacts. Governance transition from “declared baseline + non-claim boundary” to “profile-complete claim” remains in force, and retirement or narrowing of the external non-claim boundary is permitted only after the required technical breadth is implemented and objectively evidenced in release-bound artifacts. Full revalidation is expected due to absence of a prior declared release baseline in repository history.
