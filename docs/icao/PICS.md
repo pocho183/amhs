@@ -135,6 +135,19 @@ Current state:
 - Available: message ingest/relay, persistence, retrieval primitives, delivery-report persistence, basic TLS/mTLS policy hooks.
 - Missing or weak for day-to-day operator use: full UA/operator console, rich ATS templates/UI workflow, advanced audit/monitoring dashboards, and turnkey HA automation.
 
+Priority capability gaps to close for stable internal operations:
+1. **Operator workflow surface**: provide a practical UA/operator console (compose, submit, queue status, DR/NDR inspection, resend/cancel where policy allows).
+2. **Operational observability**: add first-class dashboards/alerts for association health, queue depth/age, retry churn, and per-peer reject/error rates.
+3. **Directory-backed addressing convenience**: even for internal scope, add managed address-book/distribution-list workflows (or lightweight directory integration) to reduce manual O/R addressing errors.
+4. **Controlled failover runbooks**: package active/passive failover, backup/restore, and restart procedures as repeatable operator playbooks with evidence logs.
+5. **Policy-admin ergonomics**: simplify TLS/mTLS trust-anchor and certificate lifecycle operations for non-developer administrators.
+
+Minimum closure criteria before broad internal rollout:
+- Internal operator UAT pass for end-to-end compose→relay→DR/NDR lifecycle.
+- 24x7 monitoring baseline with actionable alert thresholds and on-call handoff notes.
+- Demonstrated restore-from-backup and planned failover drill under representative traffic.
+- Documented SOPs for peer onboarding, certificate rotation, and incident triage.
+
 Readiness estimate (engineering judgment): **~70-80%** for controlled internal usage.
 
 #### B) National operational use (ANSP multi-node production)
