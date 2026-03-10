@@ -133,7 +133,11 @@ This section validates the requested assessment against what is actually impleme
 
 Current state:
 - Available: message ingest/relay, persistence, retrieval primitives, delivery-report persistence, basic TLS/mTLS policy hooks.
-- Missing or weak for day-to-day operator use: full UA/operator console, rich ATS templates/UI workflow, advanced audit/monitoring dashboards, and turnkey HA automation.
+- Missing or weak for day-to-day operator use:
+  1. Full UA/operator console for operational handling workflows.
+  2. Rich ATS templates and UI-assisted composition/review paths.
+  3. Advanced audit and monitoring dashboards for continuous oversight.
+  4. Turnkey HA automation suitable for routine operational operations.
 
 Priority capability gaps to close for stable internal operations:
 1. **Operator workflow surface**: provide a practical UA/operator console (compose, submit, queue status, DR/NDR inspection, resend/cancel where policy allows).
