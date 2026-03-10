@@ -15,9 +15,9 @@ This matrix publishes the declared external P3 endpoint behavior for an explicit
 
 ### 2.1 Profile-complete claim control conditions
 
-- The profile-complete claim applies only when campaign evidence listed in section 5 is present for the same release fingerprint and declaration artifact manifest.
-- Any change to operation semantics, wrapper handling, or reject/error mapping requires re-issue of this matrix and corresponding authority dossier updates.
-- Claim validity is suspended if evidence manifests are missing, unsigned, or not reproducible from the recorded campaign artifacts.
+- Transition gate: retain the external non-claim boundary as the governing declaration control until items 1-3 in `docs/icao/PICS.md` §5.5 are fully implemented and objectively evidenced in a release-bound dossier.
+- Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
+- Re-issue declaration matrices and authority dossier with explicit profile-complete scope wording and associated campaign evidence when the gate closes.
 
 ## 3. Complete operation matrix for profile-complete external declaration
 

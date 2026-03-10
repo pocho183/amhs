@@ -23,9 +23,9 @@ This dossier packages the release `R2026.03` declaration evidence into authority
 
 ## 2.1 Profile-complete declaration maintenance controls
 
-- Any release change that affects declared external semantics, conformance bindings, or diagnostic/reject mapping requires re-issue of this dossier and the declaration matrix.
-- Evidence drift (missing manifests, signature invalidation, or fingerprint mismatch) automatically suspends the profile-complete claim until revalidation is complete.
-- Authority submission must include the signed campaign artifacts listed in sections 3 and 6 as mandatory annexes.
+- Transition gate: retain the external non-claim boundary as the governing declaration control until items 1-3 in `docs/icao/PICS.md` §5.5 are fully implemented and objectively evidenced in a release-bound dossier.
+- Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
+- Re-issue declaration matrices and this authority dossier with explicit profile-complete scope wording and associated campaign evidence when the gate closes.
 
 ## 3. Technical evidence package
 
