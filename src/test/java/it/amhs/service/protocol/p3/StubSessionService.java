@@ -31,6 +31,7 @@ class StubSessionService extends P3GatewaySessionService {
             case "SUBMIT" -> "OK code=submitted submission-id=sub-1 message-id=42";
             case "STATUS" -> "OK code=status submission-id=sub-1 message-id=42 state=REPORTED dr-status=DELIVERED ipn-status=REPORTED";
             case "REPORT" -> "OK code=read report-id=7 message-id=sub-1 recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice report-type=DR dr-status=DELIVERED";
+            case "READ" -> "OK code=read report-id=8 message-id=sub-1 recipient=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice report-type=IPM dr-status=DELIVERED";
             case "UNBIND" -> {
                 yield "OK code=release";
             }
