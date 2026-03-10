@@ -24,7 +24,7 @@ This matrix completes the closure item from `docs/icao/PICS.md` §6.3 ("Complete
 | ACSE-10 | Authentication-value content verification | Runtime expected auth value configured and peer value mismatches | Rejects AARQ (`authentication-value verification failed`) with requestor diagnostic bucket. | Y | Deterministic negative path declared for external testing. | `validateAarqForAmhsP1`; diagnostics tests. |
 | ACSE-11 | User-information presence and size | Missing user-information, zero-length payload, or payload > profile maximum | Rejects AARQ with explicit diagnostics. | Y | Profile-limited AMHS association information is mandatory and bounded. | `validateAarqUserInformation`; negative unit coverage. |
 | ACSE-12 | AARE diagnostic structure on rejection | Any rejected AARQ path | Emits structured `AARE` with `result-source-diagnostic` and negotiated context OID list. | Y | Rejection responses are machine-readable for campaign verdict reproducibility. | `buildRejectedAare`; AARE diagnostics tests. |
-| ACSE-13 | Generic ACSE user-information encoding breadth | Peer requires broad EXTERNAL variations beyond constrained EXTERNAL/OCTET STRING mapping | Supported only for constrained encoding path; broader variants are out of declared scope. | P | External declaration remains gateway-profile limited, not full ACSE universality claim. | `AcseAssociationProtocol` constrained encode/decode path; PICS section 4.2 limits. |
+| ACSE-13 | Generic ACSE user-information encoding breadth | Peer requires EXTERNAL/OCTET STRING, EXTERNAL with trailing metadata, multi-element user-information, or EXTERNAL octet-aligned payload encodings | Supported for gateway-profile association payload extraction across interoperable EXTERNAL encoding variants. | Y | Declaration now includes broader ACSE user-information decoding breadth for AMHS association payload extraction while keeping gateway-profile session scope. | `AcseAssociationProtocol` user-information decode paths; `AcseAssociationProtocolTest` breadth vectors. |
 | ACSE-14 | Full ISO session/presentation negotiation surface | Peer expects profile-complete presentation/session negotiation semantics | Not declared; only supported gateway paths are claimed. | N | Explicit non-claim for full profile-complete external interoperability. | `PICS.md` §4.2 declared limitation and gateway posture. |
 
 
@@ -59,6 +59,6 @@ Deterministic capture points are covered by `P3Asn1GatewayProtocolEvidenceTest` 
 
 ## 6. External declaration statement
 
-For external interoperability declaration, this implementation claims **deterministic ACSE/presentation negotiation behavior for the gateway profile vectors ACSE-01..ACSE-12**, with **partial support notes for ACSE-06 and ACSE-13**, and an explicit **non-claim for full profile-complete negotiation breadth (ACSE-14)**.
+For external interoperability declaration, this implementation claims **deterministic ACSE/presentation negotiation behavior for the gateway profile vectors ACSE-01..ACSE-13**, with a **partial support note for ACSE-06**, and an explicit **non-claim for full profile-complete negotiation breadth (ACSE-14)**.
 
 Assessment campaigns should record verdicts against this matrix and attach reproducible logs/pcaps per vector.

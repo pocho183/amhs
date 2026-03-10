@@ -224,7 +224,7 @@ class AcseAssociationProtocolTest {
     }
 
     @Test
-    void shouldRejectUserInformationWithMultipleExternalElements() {
+    void shouldDecodeUserInformationWithMultipleExternalElementsUsingFirstPayload() {
         byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
             BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
 
@@ -237,12 +237,12 @@ class AcseAssociationProtocolTest {
         byte[] apduPayload = concat(appCtx, wrappedUserInfo);
         byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, apduPayload.length, apduPayload));
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> protocol.decode(encoded));
-        assertTrue(ex.getMessage().contains("exactly one EXTERNAL"));
+        AcseModels.AARQApdu decoded = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(encoded));
+        assertArrayEquals(new byte[] {0x41}, decoded.userInformation().orElseThrow());
     }
 
     @Test
-    void shouldRejectUserInformationExternalWithTrailingElements() {
+    void shouldDecodeUserInformationExternalWithTrailingElements() {
         byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
             BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
 
@@ -256,8 +256,27 @@ class AcseAssociationProtocolTest {
         byte[] apduPayload = concat(appCtx, wrappedUserInfo);
         byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, apduPayload.length, apduPayload));
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> protocol.decode(encoded));
-        assertTrue(ex.getMessage().contains("exactly one association-information OCTET STRING"));
+        AcseModels.AARQApdu decoded = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(encoded));
+        assertArrayEquals(new byte[] {0x41}, decoded.userInformation().orElseThrow());
+    }
+
+    @Test
+    void shouldDecodeUserInformationExternalWithOctetAlignedEncoding() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+
+        byte[] directReference = BerCodec.encode(new BerTlv(0, false, 6, 0, 2, new byte[] {0x51, 0x01}));
+        byte[] octetAligned = BerCodec.encode(new BerTlv(2, false, 1, 0, 3, new byte[] {0x41, 0x42, 0x43}));
+        byte[] externalPayload = concat(directReference, octetAligned);
+        byte[] external = BerCodec.encode(new BerTlv(0, true, 8, 0, externalPayload.length, externalPayload));
+        byte[] userInfoSequence = BerCodec.encode(new BerTlv(0, true, 16, 0, external.length, external));
+        byte[] wrappedUserInfo = BerCodec.encode(new BerTlv(2, true, 30, 0, userInfoSequence.length, userInfoSequence));
+
+        byte[] apduPayload = concat(appCtx, wrappedUserInfo);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, apduPayload.length, apduPayload));
+
+        AcseModels.AARQApdu decoded = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(encoded));
+        assertArrayEquals("ABC".getBytes(StandardCharsets.US_ASCII), decoded.userInformation().orElseThrow());
     }
 
     private static byte[] concat(byte[]... chunks) {
