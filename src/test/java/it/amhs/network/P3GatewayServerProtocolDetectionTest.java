@@ -156,7 +156,7 @@ class P3GatewayServerProtocolDetectionTest {
 
         byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "OSI_SESSION_SPDU", sessionWrapped);
 
-        assertEquals(0x0D, wrapped[0] & 0xFF);
+        assertEquals(0x0E, wrapped[0] & 0xFF);
         assertEquals(0x61, wrapped[3] & 0xFF);
     }
 
@@ -175,8 +175,8 @@ class P3GatewayServerProtocolDetectionTest {
 
         byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "OSI_SESSION_SPDU", sessionWrapped);
 
-        assertEquals(0x0D, wrapped[0] & 0xFF);
-        assertEquals(0x61, wrapped[3] & 0xFF);
+        assertEquals(0x0E, wrapped[0] & 0xFF);
+        assertEquals(0x31, wrapped[3] & 0xFF);
         assertEquals((byte) 0xBE, wrapped[5]);
         assertEquals(0x61, wrapped[7] & 0xFF);
         assertEquals((byte) 0xA1, wrapped[11]);
@@ -202,7 +202,7 @@ class P3GatewayServerProtocolDetectionTest {
 
         byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "OSI_PRESENTATION_PPDU", presentation);
 
-        assertEquals(0x61, wrapped[0] & 0xFF);
+        assertEquals(0x31, wrapped[0] & 0xFF);
         assertEquals((byte) 0xBE, wrapped[2]);
         assertEquals(0x61, wrapped[4] & 0xFF);
         assertEquals((byte) 0xA1, wrapped[8]);
@@ -226,6 +226,32 @@ class P3GatewayServerProtocolDetectionTest {
 
         byte[] gatewayResponse = new byte[] {(byte) 0xAA, 0x03, 0x0C, 0x01, 0x42};
         byte[] presentation = new byte[] {0x61, 0x0D, (byte) 0xBE, 0x0B, 0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xA9, 0x03, 0x0C, 0x01, 0x41};
+
+        byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "OSI_PRESENTATION_PPDU", presentation);
+        byte[] extracted = (byte[]) extractApplicationPduFromRfc1006Payload.invoke(server, wrapped, "OSI_PRESENTATION_PPDU");
+
+        assertArrayEquals(gatewayResponse, extracted);
+    }
+
+
+    @Test
+    void extractsReadRequestApduFromPresentationEnvelope() throws Exception {
+        byte[] gatewayApdu = new byte[] {(byte) 0xAB, 0x03, 0x0C, 0x01, 0x41};
+        byte[] acse = new byte[] {0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xAB, 0x03, 0x0C, 0x01, 0x41};
+        byte[] presentation = new byte[] {0x61, 0x0D, (byte) 0xBE, 0x0B, 0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xAB, 0x03, 0x0C, 0x01, 0x41};
+
+        byte[] extracted = (byte[]) extractApplicationPduFromRfc1006Payload.invoke(server, presentation, "OSI_PRESENTATION_PPDU");
+
+        assertArrayEquals(gatewayApdu, extracted);
+    }
+
+    @Test
+    void rewrapPreservesEnvelopeForReadRequestAndInjectsReadResponse() throws Exception {
+        Method rewrap = P3GatewayServer.class.getDeclaredMethod("rewrapApplicationPduForRfc1006Response", byte[].class, String.class, byte[].class);
+        rewrap.setAccessible(true);
+
+        byte[] gatewayResponse = new byte[] {(byte) 0xAC, 0x03, 0x0C, 0x01, 0x42};
+        byte[] presentation = new byte[] {0x61, 0x0D, (byte) 0xBE, 0x0B, 0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xAB, 0x03, 0x0C, 0x01, 0x41};
 
         byte[] wrapped = (byte[]) rewrap.invoke(server, gatewayResponse, "OSI_PRESENTATION_PPDU", presentation);
         byte[] extracted = (byte[]) extractApplicationPduFromRfc1006Payload.invoke(server, wrapped, "OSI_PRESENTATION_PPDU");

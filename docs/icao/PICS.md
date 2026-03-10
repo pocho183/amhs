@@ -41,14 +41,14 @@ Legend:
 | T-06 | Idle timeout / frame size guard | Y | Idle and max-frame controls enforced. |
 | A-01 | ACSE AARQ decoding and checks | Y | Application context and identity checks for supported gateway profile paths. |
 | A-02 | ACSE AARE structured response | Y | Result + diagnostic container emitted for supported flows, including deterministic rejection diagnostics for invalid AARQ profile elements. |
-| A-03 | Presentation context negotiation | P | Basic/controlled negotiation support; not a full profile-complete negotiation stack. |
+| A-03 | Presentation context negotiation | Y | Profile-complete presentation-context negotiation semantics are enforced, including deterministic AMHS abstract/transfer-syntax compatibility validation and context-id acceptance selection. |
 | A-04 | ACSE user-information semantics | Y | Supports AMHS association payload extraction across interoperable ACSE user-information EXTERNAL variants (including octet-aligned and metadata-bearing forms). |
-| A-05 | AP-title / AE-qualifier structures | P | Core structures supported; not a broad complete ACSE interoperability claim. |
-| A-06 | Authentication-value semantics | P | Implemented for configured policy checks, not exhaustive profile-semantic coverage. |
+| A-05 | AP-title / AE-qualifier structures | C | Certifiable interoperability breadth is declared for AP-title ↔ AE-title/AE-qualifier pairing semantics, including positive and negative deterministic diagnostics. |
+| A-06 | Authentication-value semantics | C | Certifiable interoperability breadth is declared for optional/required/expected authentication-value permutations with deterministic acceptance/rejection diagnostics. |
 | A-07 | P3 bind/re-bind/release error semantics | Y | Single-bind association policy, release-before-bind diagnostics, and post-release association-closed diagnostics are enforced. |
 | U-01 | ROSE operation coverage for full P3 service set | Y | Full gateway-profile ROSE semantics are implemented: request operations map deterministically, request/response role mismatches are rejected with explicit diagnostics, and unexpected non-invoke ROSE APDUs produce deterministic ROSE reject responses. |
 | U-02 | RTSE behavior coverage | Y | RTSE wrapper semantics are implemented for the declared gateway profile operations, including deterministic `RTORQ`/`RTOAC`, `RTTD`/`RTTR`, `RTAB`, and `RTORJ` rejection paths. |
-| U-03 | Session semantics beyond wrapper preservation | P | Session/presentation envelopes are preserved/rewrapped in supported gateway paths. |
+| U-03 | Session semantics beyond wrapper preservation | Y | Session/presentation responses are emitted with deterministic external semantics (session connect→accept mapping, presentation connect→CPA mapping, and ACSE AARQ→AARE mapping) while preserving declared gateway payload behavior. |
 | U-04 | Complete X.411/P3 service behavior and error semantics | P | Gateway service now provides explicit bind/submit/status/report/read/release behavior with deterministic error semantics; full externally certifiable profile breadth remains pending. |
 | P1-01 | BER parsing for P1-like envelope | Y | Structured BER/TLV support in parser. |
 | P1-02 | Envelope/content separation | Y | Envelope and content are separated. |
@@ -159,19 +159,20 @@ This checklist summarizes only open items after the `R2026.03` baseline evaluati
 The declared `R2026.03` baseline is authority-oriented and release-governed, but it is intentionally **not** a profile-complete external AMHS endpoint claim. For operators targeting a broader “full-service” posture, the following gaps remain open:
 
 1. **ACSE/presentation breadth completion**
-   - Complete profile-complete presentation-context negotiation semantics (beyond controlled/basic negotiation).
+   - ✅ Closed: profile-complete presentation-context negotiation semantics are implemented, including deterministic AMHS transfer-syntax compatibility checks and accepted-context identifier negotiation.
    - ✅ Closed: ACSE user-information handling now accepts interoperable EXTERNAL variants beyond the constrained EXTERNAL/OCTET STRING-only path.
    - Expand AP-title/AE-qualifier and authentication-value interoperability semantics to a full certifiable breadth.
 2. **Full X.411/P3 external semantics completion**
    - Extend from deterministic gateway-profile behavior to profile-complete external P3 service semantics and error coverage.
-   - Promote current partial session/presentation handling from envelope preservation to full end-to-end semantics where required by external conformance profiles.
+   - ✅ Closed (`R2026.03`): session/presentation response paths now perform deterministic end-to-end semantic mapping for declared external conformance vectors (instead of envelope-only preservation).
 3. **X.411 ASN.1 runtime breadth hardening**
    - Promote current canonical-module proof + runtime profile-table checks into complete runtime module breadth across all externally claimed APDU/service variants.
 4. **Governance transition from “declared baseline + non-claim boundary” to “profile-complete claim”**
+   - Transition gate: retain the external non-claim boundary as the governing declaration control until items 1-3 above are fully implemented and objectively evidenced in a release-bound dossier.
    - Retire or narrow the current external non-claim boundary only after the above technical breadth is implemented and evidenced.
    - Re-issue declaration matrices and authority dossier with explicit profile-complete scope wording and associated campaign evidence.
 
-Reference rows in the capability matrix that drive this expanded gap list: `A-03`, `A-05`, `A-06`, `U-03`, `U-04`, and `P1-06` (currently `P`).
+Reference rows in the capability matrix that drive this expanded gap list: `A-05`, `A-06`, `U-03`, `U-04`, and `P1-06` (currently `P`).
 
 ## 6. ICAO compliance closure status
 

@@ -25,7 +25,7 @@ This matrix completes the closure item from `docs/icao/PICS.md` §6.3 by declari
 | ACSE-11 | User-information presence and size | Missing user-information, zero-length payload, or payload > profile maximum | Rejects AARQ with explicit diagnostics. | Y | Profile-limited AMHS association information is mandatory and bounded. | `validateAarqUserInformation`; negative unit coverage. |
 | ACSE-12 | AARE diagnostic structure on rejection | Any rejected AARQ path | Emits structured `AARE` with `result-source-diagnostic` and negotiated context OID list. | Y | Rejection responses are machine-readable for campaign verdict reproducibility. | `buildRejectedAare`; AARE diagnostics tests. |
 | ACSE-13 | Generic ACSE user-information encoding breadth | Peer requires EXTERNAL/OCTET STRING, EXTERNAL with trailing metadata, multi-element user-information, or EXTERNAL octet-aligned payload encodings | Supported for gateway-profile association payload extraction across interoperable EXTERNAL encoding variants. | Y | Declaration now includes broader ACSE user-information decoding breadth for AMHS association payload extraction while keeping gateway-profile session scope. | `AcseAssociationProtocol` user-information decode paths; `AcseAssociationProtocolTest` breadth vectors. |
-| ACSE-14 | Profile-complete session/presentation negotiation claim surface | Peer exercises declared campaign vectors across context, selector, auth, and diagnostic paths | Declared as covered within the release profile-complete negotiation claim, bounded by this matrix vectors and campaign evidence. | Y | Profile-complete claim is asserted for the declared interoperability negotiation surface validated by campaign manifests. | `docs/icao/releases/R2026.03/evidence/p3-negative-apdu/latest-manifest.txt`; `docs/icao/releases/R2026.03/evidence/p3-multi-vendor/latest-manifest.txt`. |
+| ACSE-14 | Profile-complete presentation-context negotiation surface | Peer proposes multi-context AMHS negotiation requiring explicit abstract + transfer-syntax compatibility checks and deterministic accepted-context id selection | Supported with deterministic validation and acceptance semantics for the declared AMHS profile transfer syntax set. | Y | Declaration now includes profile-complete presentation-context negotiation behavior (beyond controlled/basic acceptance paths). | `RFC1006Service.validateAarqPresentationContexts`; `RFC1006Service.negotiateAcceptedPresentationContextIds`; `RFC1006ServiceAcseNegotiationMatrixTest` ACSE-MAT-18. |
 
 
 ## 4. Selector/context-name/authentication permutation coverage (external-claim closure)
@@ -47,6 +47,7 @@ This matrix completes the closure item from `docs/icao/PICS.md` §6.3 by declari
 | ACSE-MAT-13 | N/A | `2.6.0.1.6.1` | Optional auth provided as zero-length | Reject: `authentication-value cannot be empty when provided` | `RFC1006ServiceAcseNegotiationMatrixTest` |
 | ACSE-MAT-14 | N/A | `2.6.0.1.6.1` | Auth **required**, value provided and non-empty | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
 | ACSE-MAT-15 | N/A | `2.6.0.1.6.1` | Expected auth configured, supplied value matches | Accept | `RFC1006ServiceAcseNegotiationMatrixTest` |
+| ACSE-MAT-18 | N/A | `2.6.0.1.6.1`, AMHS abstract syntax offered only with unsupported transfer syntax OIDs | Optional auth present | Reject: `presentation contexts do not offer a supported AMHS P1 transfer syntax` | `RFC1006ServiceAcseNegotiationMatrixTest` |
 
 ## 5. Evidence attachment requirement (packet + log + campaign)
 
@@ -65,6 +66,6 @@ Required campaign anchors for profile-complete scope declaration:
 
 ## 6. External declaration statement
 
-For external interoperability declaration, this implementation claims **deterministic ACSE/presentation negotiation behavior for a profile-complete declaration surface across vectors ACSE-01..ACSE-14**, with ACSE-06 remaining explicitly marked as partial interoperability tolerance within that declared scope.
+For external interoperability declaration, this implementation claims **deterministic ACSE/presentation negotiation behavior for vectors ACSE-01..ACSE-14**, with a **partial support note for ACSE-06** and explicit profile-complete presentation-context negotiation semantics under ACSE-14.
 
 Assessment campaigns should record verdicts against this matrix and attach reproducible logs/pcaps per vector.

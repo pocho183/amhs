@@ -76,3 +76,9 @@ For each subsequent release:
 2. Update release/fingerprint references.
 3. Update acceptance register with completed approvals.
 4. Keep PICS/PIXIT wording aligned with this boundary record.
+
+## 9. Governance transition guardrail
+
+Retirement or narrowing of this external non-claim boundary is permitted only after profile-complete technical breadth is implemented and objectively evidenced, specifically including ACSE/presentation breadth completion, full X.411/P3 external semantics completion, and runtime ASN.1 breadth hardening as tracked in `docs/icao/PICS.md` §5.5.
+
+Until that condition is met, this boundary remains the normative control for authority-facing external declaration scope.

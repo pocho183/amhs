@@ -191,6 +191,16 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             )
         );
 
+
+        AcseModels.AARQApdu unsupportedTransferSyntax = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.2")))
+        );
+
         AcseModels.AARQApdu inconsistentPresentationList = new AcseModels.AARQApdu(
             RFC1006Service.ICAO_AMHS_P1_OID,
             Optional.of("ALICE"),
@@ -202,6 +212,75 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             Optional.of(auth),
             Optional.of(userInfo),
             List.of(RFC1006Service.ICAO_AMHS_P1_OID, "1.0.9506.2.3"),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu callingAeQualifierWithApTitle = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(new AcseModels.AeQualifier(1)),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu calledAeQualifierWithApTitle = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.1000")),
+            Optional.of(new AcseModels.AeQualifier(2)),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu callingApTitleWithoutAeIdentity = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu calledAeQualifierWithoutApTitle = new AcseModels.AARQApdu(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.empty(),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(new AcseModels.AeQualifier(4)),
+            Optional.of(auth),
+            Optional.of(userInfo),
+            List.of(RFC1006Service.ICAO_AMHS_P1_OID),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu expectedAuthConfiguredButMissing = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.of(userInfo),
+            List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
+        );
+
+        AcseModels.AARQApdu optionalAuthMissingWhenNoExpectation = aarq(
+            RFC1006Service.ICAO_AMHS_P1_OID,
+            Optional.of("ALICE"),
+            Optional.of(new AcseModels.ApTitle("1.3.6.1.4.1.999")),
+            Optional.empty(),
+            Optional.of(userInfo),
             List.of(new PresentationContext(1, RFC1006Service.ICAO_AMHS_P1_OID, List.of("2.1.1")))
         );
 
@@ -234,7 +313,9 @@ class RFC1006ServiceAcseNegotiationMatrixTest {
             Arguments.of("ACSE-MAT-16 duplicate presentation-context identifier", service(false, ""), duplicatePresentationId, "", "",
                 "ACSE presentation context identifier must be unique odd positive integer"),
             Arguments.of("ACSE-MAT-17 inconsistent flat/detailed presentation syntax list", service(false, ""), inconsistentPresentationList, "", "",
-                "ACSE presentation context OID list does not match detailed presentation-context definitions")
+                "ACSE presentation context OID list does not match detailed presentation-context definitions"),
+            Arguments.of("ACSE-MAT-18 AMHS transfer syntax not supported", service(false, ""), unsupportedTransferSyntax, "", "",
+                "ACSE presentation contexts do not offer a supported AMHS P1 transfer syntax")
         );
     }
 
