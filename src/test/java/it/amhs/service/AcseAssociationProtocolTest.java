@@ -164,6 +164,46 @@ class AcseAssociationProtocolTest {
         assertEquals(java.util.Set.of(1), decodedAare.acceptedPresentationContextIds());
     }
 
+
+    @Test
+    void shouldDecodeLargeAeQualifierAndUtf8AeTitle() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+
+        byte[] callingApTitle = BerCodec.encode(new BerTlv(2, true, 6, 0, 5,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 3, new byte[] {0x2A, 0x03, 0x04}))));
+        byte[] callingQualifier = BerCodec.encode(new BerTlv(2, false, 7, 0, 2, new byte[] {0x01, 0x2C}));
+
+        byte[] calledApTitle = BerCodec.encode(new BerTlv(2, true, 2, 0, 5,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 3, new byte[] {0x2A, 0x03, 0x05}))));
+        byte[] calledUtf8 = "DEST-Ü".getBytes(StandardCharsets.UTF_8);
+        byte[] calledField = BerCodec.encode(new BerTlv(2, true, 3, 0,
+            2 + calledUtf8.length,
+            BerCodec.encode(new BerTlv(0, false, 12, 0, calledUtf8.length, calledUtf8))));
+
+        byte[] payload = concat(appCtx, calledApTitle, calledField, callingApTitle, callingQualifier);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, payload.length, payload));
+
+        AcseModels.AARQApdu decoded = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(encoded));
+        assertEquals(Optional.of(new AcseModels.AeQualifier(300)), decoded.callingAeQualifier());
+        assertEquals(Optional.of("DEST-Ü"), decoded.calledAeTitle());
+    }
+
+    @Test
+    void shouldDecodeAuthenticationValueEncodedAsPrintableString() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+        byte[] auth = "TOKEN-123".getBytes(StandardCharsets.US_ASCII);
+        byte[] authField = BerCodec.encode(new BerTlv(2, true, 12, 0,
+            2 + auth.length,
+            BerCodec.encode(new BerTlv(0, false, 19, 0, auth.length, auth))));
+        byte[] payload = concat(appCtx, authField);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, payload.length, payload));
+
+        AcseModels.AARQApdu decoded = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(encoded));
+        assertArrayEquals("TOKEN-123".getBytes(StandardCharsets.UTF_8), decoded.authenticationValue().orElseThrow());
+    }
+
     @Test
     void shouldRejectPresentationContextDefinitionWithTrailingFields() {
         byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,

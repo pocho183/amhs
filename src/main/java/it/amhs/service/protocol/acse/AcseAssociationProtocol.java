@@ -86,10 +86,10 @@ public class AcseAssociationProtocol {
         Optional<AcseModels.AeQualifier> calledQualifier = Optional.empty();
         Optional<BerTlv> calledField = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 3);
         if (calledField.isPresent()) {
-            if (isWrappedUniversalTag(calledField.get(), 25)) {
-                calledAe = Optional.of(decodeGraphicString(calledField.get()));
+            if (isWrappedDirectoryString(calledField.get())) {
+                calledAe = Optional.of(decodeDirectoryString(calledField.get()));
             } else {
-                calledQualifier = Optional.of(new AcseModels.AeQualifier(decodeSmallInteger(calledField.get())));
+                calledQualifier = Optional.of(new AcseModels.AeQualifier(decodeNonNegativeInteger(calledField.get())));
             }
         }
 
@@ -97,10 +97,10 @@ public class AcseAssociationProtocol {
         Optional<AcseModels.AeQualifier> callingQualifier = Optional.empty();
         Optional<BerTlv> callingField = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 7);
         if (callingField.isPresent()) {
-            if (isWrappedUniversalTag(callingField.get(), 25)) {
-                callingAe = Optional.of(decodeGraphicString(callingField.get()));
+            if (isWrappedDirectoryString(callingField.get())) {
+                callingAe = Optional.of(decodeDirectoryString(callingField.get()));
             } else {
-                callingQualifier = Optional.of(new AcseModels.AeQualifier(decodeSmallInteger(callingField.get())));
+                callingQualifier = Optional.of(new AcseModels.AeQualifier(decodeNonNegativeInteger(callingField.get())));
             }
         }
 
@@ -109,7 +109,7 @@ public class AcseAssociationProtocol {
         Optional<AcseModels.ApTitle> callingApTitle = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 6)
             .map(v -> new AcseModels.ApTitle(decodeOid(v)));
         Optional<byte[]> authValue = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 12)
-            .map(this::decodeOctetString);
+            .map(this::decodeAuthenticationValue);
         Optional<byte[]> userInformation = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 30)
             .map(this::decodeUserInformation);
         PresentationContextParseResult presentationContexts = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 29)
@@ -247,17 +247,28 @@ public class AcseAssociationProtocol {
     }
 
     private byte[] encodeSmallInteger(int tagNumber, int value) {
-        if (value < 0 || value > 255) {
-            throw new IllegalArgumentException("ACSE integer/ENUMERATED field must fit in one octet");
+        if (value < 0) {
+            throw new IllegalArgumentException("ACSE integer/ENUMERATED field must be non-negative");
         }
-        return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, false, tagNumber, 0, 1, new byte[] {(byte) value}));
+        return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, false, tagNumber, 0, integerBytes(value).length, integerBytes(value)));
     }
 
     private int decodeSmallInteger(BerTlv encoded) {
-        if (encoded.value().length != 1) {
-            throw new IllegalArgumentException("ACSE integer/ENUMERATED field must be one octet");
+        return decodeNonNegativeInteger(encoded);
+    }
+
+    private int decodeNonNegativeInteger(BerTlv encoded) {
+        if (encoded.value().length == 0 || encoded.value().length > 4) {
+            throw new IllegalArgumentException("ACSE integer/ENUMERATED field length is not supported");
         }
-        return encoded.value()[0] & 0xFF;
+        int value = 0;
+        for (byte octet : encoded.value()) {
+            value = (value << 8) | (octet & 0xFF);
+        }
+        if ((encoded.value()[0] & 0x80) != 0) {
+            throw new IllegalArgumentException("ACSE integer/ENUMERATED field must be non-negative");
+        }
+        return value;
     }
 
     private byte[] encodeOctetString(int tagNumber, byte[] value) {
@@ -271,6 +282,33 @@ public class AcseAssociationProtocol {
             throw new IllegalArgumentException("ACSE expected OCTET STRING inside field [" + wrapped.tagNumber() + "]");
         }
         return octets.value();
+    }
+
+    private byte[] decodeAuthenticationValue(BerTlv wrapped) {
+        BerTlv authValue = BerCodec.decodeSingle(wrapped.value());
+        if (!authValue.isUniversal()) {
+            throw new IllegalArgumentException("ACSE authentication-value must be encoded as universal string/bit/octet type");
+        }
+        return switch (authValue.tagNumber()) {
+            case 4 -> authValue.value();
+            case 12 -> new String(authValue.value(), StandardCharsets.UTF_8).getBytes(StandardCharsets.UTF_8);
+            case 19, 22, 25, 26 -> new String(authValue.value(), StandardCharsets.US_ASCII).getBytes(StandardCharsets.UTF_8);
+            case 3 -> decodeBitStringValue(authValue.value());
+            default -> throw new IllegalArgumentException("ACSE authentication-value universal tag [" + authValue.tagNumber() + "] is not supported");
+        };
+    }
+
+    private byte[] decodeBitStringValue(byte[] bitStringPayload) {
+        if (bitStringPayload.length == 0) {
+            throw new IllegalArgumentException("ACSE BIT STRING authentication-value cannot be empty");
+        }
+        int unusedBits = bitStringPayload[0] & 0xFF;
+        if (unusedBits != 0) {
+            throw new IllegalArgumentException("ACSE BIT STRING authentication-value with non-zero unused bits is not supported");
+        }
+        byte[] out = new byte[bitStringPayload.length - 1];
+        System.arraycopy(bitStringPayload, 1, out, 0, out.length);
+        return out;
     }
 
     private byte[] encodeAarePresentationNegotiation(AcseModels.AAREApdu aare) {
@@ -486,9 +524,19 @@ public class AcseAssociationProtocol {
         return new AcseModels.ResultSourceDiagnostic(source, diagnostic);
     }
 
-    private boolean isWrappedUniversalTag(BerTlv wrapped, int universalTag) {
+    private boolean isWrappedDirectoryString(BerTlv wrapped) {
         BerTlv inner = BerCodec.decodeSingle(wrapped.value());
-        return inner.isUniversal() && inner.tagNumber() == universalTag;
+        return inner.isUniversal() && (inner.tagNumber() == 12 || inner.tagNumber() == 19
+            || inner.tagNumber() == 22 || inner.tagNumber() == 25 || inner.tagNumber() == 26);
+    }
+
+    private String decodeDirectoryString(BerTlv wrapped) {
+        BerTlv inner = BerCodec.decodeSingle(wrapped.value());
+        return switch (inner.tagNumber()) {
+            case 12 -> new String(inner.value(), StandardCharsets.UTF_8);
+            case 19, 22, 25, 26 -> new String(inner.value(), StandardCharsets.US_ASCII);
+            default -> throw new IllegalArgumentException("ACSE expected directory string inside field [" + wrapped.tagNumber() + "]");
+        };
     }
 
     private byte[] encodeOidValue(String oid) {
@@ -537,6 +585,21 @@ public class AcseAssociationProtocol {
         return oid.toString();
     }
 
+
+    private byte[] integerBytes(int value) {
+        byte[] out = new byte[4];
+        out[0] = (byte) ((value >>> 24) & 0xFF);
+        out[1] = (byte) ((value >>> 16) & 0xFF);
+        out[2] = (byte) ((value >>> 8) & 0xFF);
+        out[3] = (byte) (value & 0xFF);
+        int start = 0;
+        while (start < 3 && out[start] == 0 && (out[start + 1] & 0x80) == 0) {
+            start++;
+        }
+        byte[] minimal = new byte[4 - start];
+        System.arraycopy(out, start, minimal, 0, minimal.length);
+        return minimal;
+    }
     private void writeBase128(ByteArrayOutputStream out, long arc) {
         int count = 0;
         int[] tmp = new int[10];
