@@ -24,6 +24,8 @@ In pratica:
 
 ## 2) Configurazione base (`application.properties`)
 
+> ⚠️ **Security baseline note**: i default runtime sono pensati per bootstrap/interoperabilità e **non** sono compliance-grade. In esercizio ICAO dichiarato devi sovrascrivere esplicitamente almeno: `amhs.database.enabled`, `rfc1006.tls.enabled`, `rfc1006.tls.need-client-auth`, `tls.pkix.revocation-enabled`, `amhs.p3.gateway.enabled` secondo il profilo approvato.
+
 Parametri principali:
 
 - `rfc1006.server.port=102`
