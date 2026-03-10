@@ -292,10 +292,18 @@ public class AcseAssociationProtocol {
         return switch (authValue.tagNumber()) {
             case 4 -> authValue.value();
             case 12 -> new String(authValue.value(), StandardCharsets.UTF_8).getBytes(StandardCharsets.UTF_8);
-            case 19, 22, 25, 26 -> new String(authValue.value(), StandardCharsets.US_ASCII).getBytes(StandardCharsets.UTF_8);
+            case 19, 20, 22, 25, 26 -> new String(authValue.value(), StandardCharsets.US_ASCII).getBytes(StandardCharsets.UTF_8);
+            case 28, 30 -> decodeUnicodeStringValue(authValue.value());
             case 3 -> decodeBitStringValue(authValue.value());
             default -> throw new IllegalArgumentException("ACSE authentication-value universal tag [" + authValue.tagNumber() + "] is not supported");
         };
+    }
+
+    private byte[] decodeUnicodeStringValue(byte[] rawValue) {
+        if (rawValue.length % 2 != 0) {
+            throw new IllegalArgumentException("ACSE Unicode string authentication-value must contain an even number of octets");
+        }
+        return new String(rawValue, StandardCharsets.UTF_16BE).getBytes(StandardCharsets.UTF_8);
     }
 
     private byte[] decodeBitStringValue(byte[] bitStringPayload) {
@@ -526,15 +534,16 @@ public class AcseAssociationProtocol {
 
     private boolean isWrappedDirectoryString(BerTlv wrapped) {
         BerTlv inner = BerCodec.decodeSingle(wrapped.value());
-        return inner.isUniversal() && (inner.tagNumber() == 12 || inner.tagNumber() == 19
-            || inner.tagNumber() == 22 || inner.tagNumber() == 25 || inner.tagNumber() == 26);
+        return inner.isUniversal() && (inner.tagNumber() == 12 || inner.tagNumber() == 19 || inner.tagNumber() == 20
+            || inner.tagNumber() == 22 || inner.tagNumber() == 25 || inner.tagNumber() == 26 || inner.tagNumber() == 30);
     }
 
     private String decodeDirectoryString(BerTlv wrapped) {
         BerTlv inner = BerCodec.decodeSingle(wrapped.value());
         return switch (inner.tagNumber()) {
             case 12 -> new String(inner.value(), StandardCharsets.UTF_8);
-            case 19, 22, 25, 26 -> new String(inner.value(), StandardCharsets.US_ASCII);
+            case 19, 20, 22, 25, 26 -> new String(inner.value(), StandardCharsets.US_ASCII);
+            case 30 -> new String(inner.value(), StandardCharsets.UTF_16BE);
             default -> throw new IllegalArgumentException("ACSE expected directory string inside field [" + wrapped.tagNumber() + "]");
         };
     }

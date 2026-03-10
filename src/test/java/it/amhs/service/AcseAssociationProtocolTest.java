@@ -204,6 +204,41 @@ class AcseAssociationProtocolTest {
         assertArrayEquals("TOKEN-123".getBytes(StandardCharsets.UTF_8), decoded.authenticationValue().orElseThrow());
     }
 
+
+    @Test
+    void shouldDecodeAuthenticationValueEncodedAsBmpString() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+        byte[] auth = "ÄÖ".getBytes(StandardCharsets.UTF_16BE);
+        byte[] authField = BerCodec.encode(new BerTlv(2, true, 12, 0,
+            2 + auth.length,
+            BerCodec.encode(new BerTlv(0, false, 30, 0, auth.length, auth))));
+        byte[] payload = concat(appCtx, authField);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, payload.length, payload));
+
+        AcseModels.AARQApdu decoded = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(encoded));
+        assertArrayEquals("ÄÖ".getBytes(StandardCharsets.UTF_8), decoded.authenticationValue().orElseThrow());
+    }
+
+    @Test
+    void shouldDecodeCalledAeTitleEncodedAsBmpString() {
+        byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 6, new byte[] {0x56, 0x00, 0x01, 0x06, 0x01, 0x01}))));
+
+        byte[] calledApTitle = BerCodec.encode(new BerTlv(2, true, 2, 0, 5,
+            BerCodec.encode(new BerTlv(0, false, 6, 0, 3, new byte[] {0x2A, 0x03, 0x05}))));
+        byte[] calledBmp = "DEST-Ä".getBytes(StandardCharsets.UTF_16BE);
+        byte[] calledField = BerCodec.encode(new BerTlv(2, true, 3, 0,
+            2 + calledBmp.length,
+            BerCodec.encode(new BerTlv(0, false, 30, 0, calledBmp.length, calledBmp))));
+
+        byte[] payload = concat(appCtx, calledApTitle, calledField);
+        byte[] encoded = BerCodec.encode(new BerTlv(1, true, 0, 0, payload.length, payload));
+
+        AcseModels.AARQApdu decoded = assertInstanceOf(AcseModels.AARQApdu.class, protocol.decode(encoded));
+        assertEquals(Optional.of("DEST-Ä"), decoded.calledAeTitle());
+    }
+
     @Test
     void shouldRejectPresentationContextDefinitionWithTrailingFields() {
         byte[] appCtx = BerCodec.encode(new BerTlv(2, true, 1, 0, 8,

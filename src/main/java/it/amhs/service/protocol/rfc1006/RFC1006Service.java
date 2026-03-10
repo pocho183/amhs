@@ -538,16 +538,28 @@ public class RFC1006Service {
     }
 
     private void validateAarqEntityTitles(AcseModels.AARQApdu aarq) {
-        validateAeTitlePair("calling", aarq.callingApTitle().isPresent(), aarq.callingAeTitle().isPresent(), aarq.callingAeQualifier().isPresent());
-        validateAeTitlePair("called", aarq.calledApTitle().isPresent(), aarq.calledAeTitle().isPresent(), aarq.calledAeQualifier().isPresent());
+        validateAeTitlePair("calling", aarq.callingApTitle(), aarq.callingAeTitle(), aarq.callingAeQualifier());
+        validateAeTitlePair("called", aarq.calledApTitle(), aarq.calledAeTitle(), aarq.calledAeQualifier());
     }
 
-    private void validateAeTitlePair(String side, boolean hasApTitle, boolean hasAeTitle, boolean hasAeQualifier) {
-        if (hasApTitle && !hasAeTitle && !hasAeQualifier) {
+    private void validateAeTitlePair(
+        String side,
+        Optional<AcseModels.ApTitle> apTitle,
+        Optional<String> aeTitle,
+        Optional<AcseModels.AeQualifier> aeQualifier
+    ) {
+        if (apTitle.isPresent() && !aeTitle.isPresent() && !aeQualifier.isPresent()) {
             throw new IllegalArgumentException("ACSE " + side + " AP-title requires AE-title or AE-qualifier");
         }
-        if ((hasAeTitle || hasAeQualifier) && !hasApTitle) {
+        if ((aeTitle.isPresent() || aeQualifier.isPresent()) && apTitle.isEmpty()) {
             throw new IllegalArgumentException("ACSE " + side + " AE-title/AE-qualifier requires AP-title");
+        }
+
+        if (apTitle.isPresent() && !StringUtils.hasText(apTitle.get().objectIdentifier())) {
+            throw new IllegalArgumentException("ACSE " + side + " AP-title object identifier must not be empty");
+        }
+        if (aeTitle.isPresent() && !StringUtils.hasText(aeTitle.get())) {
+            throw new IllegalArgumentException("ACSE " + side + " AE-title must not be empty");
         }
     }
 
