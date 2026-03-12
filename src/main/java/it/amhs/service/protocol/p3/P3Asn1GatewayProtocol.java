@@ -202,10 +202,29 @@ public class P3Asn1GatewayProtocol {
             if (components.isEmpty()) {
                 return false;
             }
-            return components.stream().anyMatch(BerTlv::constructed);
+            Set<Integer> expectedFieldTags = expectedFieldTagsForApdu(tlv.tagNumber());
+            if (expectedFieldTags.isEmpty()) {
+                return false;
+            }
+            boolean hasExpectedField = false;
+            for (BerTlv component : components) {
+                if (component.tagClass() != TAG_CLASS_CONTEXT || !expectedFieldTags.contains(component.tagNumber())) {
+                    return false;
+                }
+                hasExpectedField = true;
+            }
+            return hasExpectedField;
         } catch (RuntimeException ex) {
             return false;
         }
+    }
+
+    private Set<Integer> expectedFieldTagsForApdu(int apduTag) {
+        return switch (apduTag) {
+            case APDU_BIND_REQUEST -> REQUEST_BIND_FIELD_TAGS;
+            case APDU_SUBMIT_REQUEST, APDU_STATUS_REQUEST, APDU_REPORT_REQUEST, APDU_READ_REQUEST, APDU_ERROR -> REQUEST_COMMON_FIELD_TAGS;
+            default -> Set.of();
+        };
     }
 
     private byte[] wrapRtseResponse(int inboundRtseTag, byte[] nestedResponse) {

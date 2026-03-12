@@ -129,6 +129,26 @@ class P3Asn1GatewayProtocolTest {
     }
 
     @Test
+    void rtseGatewayMatcherRejectsUnrelatedConstructedContextPayload() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+
+        byte[] unrelatedField = BerCodec.encode(new BerTlv(2, true, 9, 0, utf8Primitive("x").length, utf8Primitive("x")));
+        byte[] fakeGatewayBind = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_BIND_REQUEST, 0, unrelatedField.length, unrelatedField));
+
+        byte[] response = protocol.handle(sessionService.newSession(), rtseEnvelope(16, fakeGatewayBind));
+
+        BerTlv rtse = BerCodec.decodeSingle(response);
+        assertEquals(1, rtse.tagClass());
+        assertEquals(17, rtse.tagNumber());
+
+        BerTlv any = BerCodec.decodeSingle(rtse.value());
+        BerTlv gatewayError = BerCodec.decodeSingle(any.value());
+        assertEquals(P3Asn1GatewayProtocol.APDU_ERROR, gatewayError.tagNumber());
+        assertEquals("unsupported-operation", decodeErrorField(gatewayError, 0));
+    }
+
+    @Test
     void readPduReturnsNullAtEof() throws Exception {
         StubSessionService sessionService = new StubSessionService();
         P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
