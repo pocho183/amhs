@@ -107,8 +107,8 @@ public class P3Asn1GatewayProtocol {
             return roseReject(0, "unexpected-rose-apdu");
         }
 
-        if (apdu.tagClass() != TAG_CLASS_CONTEXT || !apdu.constructed()) {
-            return error("invalid-apdu", "Expected context-specific constructed APDU");
+        if (apdu.tagClass() != TAG_CLASS_CONTEXT || !apdu.constructed() || !looksLikeGatewayApdu(apdu)) {
+            return error("invalid-apdu", "Expected gateway APDU");
         }
 
         return switch (apdu.tagNumber()) {
@@ -156,6 +156,7 @@ public class P3Asn1GatewayProtocol {
             return BerCodec.encode(tlv);
         }
         if (looksLikeGatewayApdu(tlv)) {
+            logger.info("P3 ASN.1 accepted gateway candidate tag={} hex={}", tlv.tagNumber(), toHex(BerCodec.encode(tlv)));
             return BerCodec.encode(tlv);
         }
         if (!tlv.constructed()) {
