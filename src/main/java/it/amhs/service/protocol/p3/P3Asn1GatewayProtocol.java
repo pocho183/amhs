@@ -225,6 +225,19 @@ public class P3Asn1GatewayProtocol {
             return false;
         }
     }
+    
+    private boolean isLikelyScalarField(BerTlv field) {
+        if (!field.constructed()) {
+            return true;
+        }
+        try {
+            List<BerTlv> nested = BerCodec.decodeAll(field.value());
+            return nested.size() == 1 && nested.get(0).tagClass() == TAG_CLASS_UNIVERSAL;
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
 
     private byte[] wrapRtseResponse(int inboundRtseTag, byte[] nestedResponse) {
         int responseTag = switch (inboundRtseTag) {
