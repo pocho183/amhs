@@ -2,6 +2,7 @@ package it.amhs.service.protocol.p3;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -301,6 +302,55 @@ class P3Asn1GatewayProtocolTest {
         BerTlv responseTlv = BerCodec.decodeSingle(response);
         assertEquals(1, responseTlv.tagClass());
         assertEquals(3, responseTlv.tagNumber());
+    }
+
+    @Test
+    void doesNotInferAmbiguousChannelNameFromNonGatewayAsn1Payload() {
+        class CapturingSessionService extends StubSessionService {
+            String lastCommand;
+
+            @Override
+            public String handleCommand(SessionState state, String rawCommand) {
+                this.lastCommand = rawCommand;
+                if (rawCommand.startsWith("BIND ")) {
+                    return "OK code=bind-accepted sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice";
+                }
+                return super.handleCommand(state, rawCommand);
+            }
+        }
+
+        CapturingSessionService sessionService = new CapturingSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+
+        byte[] bindArgument = BerCodec.encode(new BerTlv(
+            0,
+            true,
+            16,
+            0,
+            concat(
+                utf8Primitive("amhsuser"),
+                utf8Primitive("changeit"),
+                utf8Primitive("/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice"),
+                utf8Primitive("HELLO"),
+                utf8Primitive("WORLD")
+            ).length,
+            concat(
+                utf8Primitive("amhsuser"),
+                utf8Primitive("changeit"),
+                utf8Primitive("/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice"),
+                utf8Primitive("HELLO"),
+                utf8Primitive("WORLD")
+            )
+        ));
+
+        byte[] bindRequest = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_BIND_REQUEST, 0, bindArgument.length, bindArgument));
+        byte[] response = protocol.handle(session, bindRequest);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(P3Asn1GatewayProtocol.APDU_BIND_RESPONSE, responseTlv.tagNumber());
+        assertTrue(sessionService.lastCommand.contains(";channel="));
+        assertTrue(sessionService.lastCommand.endsWith(";channel="));
     }
 
     private static BerTlv decodeRoseReturnErrorPayload(BerTlv roseReturnError) {

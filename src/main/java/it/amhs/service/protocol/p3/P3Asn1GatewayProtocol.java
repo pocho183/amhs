@@ -6,11 +6,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,6 +78,9 @@ public class P3Asn1GatewayProtocol {
         APDU_READ_REQUEST,
         APDU_READ_RESPONSE
     );
+
+    private static final Pattern CHANNEL_NAME_PATTERN = Pattern.compile("[A-Z][A-Z0-9_-]{1,15}");
+    private static final List<String> PREFERRED_CHANNEL_NAMES = List.of("ATFM", "AFTN");
 
     private final P3GatewaySessionService sessionService;
 
@@ -506,13 +509,24 @@ public class P3Asn1GatewayProtocol {
     }
 
     private String findChannelName(List<String> atoms, String sender) {
-        return atoms.stream()
+        List<String> candidates = atoms.stream()
             .filter(StringUtils::hasText)
             .filter(value -> !value.equals(sender))
-            .filter(value -> value.length() <= 16)
-            .filter(value -> value.chars().noneMatch(ch -> ch == '/' || ch == '=' || ch == ';'))
-            .max(Comparator.comparingInt(String::length))
-            .orElse(null);
+            .filter(value -> CHANNEL_NAME_PATTERN.matcher(value).matches())
+            .distinct()
+            .toList();
+
+        for (String preferredChannelName : PREFERRED_CHANNEL_NAMES) {
+            if (candidates.contains(preferredChannelName)) {
+                return preferredChannelName;
+            }
+        }
+
+        if (candidates.size() == 1) {
+            return candidates.get(0);
+        }
+
+        return null;
     }
 
     private byte[] mapSubmit(P3GatewaySessionService.SessionState session, byte[] payload) {
