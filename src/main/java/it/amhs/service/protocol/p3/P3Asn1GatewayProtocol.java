@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -82,6 +83,9 @@ public class P3Asn1GatewayProtocol {
 
     private static final Set<Integer> REQUEST_BIND_FIELD_TAGS = Set.of(0, 1, 2, 3);
     private static final Set<Integer> REQUEST_COMMON_FIELD_TAGS = Set.of(0, 1, 2);
+    
+    private static final Pattern CHANNEL_NAME_PATTERN = Pattern.compile("(?i)[a-z0-9][a-z0-9._-]{0,15}");
+    private static final List<String> PREFERRED_CHANNEL_NAMES = List.of("p3", "amhs", "x400", "mta", "mts");
 
     private final P3GatewaySessionService sessionService;
 
