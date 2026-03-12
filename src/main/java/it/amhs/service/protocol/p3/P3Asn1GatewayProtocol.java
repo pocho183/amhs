@@ -196,7 +196,7 @@ public class P3Asn1GatewayProtocol {
             return false;
         }
         if (tlv.value().length == 0) {
-            return tlv.tagNumber() == APDU_RELEASE_REQUEST || tlv.tagNumber() == APDU_RELEASE_RESPONSE;
+            return tlv.tagNumber() == APDU_RELEASE_REQUEST;
         }
         try {
             List<BerTlv> components = decodeContextFieldList(tlv.value());
@@ -796,14 +796,6 @@ public class P3Asn1GatewayProtocol {
         byte[] bytes = value == null ? new byte[0] : value.getBytes(StandardCharsets.UTF_8);
         byte[] utf8 = BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, 12, 0, bytes.length, bytes));
         return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, tagNumber, 0, utf8.length, utf8));
-    }
-
-    private String decodeString(BerTlv tlv) {
-        return switch (tlv.tagNumber()) {
-            case 12, 19, 22, 26, 27, 28, 30 -> new String(tlv.value(), StandardCharsets.UTF_8);
-            case 2 -> decodeIntegerAsString(tlv.value());
-            default -> new String(tlv.value(), StandardCharsets.UTF_8);
-        };
     }
 
     private String decodeIntegerAsString(byte[] value) {

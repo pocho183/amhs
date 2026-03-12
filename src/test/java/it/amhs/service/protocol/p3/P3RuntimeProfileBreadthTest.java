@@ -101,7 +101,6 @@ class P3RuntimeProfileBreadthTest {
             P3Asn1GatewayProtocol.APDU_BIND_RESPONSE,
             P3Asn1GatewayProtocol.APDU_SUBMIT_RESPONSE,
             P3Asn1GatewayProtocol.APDU_STATUS_RESPONSE,
-            P3Asn1GatewayProtocol.APDU_RELEASE_RESPONSE,
             P3Asn1GatewayProtocol.APDU_REPORT_RESPONSE,
             P3Asn1GatewayProtocol.APDU_READ_RESPONSE,
             P3Asn1GatewayProtocol.APDU_ERROR
@@ -113,6 +112,13 @@ class P3RuntimeProfileBreadthTest {
             assertEquals(P3Asn1GatewayProtocol.APDU_ERROR, response.tagNumber());
             assertEquals("unsupported-operation", decodeErrorField(response, 0));
         }
+
+        BerTlv releaseResponse = BerCodec.decodeSingle(protocol.handle(
+            sessionService.newSession(),
+            gatewayRequest(P3Asn1GatewayProtocol.APDU_RELEASE_RESPONSE, new byte[0])
+        ));
+        assertEquals(P3Asn1GatewayProtocol.APDU_ERROR, releaseResponse.tagNumber());
+        assertEquals("invalid-apdu", decodeErrorField(releaseResponse, 0));
     }
 
     private static byte[] gatewayRequest(int tagNumber, byte[] payload) {
