@@ -189,7 +189,7 @@ public class P3Asn1GatewayProtocol {
         try {
             List<BerTlv> fields = decodeContextFieldList(tlv.value());
             if (fields.isEmpty()) {
-                return true;
+                return false;
             }
             for (BerTlv field : fields) {
                 if (field.tagClass() != TAG_CLASS_CONTEXT) {
@@ -648,9 +648,11 @@ public class P3Asn1GatewayProtocol {
                 continue;
             }
             if (field.constructed()) {
-                List<BerTlv> nested = decodeContextFieldList(field.value());
-                if (nested.size() == 1) {
-                    values.put(field.tagNumber(), decodeString(nested.get(0)));
+                try {
+                    BerTlv inner = BerCodec.decodeSingle(field.value());
+                    values.put(field.tagNumber(), decodeString(inner));
+                } catch (RuntimeException ignored) {
+                    // ignore malformed or non-scalar content
                 }
             } else {
                 values.put(field.tagNumber(), new String(field.value(), StandardCharsets.UTF_8));
