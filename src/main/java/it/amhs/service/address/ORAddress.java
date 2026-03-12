@@ -139,10 +139,18 @@ public final class ORAddress {
             return "";
         }
         String trimmed = rawValue.trim();
-        if ("ADMD".equals(key) && ("\" \"".equals(trimmed) || "\"\"".equals(trimmed))) {
+        String unquoted = unquote(trimmed);
+        if ("ADMD".equals(key) && ("\" \"".equals(trimmed) || "\"\"".equals(trimmed) || unquoted.isEmpty())) {
             return " ";
         }
-        return trimmed;
+        return unquoted;
+    }
+
+    private static String unquote(String value) {
+        if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+            return value.substring(1, value.length() - 1).trim();
+        }
+        return value;
     }
 
     private static String normalizeKey(String rawKey) {

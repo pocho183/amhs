@@ -61,4 +61,21 @@ class ORAddressTest {
         ORAddress parsed = ORAddress.parse("C=IT/A=ICAO/P=ROMA/O=ENAV/OU1=LIRRZQZX/EXT-CALLSIGN=AZ123");
         assertEquals("AZ123", parsed.get("EXT-CALLSIGN"));
     }
+
+    @Test
+    void shouldIgnoreQuotedEmptyOptionalAttributes() {
+        ORAddress parsed = ORAddress.parse("C=KH/A=ICAO/P=LOCAL/O=TECHNOSKY/OU1=VDTIASRV/CN=\"\"");
+        assertEquals("KH", parsed.get("C"));
+        assertEquals("VDTIASRV", parsed.get("OU1"));
+        assertEquals(null, parsed.get("CN"));
+    }
+
+    @Test
+    void shouldUnquoteQuotedAttributeValues() {
+        ORAddress parsed = ORAddress.parse("C=KH/A=\"ICAO\"/P=\"LOCAL\"/O=\"technosky\"/OU1=\"VDTIATIS\"");
+        assertEquals("ICAO", parsed.get("ADMD"));
+        assertEquals("LOCAL", parsed.get("PRMD"));
+        assertEquals("technosky", parsed.get("O"));
+        assertEquals("VDTIATIS", parsed.get("OU1"));
+    }
 }
