@@ -198,22 +198,26 @@ public class P3Asn1GatewayProtocol {
             return tlv.tagNumber() == APDU_RELEASE_REQUEST;
         }
         try {
-            List<BerTlv> components = decodeContextFieldList(tlv.value());
-            if (components.isEmpty()) {
+            List<BerTlv> fields = decodeContextFieldList(tlv.value());
+            if (fields.isEmpty()) {
                 return false;
             }
-            Set<Integer> expectedFieldTags = expectedFieldTagsForApdu(tlv.tagNumber());
-            if (expectedFieldTags.isEmpty()) {
-                return false;
-            }
-            boolean hasExpectedField = false;
-            for (BerTlv component : components) {
-                if (component.tagClass() != TAG_CLASS_CONTEXT || !expectedFieldTags.contains(component.tagNumber())) {
+
+            Set<Integer> seenTags = new java.util.HashSet<>();
+            for (BerTlv field : fields) {
+                if (field.tagClass() != TAG_CLASS_CONTEXT) {
                     return false;
                 }
-                hasExpectedField = true;
+                seenTags.add(field.tagNumber());
             }
-            return hasExpectedField;
+
+            return switch (tlv.tagNumber()) {
+                case APDU_BIND_REQUEST -> !seenTags.isEmpty() && REQUEST_BIND_FIELD_TAGS.containsAll(seenTags);
+                case APDU_SUBMIT_REQUEST, APDU_STATUS_REQUEST, APDU_REPORT_REQUEST, APDU_READ_REQUEST, APDU_ERROR ->
+                    !seenTags.isEmpty() && REQUEST_COMMON_FIELD_TAGS.containsAll(seenTags);
+                case APDU_RELEASE_REQUEST -> true;
+                default -> true;
+            };
         } catch (RuntimeException ex) {
             return false;
         }
@@ -512,9 +516,11 @@ public class P3Asn1GatewayProtocol {
 
     private String decodeOrNameCandidate(BerTlv candidate) {
         try {
-            return ORNameMapper.fromBer(candidate).orAddress().toCanonicalString();
+            var orName = ORNameMapper.fromBer(candidate);
+            if (orName != null && orName.orAddress() != null) {
+                return orName.orAddress().toCanonicalString();
+            }
         } catch (RuntimeException ignored) {
-            // explicit wrappers are common in native bind arguments; unwrap one layer.
         }
 
         if (!candidate.constructed()) {
