@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import org.springframework.util.StringUtils;
 
 import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
+import it.amhs.service.address.ORAddress;
 
 /**
  * BER/ASN.1 gateway protocol for P3 ingress.
@@ -350,7 +352,7 @@ public class P3Asn1GatewayProtocol {
     }
 
     private byte[] mapBind(P3GatewaySessionService.SessionState session, byte[] payload) {
-        Map<Integer, String> fields = decodeContextUtf8Fields(payload);
+        Map<Integer, String> fields = decodeBindFields(payload);
         logger.info(
             "P3 ASN.1 bind request fields username={} sender={} channel={} password-present={}",
             safe(fields.get(0)),
@@ -370,6 +372,128 @@ public class P3Asn1GatewayProtocol {
             return envelope(APDU_BIND_RESPONSE, encodeKeyValuePayload(parseResponse(response)));
         }
         return errorFromResponse(response);
+    }
+
+    private Map<Integer, String> decodeBindFields(byte[] payload) {
+        Map<Integer, String> fields = decodeContextUtf8Fields(payload);
+        if (StringUtils.hasText(fields.get(0)) || StringUtils.hasText(fields.get(1)) || StringUtils.hasText(fields.get(2)) || StringUtils.hasText(fields.get(3))) {
+            return fields;
+        }
+
+        List<String> atoms = extractTextualAtoms(payload);
+        String sender = findSenderAddress(atoms);
+        String channel = findChannelName(atoms, sender);
+
+        List<String> ordered = atoms.stream()
+            .filter(StringUtils::hasText)
+            .filter(value -> !value.equals(sender))
+            .filter(value -> !value.equals(channel))
+            .toList();
+
+        Map<Integer, String> inferred = new HashMap<>();
+        if (!ordered.isEmpty()) {
+            inferred.put(0, ordered.get(0));
+        }
+        if (ordered.size() > 1) {
+            inferred.put(1, ordered.get(1));
+        }
+        if (StringUtils.hasText(sender)) {
+            inferred.put(2, sender);
+        }
+        if (StringUtils.hasText(channel)) {
+            inferred.put(3, channel);
+        }
+
+        return inferred;
+    }
+
+    private List<String> extractTextualAtoms(byte[] payload) {
+        List<String> values = new ArrayList<>();
+        collectTextualAtoms(payload, values);
+        return values.stream().filter(StringUtils::hasText).distinct().toList();
+    }
+
+    private void collectTextualAtoms(byte[] encoded, List<String> values) {
+        if (encoded == null || encoded.length == 0) {
+            return;
+        }
+        try {
+            BerTlv root = BerCodec.decodeSingle(encoded);
+            collectTextualAtoms(root, values);
+            return;
+        } catch (RuntimeException ignored) {
+            // fall back to a field list decode
+        }
+        try {
+            for (BerTlv field : BerCodec.decodeAll(encoded)) {
+                collectTextualAtoms(field, values);
+            }
+        } catch (RuntimeException ignored) {
+            // ignore non-BER content
+        }
+    }
+
+    private void collectTextualAtoms(BerTlv tlv, List<String> values) {
+        if (tlv.constructed()) {
+            try {
+                for (BerTlv nested : BerCodec.decodeAll(tlv.value())) {
+                    collectTextualAtoms(nested, values);
+                }
+            } catch (RuntimeException ignored) {
+                // not a decodable BER sequence of children
+            }
+            return;
+        }
+
+        if (tlv.tagClass() != TAG_CLASS_UNIVERSAL) {
+            maybeAddPrintable(values, tlv.value());
+            return;
+        }
+
+        switch (tlv.tagNumber()) {
+            case 2 -> values.add(decodeIntegerAsString(tlv.value()));
+            case 4, 12, 19, 22, 26, 27, 28, 30 -> maybeAddPrintable(values, tlv.value());
+            default -> {
+                // ignore non-text universal primitives
+            }
+        }
+    }
+
+    private void maybeAddPrintable(List<String> values, byte[] raw) {
+        if (raw == null || raw.length == 0) {
+            return;
+        }
+        String decoded = new String(raw, StandardCharsets.UTF_8).trim();
+        if (!StringUtils.hasText(decoded) || !isMostlyPrintable(decoded)) {
+            return;
+        }
+        values.add(decoded);
+    }
+
+    private boolean isMostlyPrintable(String value) {
+        long printable = value.chars().filter(ch -> ch >= 32 && ch < 127).count();
+        return printable >= Math.max(1, value.length() - 1);
+    }
+
+    private String findSenderAddress(List<String> atoms) {
+        for (String atom : atoms) {
+            try {
+                return ORAddress.parse(atom).toCanonicalString();
+            } catch (IllegalArgumentException ignored) {
+                // continue
+            }
+        }
+        return null;
+    }
+
+    private String findChannelName(List<String> atoms, String sender) {
+        return atoms.stream()
+            .filter(StringUtils::hasText)
+            .filter(value -> !value.equals(sender))
+            .filter(value -> value.length() <= 16)
+            .filter(value -> value.chars().noneMatch(ch -> ch == '/' || ch == '=' || ch == ';'))
+            .max(Comparator.comparingInt(String::length))
+            .orElse(null);
     }
 
     private byte[] mapSubmit(P3GatewaySessionService.SessionState session, byte[] payload) {
