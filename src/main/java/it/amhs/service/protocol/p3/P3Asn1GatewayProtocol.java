@@ -755,6 +755,18 @@ public class P3Asn1GatewayProtocol {
         return out.toByteArray();
     }
 
+
+    private String toHex(byte[] value) {
+        if (value == null || value.length == 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(value.length * 2);
+        for (byte b : value) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+
     private String safe(String value) {
         return StringUtils.hasText(value) ? value : "<empty>";
     }
