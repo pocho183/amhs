@@ -460,52 +460,64 @@ public class P3Asn1GatewayProtocol {
         if (payload == null || payload.length == 0) {
             return null;
         }
+        List<BerTlv> bindFields;
         try {
-            BerTlv root = BerCodec.decodeSingle(payload);
-            String sender = findSenderAddressFromStructuredBer(root);
+            bindFields = decodeContextFieldList(payload);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+        if (bindFields.isEmpty()) {
+            return null;
+        }
+
+        // Native bind arguments carry initiator-name as the third component.
+        if (bindFields.size() > 2) {
+            String sender = decodeOrNameCandidate(bindFields.get(2));
             if (StringUtils.hasText(sender)) {
                 return sender;
             }
-        } catch (RuntimeException ignored) {
-            // fallback to direct field list walk
         }
 
-        try {
-            for (BerTlv field : BerCodec.decodeAll(payload)) {
-                String sender = findSenderAddressFromStructuredBer(field);
+        // Compatibility fallback for variants that preserve explicit sender tag.
+        for (BerTlv field : bindFields) {
+            if (field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 2) {
+                String sender = decodeOrNameCandidate(field);
                 if (StringUtils.hasText(sender)) {
                     return sender;
                 }
             }
-        } catch (RuntimeException ignored) {
-            // not BER decodable as a field list
         }
+
         return null;
     }
 
-    private String findSenderAddressFromStructuredBer(BerTlv node) {
+    private String decodeOrNameCandidate(BerTlv candidate) {
         try {
-            return ORNameMapper.fromBer(node).orAddress().toCanonicalString();
+            return ORNameMapper.fromBer(candidate).orAddress().toCanonicalString();
         } catch (RuntimeException ignored) {
-            // continue recursive walk
+            // explicit wrappers are common in native bind arguments; unwrap one layer.
         }
 
-        if (!node.constructed()) {
+        if (!candidate.constructed()) {
             return null;
         }
 
+        List<BerTlv> nested;
         try {
-            for (BerTlv nested : BerCodec.decodeAll(node.value())) {
-                String sender = findSenderAddressFromStructuredBer(nested);
-                if (StringUtils.hasText(sender)) {
-                    return sender;
-                }
-            }
+            nested = BerCodec.decodeAll(candidate.value());
         } catch (RuntimeException ignored) {
             return null;
         }
 
-        return null;
+        if (nested.size() != 1) {
+            return null;
+        }
+
+        try {
+            return ORNameMapper.fromBer(nested.get(0)).orAddress().toCanonicalString();
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     private List<String> extractTextualAtoms(byte[] payload) {
