@@ -27,6 +27,21 @@ class P3Asn1GatewayProtocolNegativeVectorsTest {
         assertEquals("invalid-apdu", decodeErrorField(error, 0));
     }
 
+
+    @Test
+    void returnsInvalidApduWhenTopLevelContextZeroDoesNotMatchGatewayShape() {
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(new StubSessionService());
+
+        byte[] nonGatewayContextZero = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_BIND_REQUEST, 0,
+            BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] { 0x01 })).length,
+            BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] { 0x01 }))));
+        byte[] response = protocol.handle(new StubSessionService().newSession(), nonGatewayContextZero);
+
+        BerTlv error = BerCodec.decodeSingle(response);
+        assertEquals(P3Asn1GatewayProtocol.APDU_ERROR, error.tagNumber());
+        assertEquals("invalid-apdu", decodeErrorField(error, 0));
+    }
+
     @Test
     void returnsUnsupportedOperationForUnknownContextApdu() {
         StubSessionService service = new StubSessionService();
