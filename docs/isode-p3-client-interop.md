@@ -100,3 +100,24 @@ After startup, verify logs include:
 - Repeated immediate reconnects with logs like `protocol=ber-apdu` and no successful bind usually indicate protocol/profile mismatch (for example, sending RFC1006/P1 traffic to the P3 gateway port).
 
 If your ISODE client connects but fails during bind/read semantics, this typically indicates expectation mismatch vs full native P3 behavior.
+
+
+## 7) Troubleshooting bind failures: missing sender O/R address
+
+If server logs show lines such as:
+
+- `P3 ASN.1 bind request fields username= sender=<empty> channel=<empty> password-present=false`
+- `P3 bind rejected: missing sender address`
+- `ERR code=invalid-or-address detail=Missing sender address`
+
+then the client is reaching the correct listener/profile, but the bind APDU does not include the sender O/R address field.
+
+In this gateway, bind requires a non-empty sender value parseable by `ORAddress.parse(...)`, for example:
+
+- `/C=IT/ADMD=ICAO/PRMD=ENAV/CN=MARIO.CORINI`
+
+Equivalent `;`-separated input is also accepted and normalized, for example:
+
+- `C=IT;ADMD=ICAO;PRMD=ENAV;CN=MARIO.CORINI`
+
+If the client rapidly reconnects after each failed bind, that usually reflects client-side retry behavior. Fix the bind payload first (sender and, when enabled, credentials), then re-test with a single connection attempt.

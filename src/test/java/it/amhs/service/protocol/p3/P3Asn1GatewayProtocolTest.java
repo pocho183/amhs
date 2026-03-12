@@ -40,6 +40,23 @@ class P3Asn1GatewayProtocolTest {
         assertEquals(P3Asn1GatewayProtocol.APDU_READ_RESPONSE, read.tagNumber());
     }
 
+
+    @Test
+    void mapsBindWhenPayloadIsWrappedInUniversalSequence() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+
+        byte[] bindPayload = bindPayload("amhsuser", "changeit", "C=IT;ADMD=ICAO;PRMD=ENAV;CN=MARIO.CORINI", "ATFM");
+        byte[] sequenceWrappedPayload = BerCodec.encode(new BerTlv(0, true, 16, 0, bindPayload.length, bindPayload));
+        byte[] bindRequest = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_BIND_REQUEST, 0, sequenceWrappedPayload.length, sequenceWrappedPayload));
+
+        byte[] response = protocol.handle(session, bindRequest);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(P3Asn1GatewayProtocol.APDU_BIND_RESPONSE, responseTlv.tagNumber());
+    }
+
     @Test
     void unwrapsRtseRtorqAndReturnsRtoacWithGatewayPayload() {
         StubSessionService sessionService = new StubSessionService();

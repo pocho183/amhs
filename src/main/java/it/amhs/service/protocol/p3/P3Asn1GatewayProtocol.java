@@ -500,7 +500,7 @@ public class P3Asn1GatewayProtocol {
 
     private Map<Integer, String> decodeContextUtf8Fields(byte[] payload) {
         Map<Integer, String> values = new HashMap<>();
-        for (BerTlv field : BerCodec.decodeAll(payload)) {
+        for (BerTlv field : decodeContextFieldList(payload)) {
             if (field.tagClass() != TAG_CLASS_CONTEXT) {
                 continue;
             }
@@ -512,6 +512,20 @@ public class P3Asn1GatewayProtocol {
             }
         }
         return values;
+    }
+
+    private List<BerTlv> decodeContextFieldList(byte[] payload) {
+        try {
+            BerTlv maybeSequence = BerCodec.decodeSingle(payload);
+            if (maybeSequence.tagClass() == TAG_CLASS_UNIVERSAL
+                && maybeSequence.constructed()
+                && maybeSequence.tagNumber() == TAG_UNIVERSAL_SEQUENCE) {
+                return BerCodec.decodeAll(maybeSequence.value());
+            }
+        } catch (RuntimeException ignored) {
+            // fallback to decoding as a direct context-tagged field list
+        }
+        return BerCodec.decodeAll(payload);
     }
 
     private byte[] encodeKeyValuePayload(Map<String, String> map) {
