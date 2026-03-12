@@ -348,6 +348,51 @@ class P3Asn1GatewayProtocolTest {
     }
 
     @Test
+    void doesNotChooseLongestAmbiguousConstructedFieldValue() {
+        class CapturingSessionService extends StubSessionService {
+            String lastCommand;
+
+            @Override
+            public String handleCommand(SessionState state, String rawCommand) {
+                this.lastCommand = rawCommand;
+                return super.handleCommand(state, rawCommand);
+            }
+        }
+
+        CapturingSessionService sessionService = new CapturingSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+
+        byte[] ambiguousRecipient = BerCodec.encode(new BerTlv(
+            2,
+            true,
+            0,
+            0,
+            concat(
+                utf8Primitive("IGNORE-ME"),
+                utf8Primitive("THIS-IS-A-LONG-UNRELATED-STRING")
+            ).length,
+            concat(
+                utf8Primitive("IGNORE-ME"),
+                utf8Primitive("THIS-IS-A-LONG-UNRELATED-STRING")
+            )
+        ));
+
+        byte[] payload = concat(
+            ambiguousRecipient,
+            utf8Context(1, "subject"),
+            utf8Context(2, "body")
+        );
+        byte[] submitRequest = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_SUBMIT_REQUEST, 0, payload.length, payload));
+
+        byte[] response = protocol.handle(session, submitRequest);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(P3Asn1GatewayProtocol.APDU_SUBMIT_RESPONSE, responseTlv.tagNumber());
+        assertEquals("SUBMIT recipient=;subject=subject;body=body", sessionService.lastCommand);
+    }
+
+    @Test
     void returnsRoseReturnErrorForUnsupportedRoseOperation() {
         StubSessionService sessionService = new StubSessionService();
         P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
