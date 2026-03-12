@@ -441,6 +441,11 @@ public class P3Asn1GatewayProtocol {
             return fields;
         }
 
+        logger.warn(
+            "P3 ASN.1 bind payload did not expose canonical context-tagged bind fields; "
+                + "falling back to diagnostic textual atom inference (heuristic compatibility mode)"
+        );
+
         List<String> atoms = extractTextualAtoms(payload);
         String sender = findSenderAddress(atoms);
         String channel = findChannelName(atoms, sender);
@@ -451,6 +456,10 @@ public class P3Asn1GatewayProtocol {
         }
         if (StringUtils.hasText(channel)) {
             inferred.put(3, channel);
+        }
+
+        if (!inferred.isEmpty()) {
+            logger.info("P3 ASN.1 heuristic bind inference recovered sender={} channel={}", safe(sender), safe(channel));
         }
 
         return inferred;
