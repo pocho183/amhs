@@ -108,7 +108,7 @@ If server logs show lines such as:
 
 - `P3 ASN.1 bind request fields username= sender=<empty> channel=<empty> password-present=false`
 - `P3 bind rejected: missing sender address`
-- `ERR code=invalid-or-address detail=Missing sender address`
+- `ERR code=invalid-or-address detail=Missing sender address; provide BIND sender=/C=XX/ADMD=.../PRMD=.../O=.../OU1=.../CN=...`
 
 then the client is reaching the correct listener/profile, but the bind APDU does not include the sender O/R address field.
 
@@ -121,3 +121,5 @@ Equivalent `;`-separated input is also accepted and normalized, for example:
 - `C=IT;ADMD=ICAO;PRMD=ENAV;CN=MARIO.CORINI`
 
 If the client rapidly reconnects after each failed bind, that usually reflects client-side retry behavior. Fix the bind payload first (sender and, when enabled, credentials), then re-test with a single connection attempt.
+
+If your client library cannot set a sender in the initial bind object, inject it explicitly in your gateway-adapter command serialization (before ASN.1 encoding). The gateway treats sender as mandatory bind identity, so retries without sender will always fail deterministically.
