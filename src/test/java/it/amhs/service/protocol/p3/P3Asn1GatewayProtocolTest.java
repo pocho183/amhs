@@ -291,6 +291,63 @@ class P3Asn1GatewayProtocolTest {
     }
 
     @Test
+    void decodesBindSenderFromNestedStructuredOrAddressField() {
+        class CapturingSessionService extends StubSessionService {
+            String lastCommand;
+
+            @Override
+            public String handleCommand(SessionState state, String rawCommand) {
+                this.lastCommand = rawCommand;
+                return super.handleCommand(state, rawCommand);
+            }
+        }
+
+        CapturingSessionService sessionService = new CapturingSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+        P3GatewaySessionService.SessionState session = sessionService.newSession();
+
+        byte[] senderSequence = BerCodec.encode(new BerTlv(
+            0,
+            true,
+            16,
+            0,
+            concat(
+                utf8Primitive("/C=IT"),
+                utf8Primitive("ADMD=ICAO"),
+                utf8Primitive("PRMD=ENAV"),
+                utf8Primitive("O=ENAV"),
+                utf8Primitive("OU1=LIRR"),
+                utf8Primitive("CN=alice")
+            ).length,
+            concat(
+                utf8Primitive("/C=IT"),
+                utf8Primitive("ADMD=ICAO"),
+                utf8Primitive("PRMD=ENAV"),
+                utf8Primitive("O=ENAV"),
+                utf8Primitive("OU1=LIRR"),
+                utf8Primitive("CN=alice")
+            )
+        ));
+
+        byte[] payload = concat(
+            utf8Context(0, "amhsuser"),
+            utf8Context(1, "changeit"),
+            BerCodec.encode(new BerTlv(2, true, 2, 0, senderSequence.length, senderSequence)),
+            utf8Context(3, "ATFM")
+        );
+
+        byte[] bindRequest = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_BIND_REQUEST, 0, payload.length, payload));
+        byte[] response = protocol.handle(session, bindRequest);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(P3Asn1GatewayProtocol.APDU_BIND_RESPONSE, responseTlv.tagNumber());
+        assertEquals(
+            "BIND username=amhsuser;password=changeit;sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice;channel=ATFM",
+            sessionService.lastCommand
+        );
+    }
+
+    @Test
     void returnsRoseReturnErrorForUnsupportedRoseOperation() {
         StubSessionService sessionService = new StubSessionService();
         P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);

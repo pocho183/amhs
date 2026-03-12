@@ -29,7 +29,7 @@ Configuration binding for this statement is locked to:
 | Vector | Expected diagnostic/result |
 |---|---|
 | Unknown context APDU tag | Gateway `error[8]` with `code=unsupported-operation`. |
-| Primitive/non-constructed context APDU for gateway path | Gateway `error[8]` with `code=invalid-apdu` and detail `Expected context-specific constructed APDU`. |
+| Primitive/non-constructed context APDU for gateway path | Gateway `error[8]` with `code=invalid-apdu` and detail `Expected gateway APDU`. |
 | ROSE invoke using response-only opcodes (`1,3,5,7,8,10,12`) | ROSE `returnError[3]` wrapping gateway `error[8]` with `code=invalid-operation-role`. |
 | ROSE invoke with unknown opcode | ROSE `returnError[3]` wrapping gateway `error[8]` with `code=unsupported-operation`. |
 | Unexpected non-invoke ROSE APDU (`returnResult`, `returnError`, `reject`) received inbound | ROSE `reject[4]` with reason `unexpected-rose-apdu`. |
