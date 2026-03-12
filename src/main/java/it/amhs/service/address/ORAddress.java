@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.util.StringUtils;
@@ -14,6 +15,7 @@ public final class ORAddress {
     private static final List<String> CANONICAL_ORDER = List.of("C", "ADMD", "PRMD", "O", "OU1", "OU2", "OU3", "OU4", "CN", "S", "G", "I", "NUMUID");
     private static final Pattern DOMAIN_DEFINED_KEY = Pattern.compile("^DDA-[A-Z0-9][A-Z0-9-]{0,31}$");
     private static final Pattern EXTENSION_KEY = Pattern.compile("^(EXT|X)-[A-Z0-9][A-Z0-9-]{0,31}$");
+    private static final Pattern ATTRIBUTE_PATTERN = Pattern.compile("(?:^|[\\s/;,])\\s*([A-Za-z][A-Za-z0-9-]*)\\s*=\\s*(\"(?:[^\"]|\\\\\")*\"|[^/;,]*)");
     private static final Pattern PRINTABLE_STRING = Pattern.compile("^[A-Z0-9 '(),\\-.:=?]*$");
     private static final Pattern IA5_STRING = Pattern.compile("^[\\x20-\\x7E]*$");
     private static final List<Character> DISALLOWED_VALUE_CHARS = List.of('/', '+', '"');
@@ -71,16 +73,11 @@ public final class ORAddress {
             throw new IllegalArgumentException("O/R address cannot be empty");
         }
 
-        String[] tokens = address.trim().replace(';', '/').split("/");
         Map<String, String> values = new LinkedHashMap<>();
-        for (String token : tokens) {
-            if (!StringUtils.hasText(token) || !token.contains("=")) {
-                continue;
-            }
-
-            String[] keyValue = token.split("=", 2);
-            String key = normalizeKey(keyValue[0]);
-            String value = normalizeValue(key, keyValue[1]);
+        Matcher matcher = ATTRIBUTE_PATTERN.matcher(address.trim());
+        while (matcher.find()) {
+            String key = normalizeKey(matcher.group(1));
+            String value = normalizeValue(key, matcher.group(2));
 
             if (!StringUtils.hasText(key) || (!StringUtils.hasText(value) && !("ADMD".equals(key) && " ".equals(value)))) {
                 continue;

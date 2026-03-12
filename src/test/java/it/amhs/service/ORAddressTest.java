@@ -62,6 +62,24 @@ class ORAddressTest {
         assertEquals("AZ123", parsed.get("EXT-CALLSIGN"));
     }
 
+
+
+    @Test
+    void shouldParseAttributeListWithoutDelimitersBetweenPairs() {
+        ORAddress parsed = ORAddress.parse("C=IT ADMD=ICAO PRMD=ENAV O=ENAV OU1=LIRR CN=alice");
+        assertEquals("IT", parsed.get("C"));
+        assertEquals("ICAO", parsed.get("ADMD"));
+        assertEquals("ENAV", parsed.get("PRMD"));
+        assertEquals("LIRR", parsed.get("OU1"));
+        assertEquals("alice", parsed.get("CN"));
+    }
+
+    @Test
+    void shouldParseDnStyleCommaSeparatedAddress() {
+        ORAddress parsed = ORAddress.parse("CN=alice,OU1=LIRR,O=ENAV,PRMD=ENAV,ADMD=ICAO,C=IT");
+        assertEquals("/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice", parsed.toCanonicalString());
+    }
+
     @Test
     void shouldIgnoreQuotedEmptyOptionalAttributes() {
         ORAddress parsed = ORAddress.parse("C=KH/A=ICAO/P=LOCAL/O=TECHNOSKY/OU1=VDTIASRV/CN=\"\"");
