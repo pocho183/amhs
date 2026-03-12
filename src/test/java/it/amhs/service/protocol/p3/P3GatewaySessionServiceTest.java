@@ -391,6 +391,37 @@ class P3GatewaySessionServiceTest {
         assertEquals("ERR code=auth-failed detail=Invalid credentials", bindResponse);
     }
 
+
+    @Test
+    void bindAcceptsUsernameAsSenderFallbackWhenAuthIsDisabled() {
+        P3GatewaySessionService sessionService = new P3GatewaySessionService(
+            new CapturingX400MessageService(),
+            new AMHSComplianceValidator(),
+            enabledChannelService(),
+            new RelayRoutingService(""),
+            mock(AMHSMessageRepository.class),
+            mock(AMHSDeliveryReportRepository.class),
+            0,
+            1,
+            false,
+            "",
+            "",
+            "RFC1006",
+            "127.0.0.1:102",
+            "AMHS-P3-GATEWAY"
+        );
+
+        String bindResponse = sessionService.handleCommand(
+            sessionService.newSession(),
+            "BIND username=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=Alice Test"
+        );
+
+        assertEquals(
+            "OK code=bind-accepted sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ORG/OU1=LIMCZZZX/CN=ALICE TEST",
+            bindResponse
+        );
+    }
+
     @Test
     void bindRejectsInvalidOrAddressWithExplicitDiagnostic() {
         P3GatewaySessionService sessionService = new P3GatewaySessionService(

@@ -151,6 +151,15 @@ public class P3GatewaySessionService {
         String securityLabel = attributes.getOrDefault("security-label", "");
         String gatewayPolicyLabel = attributes.getOrDefault("gateway-policy-label", "");
 
+        if (!StringUtils.hasText(senderAddress) && !authRequired && StringUtils.hasText(username)) {
+            try {
+                senderAddress = ORAddress.parse(username).toCanonicalString();
+                logger.info("P3 bind using username as sender fallback sender={}", senderAddress);
+            } catch (IllegalArgumentException ex) {
+                logger.debug("P3 bind username is not a valid sender fallback value username={}", username);
+            }
+        }
+
         if (!StringUtils.hasText(senderAddress)) {
             logger.warn("P3 bind rejected: missing sender address");
             return "ERR code=invalid-or-address detail=Missing sender address; provide BIND sender=/ADMD=.../PRMD=.../O=.../OU1=.../CN=... (include /C=XX when required by your policy)";
