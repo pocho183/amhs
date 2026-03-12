@@ -108,7 +108,7 @@ If server logs show lines such as:
 
 - `P3 ASN.1 bind request fields username= sender=<empty> channel=<empty> password-present=false`
 - `P3 bind rejected: missing sender address`
-- `ERR code=invalid-or-address detail=Missing sender address; provide BIND sender=/C=XX/ADMD=.../PRMD=.../O=.../OU1=.../CN=...`
+- `ERR code=invalid-or-address detail=Missing sender address; provide BIND sender=/ADMD=.../PRMD=.../O=.../OU1=.../CN=... (include /C=XX when required by your policy)`
 
 then the client is reaching the correct listener/profile, but the bind APDU does not include the sender O/R address field.
 
