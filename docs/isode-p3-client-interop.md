@@ -122,4 +122,9 @@ Equivalent `;`-separated input is also accepted and normalized, for example:
 
 If the client rapidly reconnects after each failed bind, that usually reflects client-side retry behavior. Fix the bind payload first (sender and, when enabled, credentials), then re-test with a single connection attempt.
 
-If your client library cannot set a sender in the initial bind object, inject it explicitly in your gateway-adapter command serialization (before ASN.1 encoding). The gateway treats sender as mandatory bind identity, so retries without sender will always fail deterministically.
+If your ISODE client API cannot inject `sender` in the initial bind structure, do one of the following:
+
+1. Add an adapter layer that emits the gateway bind key/value payload before BER encoding.
+2. Extend the client-side bind serialization so `sender` is present in the first APDU.
+
+The gateway treats `sender` as mandatory bind identity, so retries without it will continue to fail with deterministic `invalid-or-address` rejections.
