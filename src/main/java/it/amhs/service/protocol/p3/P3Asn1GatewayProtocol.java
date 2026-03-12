@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,7 @@ import org.springframework.util.StringUtils;
 import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
 import it.amhs.service.address.ORAddress;
+import it.amhs.service.address.ORNameMapper;
 
 /**
  * BER/ASN.1 gateway protocol for P3 ingress.
@@ -79,6 +81,11 @@ public class P3Asn1GatewayProtocol {
         APDU_READ_RESPONSE
     );
 
+    private static final Set<Integer> REQUEST_BIND_FIELD_TAGS = Set.of(0, 1, 2, 3);
+    private static final Set<Integer> REQUEST_COMMON_FIELD_TAGS = Set.of(0, 1, 2);
+    
+    private static final Pattern CHANNEL_NAME_PATTERN = Pattern.compile("(?i)[a-z0-9][a-z0-9._-]{0,15}");
+    private static final List<String> PREFERRED_CHANNEL_NAMES = List.of("p3", "amhs", "x400", "mta", "mts");
 
     private final P3GatewaySessionService sessionService;
 
@@ -384,6 +391,13 @@ public class P3Asn1GatewayProtocol {
     private byte[] mapBind(P3GatewaySessionService.SessionState session, byte[] payload) {
         logger.info("P3 ASN.1 bind candidate payload={}", toHex(payload));
         Map<Integer, String> fields = decodeBindFields(payload);
+        if (fields.isEmpty()) {
+            logger.warn("P3 ASN.1 bind rejected: unsupported native bind argument shape");
+            return error(
+                "unsupported-native-p3-bind",
+                "Bind argument did not contain gateway fields or a decodable X.411 ORName sender"
+            );
+        }
         logger.info(
             "P3 ASN.1 bind request fields username={} sender={} channel={} password-present={}",
             safe(fields.get(0)),
@@ -411,6 +425,14 @@ public class P3Asn1GatewayProtocol {
             return fields;
         }
 
+        String structuredSender = findSenderAddressFromStructuredBer(payload);
+        if (StringUtils.hasText(structuredSender)) {
+            Map<Integer, String> mapped = new HashMap<>();
+            mapped.put(2, structuredSender);
+            logger.info("P3 ASN.1 structured bind decode recovered sender={} without gateway credential fields", safe(structuredSender));
+            return mapped;
+        }
+
         logger.warn(
             "P3 ASN.1 bind payload did not expose canonical context-tagged bind fields; "
                 + "falling back to diagnostic textual atom inference (heuristic compatibility mode)"
@@ -433,6 +455,58 @@ public class P3Asn1GatewayProtocol {
         }
 
         return inferred;
+    }
+
+    private String findSenderAddressFromStructuredBer(byte[] payload) {
+        if (payload == null || payload.length == 0) {
+            return null;
+        }
+        try {
+            BerTlv root = BerCodec.decodeSingle(payload);
+            String sender = findSenderAddressFromStructuredBer(root);
+            if (StringUtils.hasText(sender)) {
+                return sender;
+            }
+        } catch (RuntimeException ignored) {
+            // fallback to direct field list walk
+        }
+
+        try {
+            for (BerTlv field : BerCodec.decodeAll(payload)) {
+                String sender = findSenderAddressFromStructuredBer(field);
+                if (StringUtils.hasText(sender)) {
+                    return sender;
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // not BER decodable as a field list
+        }
+        return null;
+    }
+
+    private String findSenderAddressFromStructuredBer(BerTlv node) {
+        try {
+            return ORNameMapper.fromBer(node).orAddress().toCanonicalString();
+        } catch (RuntimeException ignored) {
+            // continue recursive walk
+        }
+
+        if (!node.constructed()) {
+            return null;
+        }
+
+        try {
+            for (BerTlv nested : BerCodec.decodeAll(node.value())) {
+                String sender = findSenderAddressFromStructuredBer(nested);
+                if (StringUtils.hasText(sender)) {
+                    return sender;
+                }
+            }
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+
+        return null;
     }
 
     private List<String> extractTextualAtoms(byte[] payload) {
