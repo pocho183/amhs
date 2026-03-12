@@ -153,7 +153,7 @@ public class P3GatewaySessionService {
 
         if (!StringUtils.hasText(senderAddress)) {
             logger.warn("P3 bind rejected: missing sender address");
-            return "ERR code=invalid-or-address detail=Missing sender address; provide BIND sender=/C=XX/ADMD=.../PRMD=.../O=.../OU1=.../CN=...";
+            return "ERR code=invalid-or-address detail=Missing sender address; provide BIND sender=/ADMD=.../PRMD=.../O=.../OU1=.../CN=... (include /C=XX when required by your policy)";
         }
 
         ORAddress parsedSender;
