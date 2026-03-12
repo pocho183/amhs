@@ -678,17 +678,29 @@ public class P3Asn1GatewayProtocol {
                 continue;
             }
             if (field.constructed()) {
-                try {
-                    BerTlv inner = BerCodec.decodeSingle(field.value());
-                    values.put(field.tagNumber(), decodeString(inner));
-                } catch (RuntimeException ignored) {
-                    // ignore malformed or non-scalar content
+                String nested = decodeConstructedFieldValue(field);
+                if (StringUtils.hasText(nested)) {
+                    values.put(field.tagNumber(), nested);
                 }
             } else {
                 values.put(field.tagNumber(), new String(field.value(), StandardCharsets.UTF_8));
             }
         }
         return values;
+    }
+
+    private String decodeConstructedFieldValue(BerTlv field) {
+        List<String> atoms = new ArrayList<>();
+        collectTextualAtoms(field, atoms);
+        List<String> text = atoms.stream().filter(StringUtils::hasText).distinct().toList();
+        if (text.isEmpty()) {
+            return null;
+        }
+        String sender = findSenderAddress(text);
+        if (StringUtils.hasText(sender)) {
+            return sender;
+        }
+        return text.stream().max(Comparator.comparingInt(String::length)).orElse(null);
     }
 
     private List<BerTlv> decodeContextFieldList(byte[] payload) {
