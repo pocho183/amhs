@@ -42,7 +42,7 @@ This matrix publishes the declared external P3 endpoint behavior for an explicit
 | Incoming vector class | Required deterministic response class | Deterministic reason / code mapping |
 |---|---|---|
 | Unknown gateway context APDU tag | Gateway `error[8]` | `code=unsupported-operation`, detail includes unsupported APDU/tag number. |
-| Primitive (non-constructed) context APDU where constructed form is required | Gateway `error[8]` | `code=invalid-apdu`, detail `Expected context-specific constructed APDU`. |
+| Primitive (non-constructed) context APDU where constructed form is required | Gateway `error[8]` | `code=invalid-apdu`, detail `Expected gateway APDU`. |
 | ROSE invoke with response opcode (`1,3,5,7,8,10,12`) | ROSE `returnError[3]` + nested gateway `error[8]` | `code=invalid-operation-role`. |
 | ROSE invoke with unknown opcode | ROSE `returnError[3]` + nested gateway `error[8]` | `code=unsupported-operation`. |
 | Unexpected inbound ROSE non-invoke APDU | ROSE `reject[4]` | `reason=unexpected-rose-apdu`. |
