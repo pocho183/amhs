@@ -160,6 +160,7 @@ public class P3Asn1GatewayProtocol {
             return BerCodec.encode(tlv);
         }
         if (looksLikeGatewayApdu(tlv)) {
+            logger.info("P3 ASN.1 accepted gateway candidate tag={} hex={}", tlv.tagNumber(), toHex(BerCodec.encode(tlv)));
             return BerCodec.encode(tlv);
         }
         if (!tlv.constructed()) {
