@@ -112,13 +112,15 @@ If server logs show lines such as:
 
 then the client is reaching the correct listener/profile, but the bind APDU does not include the sender O/R address field.
 
-In this gateway, bind requires a non-empty sender value parseable by `ORAddress.parse(...)`, for example:
+In this gateway, bind requires a sender O/R address parseable by `ORAddress.parse(...)`, for example:
 
 - `/C=IT/ADMD=ICAO/PRMD=ENAV/CN=MARIO.CORINI`
 
 Equivalent `;`-separated input is also accepted and normalized, for example:
 
 - `C=IT;ADMD=ICAO;PRMD=ENAV;CN=MARIO.CORINI`
+
+When `amhs.p3.gateway.auth.required=false`, the gateway also accepts a compatibility fallback: if `sender` is missing but `username` is a valid O/R address, `username` is used as the bind sender identity.
 
 If the client rapidly reconnects after each failed bind, that usually reflects client-side retry behavior. Fix the bind payload first (sender and, when enabled, credentials), then re-test with a single connection attempt.
 
