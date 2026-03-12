@@ -226,26 +226,6 @@ public class P3Asn1GatewayProtocol {
         }
     }
 
-    private boolean isLikelyScalarField(BerTlv field) {
-        if (!field.constructed()) {
-            return true;
-        }
-        try {
-            List<BerTlv> nested = BerCodec.decodeAll(field.value());
-            return nested.size() == 1 && nested.get(0).tagClass() == TAG_CLASS_UNIVERSAL;
-        } catch (RuntimeException ex) {
-            return false;
-        }
-    }
-
-    private Set<Integer> expectedFieldTagsForApdu(int apduTag) {
-        return switch (apduTag) {
-            case APDU_BIND_REQUEST -> REQUEST_BIND_FIELD_TAGS;
-            case APDU_SUBMIT_REQUEST, APDU_STATUS_REQUEST, APDU_REPORT_REQUEST, APDU_READ_REQUEST, APDU_ERROR -> REQUEST_COMMON_FIELD_TAGS;
-            default -> Set.of();
-        };
-    }
-
     private byte[] wrapRtseResponse(int inboundRtseTag, byte[] nestedResponse) {
         int responseTag = switch (inboundRtseTag) {
             case RTSE_RTORQ -> RTSE_RTOAC;
@@ -458,16 +438,20 @@ public class P3Asn1GatewayProtocol {
 
     private Map<Integer, String> decodeBindFields(byte[] payload) {
         Map<Integer, String> fields = decodeContextUtf8Fields(payload);
-        if (StringUtils.hasText(fields.get(0)) || StringUtils.hasText(fields.get(1)) || StringUtils.hasText(fields.get(2)) || StringUtils.hasText(fields.get(3))) {
+
+        if (StringUtils.hasText(fields.get(2))) {
             return fields;
         }
 
         String structuredSender = findSenderAddressFromStructuredBer(payload);
         if (StringUtils.hasText(structuredSender)) {
-            Map<Integer, String> mapped = new HashMap<>();
-            mapped.put(2, structuredSender);
+            fields.putIfAbsent(2, structuredSender);
             logger.info("P3 ASN.1 structured bind decode recovered sender={} without gateway credential fields", safe(structuredSender));
-            return mapped;
+            return fields;
+        }
+
+        if (!fields.isEmpty()) {
+            return fields;
         }
 
         logger.warn(
@@ -508,7 +492,6 @@ public class P3Asn1GatewayProtocol {
             return null;
         }
 
-        // Native bind arguments carry initiator-name as the third component.
         if (bindFields.size() > 2) {
             String sender = decodeOrNameCandidate(bindFields.get(2));
             if (StringUtils.hasText(sender)) {
