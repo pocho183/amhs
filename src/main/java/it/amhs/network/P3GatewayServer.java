@@ -856,7 +856,11 @@ public class P3GatewayServer {
     }
 
     private int findFirstBerOffset(byte[] payload) {
-        for (int i = 0; i < payload.length - 1; i++) {
+        int start = 0;
+        if (payload.length > 0 && isSessionSpduCode(payload[0])) {
+            start = 1;
+        }
+        for (int i = start; i < payload.length - 1; i++) {
             byte[] slice = Arrays.copyOfRange(payload, i, payload.length);
             if (!looksLikeBerApdu(slice)) {
                 continue;
@@ -869,6 +873,11 @@ public class P3GatewayServer {
             }
         }
         return -1;
+    }
+
+    private boolean isSessionSpduCode(byte value) {
+        int firstOctet = value & 0xFF;
+        return firstOctet == 0x0D || firstOctet == 0x01 || firstOctet == 0x0E;
     }
 
     private byte[] wrapPresentationEnvelope(byte[] payload, byte[] inboundPresentation) {
