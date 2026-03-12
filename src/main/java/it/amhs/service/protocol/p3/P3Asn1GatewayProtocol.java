@@ -597,8 +597,10 @@ public class P3Asn1GatewayProtocol {
             .toList();
 
         for (String preferredChannelName : PREFERRED_CHANNEL_NAMES) {
-            if (candidates.contains(preferredChannelName)) {
-                return preferredChannelName;
+            for (String candidate : candidates) {
+                if (candidate.equalsIgnoreCase(preferredChannelName)) {
+                    return candidate;
+                }
             }
         }
 
