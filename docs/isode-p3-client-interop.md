@@ -116,9 +116,12 @@ In this gateway, bind requires a sender O/R address parseable by `ORAddress.pars
 
 - `/C=IT/ADMD=ICAO/PRMD=ENAV/CN=MARIO.CORINI`
 
-Equivalent `;`-separated input is also accepted and normalized, for example:
+The parser now accepts and normalizes the most common textual variants seen in interop traces:
 
-- `C=IT;ADMD=ICAO;PRMD=ENAV;CN=MARIO.CORINI`
+- canonical `/` form (`/C=IT/ADMD=ICAO/...`)
+- `;`-separated form (`C=IT;ADMD=ICAO;...`)
+- DN-style comma-separated form (`CN=MARIO.CORINI,OU1=LIRR,O=ENAV,PRMD=ENAV,ADMD=ICAO,C=IT`)
+- whitespace-delimited attribute lists (`C=IT ADMD=ICAO PRMD=ENAV O=ENAV OU1=LIRR CN=MARIO.CORINI`)
 
 When `amhs.p3.gateway.auth.required=false`, the gateway also accepts a compatibility fallback: if `sender` is missing but `username` is a valid O/R address, `username` is used as the bind sender identity.
 
