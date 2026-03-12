@@ -24,12 +24,7 @@ public final class BerCodec {
     public static BerTlv decodeSingle(byte[] payload) {
         if (payload == null || payload.length == 0)
             throw new IllegalArgumentException("Empty ASN.1 BER payload");
-        BerDecodeResult decoded = decodeAt(payload, 0);
-        if (decoded.totalLength() < payload.length) {
-            System.out.println("BER warning: trailing bytes detected (" + 
-            		(payload.length - decoded.totalLength()) + " bytes)");
-        }
-        return decoded.tlv();
+        return decodeAt(payload, 0).tlv();
     }
 
     public static byte[] encode(BerTlv tlv) {
