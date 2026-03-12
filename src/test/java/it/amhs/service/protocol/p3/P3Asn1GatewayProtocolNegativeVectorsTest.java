@@ -3,6 +3,7 @@ package it.amhs.service.protocol.p3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.io.ByteArrayInputStream;
 import java.io.EOFException;
@@ -81,6 +82,27 @@ class P3Asn1GatewayProtocolNegativeVectorsTest {
 
         assertTrue(service.lastCommand.contains("username=amhsuser"));
         assertTrue(service.lastCommand.contains("channel=ATFM"));
+    }
+
+    @Test
+    void bindFallbackHeuristicsDoNotInferCredentials() {
+        RecordingSessionService service = new RecordingSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(service);
+
+        byte[] textualPayload = concat(
+            contextUtf8(7, "/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice"),
+            contextUtf8(8, "ATFM")
+        );
+        byte[] bindApdu = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_BIND_REQUEST, 0, textualPayload.length, textualPayload));
+
+        protocol.handle(service.newSession(), bindApdu);
+
+        assertTrue(service.lastCommand.contains("sender=/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice"));
+        assertTrue(service.lastCommand.contains("channel=ATFM"));
+        assertTrue(service.lastCommand.contains("username="));
+        assertTrue(service.lastCommand.contains("password="));
+        assertFalse(service.lastCommand.contains("username=amhsuser"));
+        assertFalse(service.lastCommand.contains("password=changeit"));
     }
 
 
