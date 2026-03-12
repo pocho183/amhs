@@ -540,6 +540,50 @@ class P3Asn1GatewayProtocolTest {
         assertEquals("unsupported-native-p3-bind", decodeErrorField(responseTlv, 0));
     }
 
+    @Test
+    void doesNotDecodeSenderFromUnrelatedStructuredOrNameElsewhereInBindArgument() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+
+        byte[] unrelatedOrAddress = concat(
+            contextWrappedUtf8(0, "IT"),
+            contextWrappedUtf8(1, "ICAO"),
+            contextWrappedUtf8(2, "ENAV"),
+            contextWrappedUtf8(3, "ENAV"),
+            contextWrappedUtf8(4, "LIRR"),
+            contextWrappedUtf8(8, "alice")
+        );
+        byte[] unrelatedOrName = BerCodec.encode(new BerTlv(2, true, 1, 0, unrelatedOrAddress.length, unrelatedOrAddress));
+
+        byte[] bindArgument = BerCodec.encode(new BerTlv(
+            0,
+            true,
+            16,
+            0,
+            concat(
+                BerCodec.encode(utf8Primitive("amhsuser")),
+                BerCodec.encode(utf8Primitive("changeit")),
+                BerCodec.encode(utf8Primitive("not-an-orname")),
+                BerCodec.encode(utf8Primitive("ATFM")),
+                unrelatedOrName
+            ).length,
+            concat(
+                BerCodec.encode(utf8Primitive("amhsuser")),
+                BerCodec.encode(utf8Primitive("changeit")),
+                BerCodec.encode(utf8Primitive("not-an-orname")),
+                BerCodec.encode(utf8Primitive("ATFM")),
+                unrelatedOrName
+            )
+        ));
+
+        byte[] bindRequest = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_BIND_REQUEST, 0, bindArgument.length, bindArgument));
+        byte[] response = protocol.handle(sessionService.newSession(), bindRequest);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(P3Asn1GatewayProtocol.APDU_ERROR, responseTlv.tagNumber());
+        assertEquals("unsupported-native-p3-bind", decodeErrorField(responseTlv, 0));
+    }
+
     private static BerTlv decodeRoseReturnErrorPayload(BerTlv roseReturnError) {
         var fields = BerCodec.decodeAll(roseReturnError.value());
         return fields.get(2);
@@ -652,6 +696,11 @@ class P3Asn1GatewayProtocolTest {
     private static byte[] integerContext(int tagNumber, int value) {
         byte[] integer = BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] { (byte) value }));
         return BerCodec.encode(new BerTlv(2, true, tagNumber, 0, integer.length, integer));
+    }
+
+    private static byte[] contextWrappedUtf8(int tagNumber, String value) {
+        byte[] utf8 = BerCodec.encode(utf8Primitive(value));
+        return BerCodec.encode(new BerTlv(2, true, tagNumber, 0, utf8.length, utf8));
     }
 
     private static BerTlv utf8Primitive(String value) {
