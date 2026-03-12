@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -758,15 +757,25 @@ public class P3Asn1GatewayProtocol {
     private String decodeConstructedFieldValue(BerTlv field) {
         List<String> atoms = new ArrayList<>();
         collectTextualAtoms(field, atoms);
-        List<String> text = atoms.stream().filter(StringUtils::hasText).distinct().toList();
+        List<String> text = atoms.stream().filter(StringUtils::hasText).toList();
         if (text.isEmpty()) {
             return null;
         }
-        String sender = findSenderAddress(text);
+        String sender = findSenderAddress(text.stream().distinct().toList());
         if (StringUtils.hasText(sender)) {
             return sender;
         }
-        return text.stream().max(Comparator.comparingInt(String::length)).orElse(null);
+
+        List<String> unique = text.stream().distinct().toList();
+        if (unique.size() == 1) {
+            return unique.get(0);
+        }
+
+        logger.debug(
+            "P3 ASN.1 constructed field value is ambiguous; skipping heuristic selection from candidates={}.",
+            unique.size()
+        );
+        return null;
     }
 
     private List<BerTlv> decodeContextFieldList(byte[] payload) {
