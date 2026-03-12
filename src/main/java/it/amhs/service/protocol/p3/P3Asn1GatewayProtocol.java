@@ -8,7 +8,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -196,43 +195,15 @@ public class P3Asn1GatewayProtocol {
         if (tlv.tagClass() != TAG_CLASS_CONTEXT || !tlv.constructed() || !isGatewayApduTag(tlv.tagNumber())) {
             return false;
         }
-        try {
-            List<BerTlv> fields = decodeContextFieldList(tlv.value());
-            if (fields.isEmpty()) {
-                return tlv.tagNumber() == APDU_RELEASE_REQUEST || tlv.tagNumber() == APDU_RELEASE_RESPONSE;
-            }
-            Set<Integer> seenTags = new HashSet<>();
-            for (BerTlv field : fields) {
-                if (field.tagClass() != TAG_CLASS_CONTEXT) {
-                    return false;
-                }
-                if (!isLikelyScalarField(field)) {
-                    return false;
-                }
-                seenTags.add(field.tagNumber());
-            }
-            return hasExpectedFieldShape(tlv.tagNumber(), seenTags);
-        } catch (RuntimeException ex) {
-            return false;
-        }
-    }
-
-    private boolean hasExpectedFieldShape(int apduTag, Set<Integer> seenTags) {
-        return switch (apduTag) {
-            case APDU_BIND_REQUEST -> seenTags.size() >= 2 && REQUEST_BIND_FIELD_TAGS.containsAll(seenTags);
-            case APDU_SUBMIT_REQUEST, APDU_STATUS_REQUEST, APDU_REPORT_REQUEST, APDU_READ_REQUEST, APDU_ERROR ->
-                !seenTags.isEmpty() && REQUEST_COMMON_FIELD_TAGS.containsAll(seenTags);
-            default -> true;
-        };
-    }
-
-    private boolean isLikelyScalarField(BerTlv field) {
-        if (!field.constructed()) {
-            return true;
+        if (tlv.value().length == 0) {
+            return tlv.tagNumber() == APDU_RELEASE_REQUEST || tlv.tagNumber() == APDU_RELEASE_RESPONSE;
         }
         try {
-            BerTlv inner = BerCodec.decodeSingle(field.value());
-            return !inner.constructed();
+            List<BerTlv> components = decodeContextFieldList(tlv.value());
+            if (components.isEmpty()) {
+                return false;
+            }
+            return components.stream().anyMatch(BerTlv::constructed);
         } catch (RuntimeException ex) {
             return false;
         }
