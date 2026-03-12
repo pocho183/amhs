@@ -208,6 +208,9 @@ public class P3Asn1GatewayProtocol {
                 if (field.tagClass() != TAG_CLASS_CONTEXT) {
                     return false;
                 }
+                if (!isLikelyScalarField(field)) {
+                    return false;
+                }
                 seenTags.add(field.tagNumber());
             }
 
@@ -216,7 +219,7 @@ public class P3Asn1GatewayProtocol {
                 case APDU_SUBMIT_REQUEST, APDU_STATUS_REQUEST, APDU_REPORT_REQUEST, APDU_READ_REQUEST, APDU_ERROR ->
                     !seenTags.isEmpty() && REQUEST_COMMON_FIELD_TAGS.containsAll(seenTags);
                 case APDU_RELEASE_REQUEST -> true;
-                default -> true;
+                default -> false;
             };
         } catch (RuntimeException ex) {
             return false;
