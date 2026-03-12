@@ -182,6 +182,24 @@ class P3GatewayServerProtocolDetectionTest {
         assertEquals((byte) 0xA1, wrapped[11]);
     }
 
+
+    @Test
+    void findsBerOffsetAfterSessionCodeInsteadOfRecursingOnSpduTag() throws Exception {
+        Method findFirstBerOffset = P3GatewayServer.class.getDeclaredMethod("findFirstBerOffset", byte[].class);
+        findFirstBerOffset.setAccessible(true);
+
+        byte[] acse = new byte[] {0x60, 0x09, (byte) 0xBE, 0x07, (byte) 0xA0, 0x05, (byte) 0xA0, 0x03, 0x0C, 0x01, 0x41};
+        byte[] sessionWrapped = new byte[3 + acse.length];
+        sessionWrapped[0] = 0x0D;
+        sessionWrapped[1] = 0x01;
+        sessionWrapped[2] = 0x00;
+        System.arraycopy(acse, 0, sessionWrapped, 3, acse.length);
+
+        int offset = (Integer) findFirstBerOffset.invoke(server, (Object) sessionWrapped);
+
+        assertEquals(3, offset);
+    }
+
     @Test
     void extractsGatewayApduFromPresentationEnvelope() throws Exception {
         byte[] gatewayApdu = new byte[] {(byte) 0xA0, 0x03, 0x0C, 0x01, 0x41};
