@@ -410,6 +410,20 @@ class P3Asn1GatewayProtocolTest {
         assertTrue(sessionService.lastCommand.endsWith(";channel="));
     }
 
+    @Test
+    void returnsExplicitErrorWhenBindPayloadHasNoGatewayFieldsOrDecodableOrName() {
+        StubSessionService sessionService = new StubSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(sessionService);
+
+        byte[] opaque = BerCodec.encode(new BerTlv(0, false, 4, 0, 4, new byte[] { 0x00, (byte) 0xFF, 0x01, 0x02 }));
+        byte[] bindRequest = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_BIND_REQUEST, 0, opaque.length, opaque));
+        byte[] response = protocol.handle(sessionService.newSession(), bindRequest);
+
+        BerTlv responseTlv = BerCodec.decodeSingle(response);
+        assertEquals(P3Asn1GatewayProtocol.APDU_ERROR, responseTlv.tagNumber());
+        assertEquals("unsupported-native-p3-bind", decodeErrorField(responseTlv, 0));
+    }
+
     private static BerTlv decodeRoseReturnErrorPayload(BerTlv roseReturnError) {
         var fields = BerCodec.decodeAll(roseReturnError.value());
         return fields.get(2);
