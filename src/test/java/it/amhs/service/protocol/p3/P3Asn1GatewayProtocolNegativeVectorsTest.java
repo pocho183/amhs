@@ -1,6 +1,7 @@
 package it.amhs.service.protocol.p3;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.ByteArrayInputStream;
@@ -56,6 +57,32 @@ class P3Asn1GatewayProtocolNegativeVectorsTest {
         assertEquals(4, roseReject.tagNumber());
     }
 
+    @Test
+    void rtseNestedScanSkipsContextZeroThatIsNotGatewayApdu() {
+        RecordingSessionService service = new RecordingSessionService();
+        P3Asn1GatewayProtocol protocol = new P3Asn1GatewayProtocol(service);
+
+        byte[] fakeInnerContextZero = BerCodec.encode(new BerTlv(2, true, 0, 0,
+            BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] { 0x05 })).length,
+            BerCodec.encode(new BerTlv(0, false, 2, 0, 1, new byte[] { 0x05 }))));
+
+        byte[] bindPayload = concat(
+            contextUtf8(0, "amhsuser"),
+            contextUtf8(1, "changeit"),
+            contextUtf8(2, "/C=IT/ADMD=ICAO/PRMD=ENAV/O=ENAV/OU1=LIRR/CN=alice"),
+            contextUtf8(3, "ATFM")
+        );
+        byte[] realBindApdu = BerCodec.encode(new BerTlv(2, true, P3Asn1GatewayProtocol.APDU_BIND_REQUEST, 0, bindPayload.length, bindPayload));
+
+        byte[] rtsePayload = concat(fakeInnerContextZero, realBindApdu);
+        byte[] rtse = BerCodec.encode(new BerTlv(1, true, 16, 0, rtsePayload.length, rtsePayload));
+
+        protocol.handle(service.newSession(), rtse);
+
+        assertTrue(service.lastCommand.contains("username=amhsuser"));
+        assertTrue(service.lastCommand.contains("channel=ATFM"));
+    }
+
 
     @Test
     void returnsMalformedApduErrorForInvalidBerPayload() {
@@ -103,5 +130,35 @@ class P3Asn1GatewayProtocolNegativeVectorsTest {
             }
         }
         return null;
+    }
+
+    private static byte[] contextUtf8(int tagNumber, String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        byte[] utf8 = BerCodec.encode(new BerTlv(0, false, 12, 0, bytes.length, bytes));
+        return BerCodec.encode(new BerTlv(2, true, tagNumber, 0, utf8.length, utf8));
+    }
+
+    private static byte[] concat(byte[]... chunks) {
+        int total = 0;
+        for (byte[] chunk : chunks) {
+            total += chunk.length;
+        }
+        byte[] merged = new byte[total];
+        int offset = 0;
+        for (byte[] chunk : chunks) {
+            System.arraycopy(chunk, 0, merged, offset, chunk.length);
+            offset += chunk.length;
+        }
+        return merged;
+    }
+
+    private static final class RecordingSessionService extends StubSessionService {
+        private String lastCommand = "";
+
+        @Override
+        public String handleCommand(SessionState state, String rawCommand) {
+            lastCommand = rawCommand;
+            return super.handleCommand(state, rawCommand);
+        }
     }
 }
