@@ -112,7 +112,11 @@ public class P3Asn1GatewayProtocol {
         }
 
         return switch (apdu.tagNumber()) {
-            case APDU_BIND_REQUEST -> mapBind(session, apdu.value());
+            case APDU_BIND_REQUEST -> {
+                logger.info("P3 ASN.1 bind candidate raw={}", toHex(BerCodec.encode(apdu)));
+                logger.info("P3 ASN.1 bind candidate payload={}", toHex(apdu.value()));
+                yield mapBind(session, apdu.value());
+            }
             case APDU_SUBMIT_REQUEST -> mapSubmit(session, apdu.value());
             case APDU_STATUS_REQUEST -> mapStatus(session, apdu.value());
             case APDU_REPORT_REQUEST -> mapReport(session, apdu.value());
@@ -148,18 +152,24 @@ public class P3Asn1GatewayProtocol {
     }
 
     private byte[] findGatewayOrRoseApdu(BerTlv tlv) {
-        if (isRoseInvoke(tlv)
-            || (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && isGatewayApduTag(tlv.tagNumber()))) {
+        if (isRoseInvoke(tlv)) {
+            return BerCodec.encode(tlv);
+        }
+        if (looksLikeGatewayApdu(tlv)) {
             return BerCodec.encode(tlv);
         }
         if (!tlv.constructed()) {
             return null;
         }
-        for (BerTlv nested : BerCodec.decodeAll(tlv.value())) {
-            byte[] found = findGatewayOrRoseApdu(nested);
-            if (found != null) {
-                return found;
+        try {
+            for (BerTlv nested : BerCodec.decodeAll(tlv.value())) {
+                byte[] found = findGatewayOrRoseApdu(nested);
+                if (found != null) {
+                    return found;
+                }
             }
+        } catch (RuntimeException ex) {
+            return null;
         }
         return null;
     }
@@ -170,6 +180,26 @@ public class P3Asn1GatewayProtocol {
 
     private boolean isGatewayApduTag(int tagNumber) {
         return EXTERNAL_CLAIMED_APDU_VARIANTS.contains(tagNumber);
+    }
+
+    private boolean looksLikeGatewayApdu(BerTlv tlv) {
+        if (tlv.tagClass() != TAG_CLASS_CONTEXT || !tlv.constructed() || !isGatewayApduTag(tlv.tagNumber())) {
+            return false;
+        }
+        try {
+            List<BerTlv> fields = decodeContextFieldList(tlv.value());
+            if (fields.isEmpty()) {
+                return true;
+            }
+            for (BerTlv field : fields) {
+                if (field.tagClass() != TAG_CLASS_CONTEXT) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (RuntimeException ex) {
+            return false;
+        }
     }
 
     private byte[] wrapRtseResponse(int inboundRtseTag, byte[] nestedResponse) {
@@ -352,6 +382,7 @@ public class P3Asn1GatewayProtocol {
     }
 
     private byte[] mapBind(P3GatewaySessionService.SessionState session, byte[] payload) {
+        logger.info("P3 ASN.1 bind candidate payload={}", toHex(payload));
         Map<Integer, String> fields = decodeBindFields(payload);
         logger.info(
             "P3 ASN.1 bind request fields username={} sender={} channel={} password-present={}",
@@ -384,19 +415,7 @@ public class P3Asn1GatewayProtocol {
         String sender = findSenderAddress(atoms);
         String channel = findChannelName(atoms, sender);
 
-        List<String> ordered = atoms.stream()
-            .filter(StringUtils::hasText)
-            .filter(value -> !value.equals(sender))
-            .filter(value -> !value.equals(channel))
-            .toList();
-
         Map<Integer, String> inferred = new HashMap<>();
-        if (!ordered.isEmpty()) {
-            inferred.put(0, ordered.get(0));
-        }
-        if (ordered.size() > 1) {
-            inferred.put(1, ordered.get(1));
-        }
         if (StringUtils.hasText(sender)) {
             inferred.put(2, sender);
         }
@@ -629,8 +648,10 @@ public class P3Asn1GatewayProtocol {
                 continue;
             }
             if (field.constructed()) {
-                BerTlv inner = BerCodec.decodeSingle(field.value());
-                values.put(field.tagNumber(), decodeString(inner));
+                List<BerTlv> nested = decodeContextFieldList(field.value());
+                if (nested.size() == 1) {
+                    values.put(field.tagNumber(), decodeString(nested.get(0)));
+                }
             } else {
                 values.put(field.tagNumber(), new String(field.value(), StandardCharsets.UTF_8));
             }
