@@ -572,23 +572,42 @@ public class P3GatewayServer {
     }
 
     private byte[] extractApplicationPduFromSessionEnvelope(byte[] payload) {
-        int berOffset = findFirstBerOffset(payload);
-        if (berOffset < 0) {
-            logger.debug("P3 gateway could not find BER payload inside session SPDU");
+        if (payload == null || payload.length < 2) {
             return null;
         }
 
-        byte[] candidate = Arrays.copyOfRange(payload, berOffset, payload.length);
-        String nestedKind = classifyRfc1006Payload(candidate);
+        int pos = 1; // skip SPDU code octet
 
-        logger.debug(
-            "P3 gateway extracted BER from session SPDU at offset={} nestedKind={} firstBytes={}",
-            berOffset,
-            nestedKind,
-            toHexPreview(candidate, 64)
-        );
+        while (pos + 1 < payload.length) {
+            int pi = payload[pos] & 0xFF;
+            int li = payload[pos + 1] & 0xFF;
+            pos += 2;
 
-        return extractApplicationPduFromAsn1Envelope(candidate, nestedKind);
+            if (pos + li > payload.length) {
+                logger.debug("P3 gateway session SPDU parameter overruns payload: pi=0x{} li={}", String.format("%02X", pi), li);
+                return null;
+            }
+
+            byte[] paramValue = Arrays.copyOfRange(payload, pos, pos + li);
+            pos += li;
+
+            // Only inspect whole parameter values, never arbitrary offsets.
+            String nestedKind = classifyRfc1006Payload(paramValue);
+            if ("BER_APDU".equals(nestedKind)
+                || "OSI_PRESENTATION_PPDU".equals(nestedKind)
+                || "ACSE_APDU".equals(nestedKind)) {
+                logger.debug(
+                    "P3 gateway session SPDU parameter pi=0x{} contains nested kind={} firstBytes={}",
+                    String.format("%02X", pi),
+                    nestedKind,
+                    toHexPreview(paramValue, 64)
+                );
+                return extractApplicationPduFromAsn1Envelope(paramValue, nestedKind);
+            }
+        }
+
+        logger.debug("P3 gateway did not find application BER inside session SPDU");
+        return null;
     }
 
     private byte[] extractApplicationPduFromAsn1Envelope(byte[] candidate, String payloadKind) {
@@ -645,25 +664,39 @@ public class P3GatewayServer {
     private byte[] unwrapPresentation(byte[] ppdu) {
         try {
             BerTlv root = BerCodec.decodeSingle(ppdu);
-            if (root.tagClass() != TAG_CLASS_UNIVERSAL || !root.constructed()) {
+            if (!root.constructed()) {
                 return null;
             }
+
             List<BerTlv> fields = BerCodec.decodeAll(root.value());
             for (BerTlv field : fields) {
-                if (field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 30) {
-                    byte[] nested = findAnyBerValue(field.value());
-                    if (nested != null) {
-                        return nested;
+                if (field.tagClass() == TAG_CLASS_CONTEXT && (field.tagNumber() == 30 || field.tagNumber() == 0)) {
+                    byte[] value = field.value();
+                    String nestedKind = classifyRfc1006Payload(value);
+                    if ("BER_APDU".equals(nestedKind)
+                        || "OSI_PRESENTATION_PPDU".equals(nestedKind)
+                        || "ACSE_APDU".equals(nestedKind)) {
+                        return value;
                     }
-                }
-                if (field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 0) {
-                    byte[] nested = findAnyBerValue(field.value());
-                    if (nested != null) {
-                        return nested;
+
+                    try {
+                        List<BerTlv> nested = BerCodec.decodeAll(value);
+                        for (BerTlv child : nested) {
+                            byte[] encoded = BerCodec.encode(child);
+                            nestedKind = classifyRfc1006Payload(encoded);
+                            if ("BER_APDU".equals(nestedKind)
+                                || "OSI_PRESENTATION_PPDU".equals(nestedKind)
+                                || "ACSE_APDU".equals(nestedKind)) {
+                                return encoded;
+                            }
+                        }
+                    } catch (RuntimeException ignored) {
+                        // continue
                     }
                 }
             }
-            return findAnyBerValue(root.value());
+
+            return null;
         } catch (RuntimeException ex) {
             logger.debug("Failed to unwrap presentation PPDU: {}", ex.getMessage());
             return null;
@@ -676,14 +709,34 @@ public class P3GatewayServer {
             if (acse.tagClass() != TAG_CLASS_APPLICATION || !acse.constructed()) {
                 return null;
             }
+
             for (BerTlv field : BerCodec.decodeAll(acse.value())) {
                 if (field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 30) {
-                    byte[] nested = findAnyBerValue(field.value());
-                    if (nested != null) {
-                        return nested;
+                    byte[] value = field.value();
+                    String nestedKind = classifyRfc1006Payload(value);
+                    if ("BER_APDU".equals(nestedKind)
+                        || "OSI_PRESENTATION_PPDU".equals(nestedKind)
+                        || "ACSE_APDU".equals(nestedKind)) {
+                        return value;
+                    }
+
+                    try {
+                        List<BerTlv> nested = BerCodec.decodeAll(value);
+                        for (BerTlv child : nested) {
+                            byte[] encoded = BerCodec.encode(child);
+                            nestedKind = classifyRfc1006Payload(encoded);
+                            if ("BER_APDU".equals(nestedKind)
+                                || "OSI_PRESENTATION_PPDU".equals(nestedKind)
+                                || "ACSE_APDU".equals(nestedKind)) {
+                                return encoded;
+                            }
+                        }
+                    } catch (RuntimeException ignored) {
+                        // continue
                     }
                 }
             }
+
             return null;
         } catch (RuntimeException ex) {
             logger.debug("Failed to unwrap ACSE APDU: {}", ex.getMessage());
