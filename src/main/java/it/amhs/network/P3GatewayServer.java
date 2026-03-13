@@ -273,8 +273,7 @@ public class P3GatewayServer {
         }
     }
 
-    private void handleRfc1006Session(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
-        throws Exception {
+    private void handleRfc1006Session(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output) throws Exception {
         ByteArrayOutputStream segmentedPayload = new ByteArrayOutputStream();
         int pduIndex = 0;
         while (true) {
@@ -340,6 +339,11 @@ public class P3GatewayServer {
             );
 
             byte[] applicationPdu = extractApplicationPduFromRfc1006Payload(pdu, payloadKind);
+            logger.info(
+            	    "P3 gateway delivering application PDU to ASN.1 handler len={} first-bytes={}",
+            	    applicationPdu.length,
+            	    toHexPreview(applicationPdu, 64)
+            	);
             if (applicationPdu == null) {
                 logger.warn(
                     "P3 gateway connection #{} RFC1006 payload #{} kind={} is not supported by the ASN.1 gateway handler (expected BER APDU or OSI Session/Presentation/ACSE envelope); closing connection",
@@ -591,22 +595,32 @@ public class P3GatewayServer {
             byte[] paramValue = Arrays.copyOfRange(payload, pos, pos + li);
             pos += li;
 
-            // Only inspect whole parameter values, never arbitrary offsets.
-            String nestedKind = classifyRfc1006Payload(paramValue);
-            if ("BER_APDU".equals(nestedKind)
-                || "OSI_PRESENTATION_PPDU".equals(nestedKind)
-                || "ACSE_APDU".equals(nestedKind)) {
-                logger.debug(
-                    "P3 gateway session SPDU parameter pi=0x{} contains nested kind={} firstBytes={}",
-                    String.format("%02X", pi),
-                    nestedKind,
-                    toHexPreview(paramValue, 64)
-                );
-                return extractApplicationPduFromAsn1Envelope(paramValue, nestedKind);
+            try {
+                BerTlv tlv = BerCodec.decodeSingle(paramValue);
+
+                // Reject tiny primitive BER values like BOOLEAN / ENUMERATED / INTEGER.
+                if (!tlv.constructed()) {
+                    continue;
+                }
+
+                String nestedKind = classifyRfc1006Payload(paramValue);
+                if ("OSI_PRESENTATION_PPDU".equals(nestedKind)
+                    || "ACSE_APDU".equals(nestedKind)
+                    || "BER_APDU".equals(nestedKind)) {
+                    logger.debug(
+                        "P3 gateway session SPDU parameter pi=0x{} contains nested kind={} firstBytes={}",
+                        String.format("%02X", pi),
+                        nestedKind,
+                        toHexPreview(paramValue, 64)
+                    );
+                    return extractApplicationPduFromAsn1Envelope(paramValue, nestedKind);
+                }
+            } catch (RuntimeException ignored) {
+                // not a BER value we care about
             }
         }
 
-        logger.debug("P3 gateway did not find application BER inside session SPDU");
+        logger.debug("P3 gateway did not find constructed application BER inside session SPDU");
         return null;
     }
 
