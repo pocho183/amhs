@@ -256,6 +256,11 @@ public class P3GatewayServer {
                 return;
             }
 
+            logger.info(
+            	    "P3 gateway delivering application PDU to ASN.1 handler len={} first-bytes={}",
+            	    applicationPdu.length,
+            	    toHexPreview(applicationPdu, 64)
+            	);
             byte[] response = asn1GatewayProtocol.handle(session, applicationPdu);
             byte[] wrappedResponse = rewrapApplicationPduForRfc1006Response(response, payloadKind, pdu);
             output.write(wrappedResponse);
@@ -557,36 +562,33 @@ public class P3GatewayServer {
         if (payload == null || payload.length == 0) {
             return null;
         }
-        if ("BER_APDU".equals(payloadKind)) {
-            return payload;
-        }
 
-        if ("OSI_SESSION_SPDU".equals(payloadKind)) {
-            return extractApplicationPduFromSessionEnvelope(payload);
-        }
-
-        return extractApplicationPduFromAsn1Envelope(payload, payloadKind);
+        return switch (payloadKind) {
+            case "BER_APDU" -> payload;
+            case "OSI_SESSION_SPDU" -> extractApplicationPduFromSessionEnvelope(payload);
+            case "OSI_PRESENTATION_PPDU", "ACSE_APDU" -> extractApplicationPduFromAsn1Envelope(payload, payloadKind);
+            default -> null;
+        };
     }
 
     private byte[] extractApplicationPduFromSessionEnvelope(byte[] payload) {
-        for (int i = 0; i < payload.length - 1; i++) {
-            byte[] slice = Arrays.copyOfRange(payload, i, payload.length);
-            if (!looksLikeBerApdu(slice)) {
-                continue;
-            }
-            try {
-                BerTlv tlv = BerCodec.decodeSingle(slice);
-                int totalLength = tlv.headerLength() + tlv.length();
-                byte[] candidate = Arrays.copyOfRange(slice, 0, totalLength);
-                byte[] appPdu = extractApplicationPduFromAsn1Envelope(candidate, classifyRfc1006Payload(candidate));
-                if (appPdu != null) {
-                    return appPdu;
-                }
-            } catch (RuntimeException ignored) {
-                // continue scanning for the first valid BER envelope that yields a gateway APDU
-            }
+        int berOffset = findFirstBerOffset(payload);
+        if (berOffset < 0) {
+            logger.debug("P3 gateway could not find BER payload inside session SPDU");
+            return null;
         }
-        return null;
+
+        byte[] candidate = Arrays.copyOfRange(payload, berOffset, payload.length);
+        String nestedKind = classifyRfc1006Payload(candidate);
+
+        logger.debug(
+            "P3 gateway extracted BER from session SPDU at offset={} nestedKind={} firstBytes={}",
+            berOffset,
+            nestedKind,
+            toHexPreview(candidate, 64)
+        );
+
+        return extractApplicationPduFromAsn1Envelope(candidate, nestedKind);
     }
 
     private byte[] extractApplicationPduFromAsn1Envelope(byte[] candidate, String payloadKind) {
@@ -594,31 +596,50 @@ public class P3GatewayServer {
             return null;
         }
 
-        byte[] original = candidate;
+        logger.debug(
+            "P3 gateway ASN.1 envelope unwrap start kind={} firstBytes={}",
+            payloadKind,
+            toHexPreview(candidate, 64)
+        );
+
+        if ("BER_APDU".equals(payloadKind)) {
+            return candidate;
+        }
 
         if ("OSI_PRESENTATION_PPDU".equals(payloadKind)) {
-            candidate = unwrapPresentation(candidate);
-            if (candidate == null) {
+            byte[] unwrapped = unwrapPresentation(candidate);
+            if (unwrapped == null) {
+                logger.debug("P3 gateway failed to unwrap presentation PPDU");
                 return null;
             }
+
+            String nestedKind = classifyRfc1006Payload(unwrapped);
+            logger.debug(
+                "P3 gateway unwrapped presentation PPDU nestedKind={} firstBytes={}",
+                nestedKind,
+                toHexPreview(unwrapped, 64)
+            );
+            return extractApplicationPduFromAsn1Envelope(unwrapped, nestedKind);
         }
 
         if ("ACSE_APDU".equals(payloadKind)
-            || (candidate.length > 0 && (candidate[0] & 0xFF) == 0x60)
-            || (candidate.length > 0 && (candidate[0] & 0xFF) == 0x61)) {
+            || (candidate.length > 0 && ((candidate[0] & 0xFF) == 0x60 || (candidate[0] & 0xFF) == 0x61))) {
             byte[] acseUserData = unwrapAcse(candidate);
             if (acseUserData == null) {
-                return findGatewayApdu(original);
+                logger.debug("P3 gateway ACSE unwrap yielded no user-data; passing ACSE APDU through");
+                return candidate;
             }
-            byte[] appPdu = findGatewayApdu(acseUserData);
-            return appPdu != null ? appPdu : acseUserData;
+
+            String nestedKind = classifyRfc1006Payload(acseUserData);
+            logger.debug(
+                "P3 gateway unwrapped ACSE user-data nestedKind={} firstBytes={}",
+                nestedKind,
+                toHexPreview(acseUserData, 64)
+            );
+            return extractApplicationPduFromAsn1Envelope(acseUserData, nestedKind);
         }
 
-        byte[] appPdu = findGatewayApdu(candidate);
-        if (appPdu != null) {
-            return appPdu;
-        }
-        return findGatewayApdu(original);
+        return candidate;
     }
 
     private byte[] unwrapPresentation(byte[] ppdu) {

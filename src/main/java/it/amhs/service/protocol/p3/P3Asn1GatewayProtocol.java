@@ -160,15 +160,30 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] findGatewayOrRoseApdu(BerTlv tlv) {
         if (isRoseInvoke(tlv)) {
+            logger.info(
+                "P3 ASN.1 accepted ROSE invoke candidate tagClass={} tagNumber={} len={}",
+                tlv.tagClass(),
+                tlv.tagNumber(),
+                tlv.value().length
+            );
             return BerCodec.encode(tlv);
         }
-        if (looksLikeGatewayApdu(tlv)) {
-            logger.info("P3 ASN.1 accepted gateway candidate tag={} hex={}", tlv.tagNumber(), toHex(BerCodec.encode(tlv)));
+
+        boolean gatewayCandidate = looksLikeGatewayApdu(tlv);
+        if (gatewayCandidate) {
+            logger.info(
+                "P3 ASN.1 accepted gateway candidate tag={} len={} hex={}",
+                tlv.tagNumber(),
+                tlv.value().length,
+                toHex(BerCodec.encode(tlv))
+            );
             return BerCodec.encode(tlv);
         }
+
         if (!tlv.constructed()) {
             return null;
         }
+
         try {
             for (BerTlv nested : BerCodec.decodeAll(tlv.value())) {
                 byte[] found = findGatewayOrRoseApdu(nested);
@@ -177,9 +192,115 @@ public class P3Asn1GatewayProtocol {
                 }
             }
         } catch (RuntimeException ex) {
+            logger.debug(
+                "P3 ASN.1 nested decode skipped for tagClass={} tagNumber={} reason={}",
+                tlv.tagClass(),
+                tlv.tagNumber(),
+                ex.getMessage()
+            );
             return null;
         }
+
         return null;
+    }
+
+    private boolean looksLikeGatewayApdu(BerTlv tlv) {
+        if (tlv.tagClass() != TAG_CLASS_CONTEXT || !tlv.constructed() || !isGatewayApduTag(tlv.tagNumber())) {
+            return false;
+        }
+
+        if (tlv.value().length == 0) {
+            return tlv.tagNumber() == APDU_RELEASE_REQUEST;
+        }
+
+        final List<BerTlv> fields;
+        try {
+            fields = decodeContextFieldList(tlv.value());
+        } catch (RuntimeException ex) {
+            logger.debug(
+                "P3 ASN.1 gateway candidate rejected tag={} len={} reason=field-decode-failed:{}",
+                tlv.tagNumber(),
+                tlv.value().length,
+                ex.getMessage()
+            );
+            return false;
+        }
+
+        if (fields.isEmpty()) {
+            logger.debug(
+                "P3 ASN.1 gateway candidate rejected tag={} len={} reason=no-fields",
+                tlv.tagNumber(),
+                tlv.value().length
+            );
+            return false;
+        }
+
+        Set<Integer> seenTags = new java.util.HashSet<>();
+        boolean hasConstructedField = false;
+
+        for (BerTlv field : fields) {
+            if (field.tagClass() != TAG_CLASS_CONTEXT) {
+                logger.debug(
+                    "P3 ASN.1 gateway candidate rejected tag={} reason=non-context-field fieldTagClass={} fieldTagNumber={}",
+                    tlv.tagNumber(),
+                    field.tagClass(),
+                    field.tagNumber()
+                );
+                return false;
+            }
+
+            if (!isLikelyScalarField(field)) {
+                logger.debug(
+                    "P3 ASN.1 gateway candidate rejected tag={} reason=non-scalar-field fieldTagNumber={}",
+                    tlv.tagNumber(),
+                    field.tagNumber()
+                );
+                return false;
+            }
+
+            if (field.constructed()) {
+                hasConstructedField = true;
+            }
+            seenTags.add(field.tagNumber());
+        }
+
+        boolean accepted = switch (tlv.tagNumber()) {
+            case APDU_BIND_REQUEST ->
+                // Reject tiny fake nodes like A0 03 80 01 01.
+                fields.size() >= 2
+                    && hasConstructedField
+                    && REQUEST_BIND_FIELD_TAGS.containsAll(seenTags);
+
+            case APDU_SUBMIT_REQUEST, APDU_STATUS_REQUEST, APDU_REPORT_REQUEST, APDU_READ_REQUEST, APDU_ERROR ->
+                !seenTags.isEmpty()
+                    && REQUEST_COMMON_FIELD_TAGS.containsAll(seenTags);
+
+            case APDU_RELEASE_REQUEST -> true;
+
+            default -> false;
+        };
+
+        if (!accepted) {
+            logger.debug(
+                "P3 ASN.1 gateway candidate rejected tag={} len={} fieldCount={} seenTags={} hasConstructedField={}",
+                tlv.tagNumber(),
+                tlv.value().length,
+                fields.size(),
+                seenTags,
+                hasConstructedField
+            );
+        } else {
+            logger.debug(
+                "P3 ASN.1 gateway candidate matched tag={} len={} fieldCount={} seenTags={} hasConstructedField={}",
+                tlv.tagNumber(),
+                tlv.value().length,
+                fields.size(),
+                seenTags,
+                hasConstructedField
+            );
+        }
+
+        return accepted;
     }
 
     static Set<Integer> externalClaimedApduVariants() {
@@ -188,42 +309,6 @@ public class P3Asn1GatewayProtocol {
 
     private boolean isGatewayApduTag(int tagNumber) {
         return EXTERNAL_CLAIMED_APDU_VARIANTS.contains(tagNumber);
-    }
-
-    private boolean looksLikeGatewayApdu(BerTlv tlv) {
-        if (tlv.tagClass() != TAG_CLASS_CONTEXT || !tlv.constructed() || !isGatewayApduTag(tlv.tagNumber())) {
-            return false;
-        }
-        if (tlv.value().length == 0) {
-            return tlv.tagNumber() == APDU_RELEASE_REQUEST;
-        }
-        try {
-            List<BerTlv> fields = decodeContextFieldList(tlv.value());
-            if (fields.isEmpty()) {
-                return false;
-            }
-
-            Set<Integer> seenTags = new java.util.HashSet<>();
-            for (BerTlv field : fields) {
-                if (field.tagClass() != TAG_CLASS_CONTEXT) {
-                    return false;
-                }
-                if (!isLikelyScalarField(field)) {
-                    return false;
-                }
-                seenTags.add(field.tagNumber());
-            }
-
-            return switch (tlv.tagNumber()) {
-                case APDU_BIND_REQUEST -> !seenTags.isEmpty() && REQUEST_BIND_FIELD_TAGS.containsAll(seenTags);
-                case APDU_SUBMIT_REQUEST, APDU_STATUS_REQUEST, APDU_REPORT_REQUEST, APDU_READ_REQUEST, APDU_ERROR ->
-                    !seenTags.isEmpty() && REQUEST_COMMON_FIELD_TAGS.containsAll(seenTags);
-                case APDU_RELEASE_REQUEST -> true;
-                default -> false;
-            };
-        } catch (RuntimeException ex) {
-            return false;
-        }
     }
     
     private boolean isLikelyScalarField(BerTlv field) {
