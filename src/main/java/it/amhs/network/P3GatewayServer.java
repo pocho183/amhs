@@ -11,9 +11,10 @@ import java.io.PrintWriter;
 import java.io.PushbackInputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
-import java.net.SocketException;
 import java.net.Socket;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -30,29 +31,33 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import it.amhs.asn1.BerCodec;
+import it.amhs.asn1.BerTlv;
 import it.amhs.service.protocol.p3.P3Asn1GatewayProtocol;
 import it.amhs.service.protocol.p3.P3GatewaySessionService;
 import it.amhs.service.protocol.rfc1006.CotpConnectionTpdu;
-import it.amhs.asn1.BerCodec;
-import it.amhs.asn1.BerTlv;
 
 @Component
 @ConditionalOnProperty(prefix = "amhs.p3.gateway", name = "enabled", havingValue = "true")
 public class P3GatewayServer {
 
     private static final Logger logger = LoggerFactory.getLogger(P3GatewayServer.class);
+
     private static final byte TPKT_VERSION = 0x03;
     private static final byte TPKT_RESERVED = 0x00;
     private static final int MAX_TPKT_LENGTH = 65_535;
+
     private static final byte COTP_PDU_CR = (byte) 0xE0;
     private static final byte COTP_PDU_CC = (byte) 0xD0;
     private static final byte COTP_PDU_DT = (byte) 0xF0;
     private static final byte COTP_PDU_DR = (byte) 0x80;
     private static final byte COTP_PDU_DC = (byte) 0xC0;
     private static final byte[] COTP_DT_HEADER = new byte[] { 0x02, (byte) 0xF0 };
-    private static final int TAG_CLASS_CONTEXT = 2;
+
     private static final int TAG_CLASS_UNIVERSAL = 0;
     private static final int TAG_CLASS_APPLICATION = 1;
+    private static final int TAG_CLASS_CONTEXT = 2;
+
     private static final int GATEWAY_APDU_MIN_TAG = 0;
     private static final int GATEWAY_APDU_MAX_TAG = 12;
 
@@ -86,6 +91,7 @@ public class P3GatewayServer {
         if (maxSessions < 1) {
             throw new IllegalArgumentException("amhs.p3.gateway.max-sessions must be >= 1");
         }
+
         this.host = host;
         this.port = port;
         this.tlsEnabled = tlsEnabled;
@@ -103,7 +109,8 @@ public class P3GatewayServer {
 
     public void start() throws Exception {
         if (tlsEnabled) {
-            SSLServerSocket server = (SSLServerSocket) tls.getServerSocketFactory().createServerSocket(port, 50, InetAddress.getByName(host));
+            SSLServerSocket server = (SSLServerSocket) tls.getServerSocketFactory()
+                .createServerSocket(port, 50, InetAddress.getByName(host));
             server.setEnabledProtocols(new String[] { "TLSv1.3", "TLSv1.2" });
             server.setNeedClientAuth(needClientAuth);
             logger.info("AMHS P3 gateway TLS server listening on {}:{}", host, port);
@@ -120,23 +127,31 @@ public class P3GatewayServer {
         while (true) {
             Socket socket = server.accept();
             long connectionId = connectionSequence.incrementAndGet();
-            logger.info("P3 gateway connection #{} from {}:{} to local-port={}", connectionId, socket.getInetAddress(), socket.getPort(), socket.getLocalPort());
+            logger.info(
+                "P3 gateway connection #{} from {}:{} to local-port={}",
+                connectionId,
+                socket.getInetAddress(),
+                socket.getPort(),
+                socket.getLocalPort()
+            );
             clientExecutor.execute(() -> handleClient(connectionId, socket));
         }
     }
 
     private void handleClient(long connectionId, Socket socket) {
-        try (socket;
-             PushbackInputStream input = new PushbackInputStream(socket.getInputStream(), 16);
-             OutputStream output = socket.getOutputStream()) {
+        try (
+            socket;
+            PushbackInputStream input = new PushbackInputStream(socket.getInputStream(), 16);
+            OutputStream output = socket.getOutputStream()
+        ) {
             P3GatewaySessionService.SessionState session = sessionService.newSession();
+
             byte[] preview = input.readNBytes(8);
             if (preview.length == 0) {
                 return;
             }
             input.unread(preview);
 
-            int first = preview[0] & 0xFF;
             ProtocolKind protocolKind = detectProtocol(preview);
             logger.info(
                 "P3 gateway connection #{} protocol-detect kind={} first-octets={}",
@@ -198,17 +213,23 @@ public class P3GatewayServer {
     }
 
     private boolean isExpectedDisconnect(Exception ex) {
-        return ex instanceof EOFException
-            || ex instanceof SocketException;
+        return ex instanceof EOFException || ex instanceof SocketException;
     }
 
-    private void handleTextSession(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
-        throws Exception {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
-             PrintWriter writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8)), true)) {
+    private void handleTextSession(
+        long connectionId,
+        P3GatewaySessionService.SessionState session,
+        PushbackInputStream input,
+        OutputStream output
+    ) throws Exception {
+        try (
+            BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
+            PrintWriter writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8)), true)
+        ) {
             if (textWelcomeEnabled) {
                 writer.println("OK code=gateway-ready");
             }
+
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) {
@@ -224,8 +245,12 @@ public class P3GatewayServer {
         }
     }
 
-    private void handleAsn1Session(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output)
-        throws Exception {
+    private void handleAsn1Session(
+        long connectionId,
+        P3GatewaySessionService.SessionState session,
+        PushbackInputStream input,
+        OutputStream output
+    ) throws Exception {
         int pduIndex = 0;
         while (true) {
             byte[] pdu = asn1GatewayProtocol.readPdu(input);
@@ -233,6 +258,7 @@ public class P3GatewayServer {
                 logger.info("P3 gateway connection #{} BER session closed by peer after {} APDU(s)", connectionId, pduIndex);
                 return;
             }
+
             pduIndex++;
             String payloadKind = classifyRfc1006Payload(pdu);
             logger.info(
@@ -257,14 +283,16 @@ public class P3GatewayServer {
             }
 
             logger.info(
-            	    "P3 gateway delivering application PDU to ASN.1 handler len={} first-bytes={}",
-            	    applicationPdu.length,
-            	    toHexPreview(applicationPdu, 64)
-            	);
+                "P3 gateway delivering application PDU to ASN.1 handler len={} first-bytes={}",
+                applicationPdu.length,
+                toHexPreview(applicationPdu, 64)
+            );
+
             byte[] response = asn1GatewayProtocol.handle(session, applicationPdu);
             byte[] wrappedResponse = rewrapApplicationPduForRfc1006Response(response, payloadKind, pdu);
             output.write(wrappedResponse);
             output.flush();
+
             logger.debug("P3 gateway connection #{} BER APDU #{} response-len={}", connectionId, pduIndex, response.length);
             if (session.isClosed()) {
                 logger.info("P3 gateway connection #{} BER session closed by release after {} APDU(s)", connectionId, pduIndex);
@@ -273,9 +301,15 @@ public class P3GatewayServer {
         }
     }
 
-    private void handleRfc1006Session(long connectionId, P3GatewaySessionService.SessionState session, PushbackInputStream input, OutputStream output) throws Exception {
+    private void handleRfc1006Session(
+        long connectionId,
+        P3GatewaySessionService.SessionState session,
+        PushbackInputStream input,
+        OutputStream output
+    ) throws Exception {
         ByteArrayOutputStream segmentedPayload = new ByteArrayOutputStream();
         int pduIndex = 0;
+
         while (true) {
             CotpFrame frame = readRfc1006Frame(input);
             if (frame == null) {
@@ -300,7 +334,7 @@ public class P3GatewayServer {
             }
 
             if (frame.type == COTP_PDU_DR) {
-                sendTpktFrame(output, new byte[] {0x06, COTP_PDU_DC, 0x00, 0x00, 0x00, 0x00, 0x00});
+                sendTpktFrame(output, new byte[] { 0x06, COTP_PDU_DC, 0x00, 0x00, 0x00, 0x00, 0x00 });
                 output.flush();
                 logger.info("P3 gateway connection #{} RFC1006 disconnect requested by peer", connectionId);
                 return;
@@ -339,11 +373,6 @@ public class P3GatewayServer {
             );
 
             byte[] applicationPdu = extractApplicationPduFromRfc1006Payload(pdu, payloadKind);
-            logger.info(
-            	    "P3 gateway delivering application PDU to ASN.1 handler len={} first-bytes={}",
-            	    applicationPdu.length,
-            	    toHexPreview(applicationPdu, 64)
-            	);
             if (applicationPdu == null) {
                 logger.warn(
                     "P3 gateway connection #{} RFC1006 payload #{} kind={} is not supported by the ASN.1 gateway handler (expected BER APDU or OSI Session/Presentation/ACSE envelope); closing connection",
@@ -355,9 +384,16 @@ public class P3GatewayServer {
                 return;
             }
 
+            logger.info(
+                "P3 gateway delivering application PDU to ASN.1 handler len={} first-bytes={}",
+                applicationPdu.length,
+                toHexPreview(applicationPdu, 64)
+            );
+
             byte[] response = asn1GatewayProtocol.handle(session, applicationPdu);
             byte[] wrappedResponse = rewrapApplicationPduForRfc1006Response(response, payloadKind, pdu);
             sendRfc1006Dt(output, wrappedResponse);
+
             logger.debug("P3 gateway connection #{} RFC1006 payload #{} response-len={}", connectionId, pduIndex, response.length);
             if (session.isClosed()) {
                 logger.info("P3 gateway connection #{} RFC1006 session closed by release after {} payload(s)", connectionId, pduIndex);
@@ -371,6 +407,7 @@ public class P3GatewayServer {
         if (version < 0) {
             return null;
         }
+
         int reserved = input.read();
         int lenHi = input.read();
         int lenLo = input.read();
@@ -390,6 +427,7 @@ public class P3GatewayServer {
         if (cotpTpdu.length != tpktLength - 4) {
             throw new EOFException("Truncated TPKT payload");
         }
+
         int lengthIndicator = cotpTpdu[0] & 0xFF;
         if (lengthIndicator + 1 > cotpTpdu.length || lengthIndicator < 1) {
             throw new IllegalArgumentException("Invalid COTP length indicator: " + lengthIndicator);
@@ -402,9 +440,11 @@ public class P3GatewayServer {
         if (type != COTP_PDU_DT) {
             return new CotpFrame(type, true, new byte[0], cotpTpdu);
         }
+
         if (lengthIndicator < 2 || cotpTpdu[1] != COTP_DT_HEADER[1]) {
             throw new IllegalArgumentException("Unsupported COTP DT header");
         }
+
         boolean eot = (cotpTpdu[2] & 0x80) != 0;
         int dataOffset = lengthIndicator + 1;
         byte[] userData = new byte[cotpTpdu.length - dataOffset];
@@ -440,7 +480,7 @@ public class P3GatewayServer {
     }
 
     private void sendRfc1006Disconnect(OutputStream output) throws Exception {
-        sendTpktFrame(output, new byte[] {0x06, COTP_PDU_DR, 0x00, 0x00, 0x00, 0x00, 0x00});
+        sendTpktFrame(output, new byte[] { 0x06, COTP_PDU_DR, 0x00, 0x00, 0x00, 0x00, 0x00 });
         output.flush();
     }
 
@@ -466,7 +506,7 @@ public class P3GatewayServer {
     }
 
     private boolean looksLikeBerApdu(byte[] preview) {
-        if (preview.length < 2) {
+        if (preview == null || preview.length < 2) {
             return false;
         }
 
@@ -475,13 +515,13 @@ public class P3GatewayServer {
             return false;
         }
 
-        int lengthOctet = preview[1] & 0xFF;
-        if ((lengthOctet & 0x80) == 0) {
-            return true;
+        try {
+            BerTlv tlv = BerCodec.decodeSingle(preview);
+            int totalLength = tlv.headerLength() + tlv.length();
+            return totalLength > 0 && totalLength <= preview.length;
+        } catch (RuntimeException ex) {
+            return false;
         }
-
-        int lengthByteCount = lengthOctet & 0x7F;
-        return lengthByteCount > 0 && lengthByteCount <= 4 && preview.length >= (2 + lengthByteCount);
     }
 
     private boolean looksLikeRfc1006Tpkt(byte[] preview) {
@@ -536,30 +576,34 @@ public class P3GatewayServer {
     }
 
     private String classifyRfc1006Payload(byte[] payload) {
-        if (payload.length == 0) {
+        if (payload == null || payload.length == 0) {
             return "EMPTY";
         }
+
+        try {
+            BerTlv tlv = BerCodec.decodeSingle(payload);
+
+            if (tlv.tagClass() == TAG_CLASS_APPLICATION && tlv.constructed()
+                && (tlv.tagNumber() == 0 || tlv.tagNumber() == 1 || tlv.tagNumber() == 2 || tlv.tagNumber() == 4)) {
+                return "ACSE_APDU";
+            }
+
+            if (tlv.tagClass() == TAG_CLASS_UNIVERSAL && tlv.constructed() && tlv.tagNumber() == 17) {
+                return "OSI_PRESENTATION_PPDU";
+            }
+
+            if (looksLikeBerApdu(payload)) {
+                return "BER_APDU";
+            }
+        } catch (RuntimeException ignored) {
+            // fall through
+        }
+
         int firstOctet = payload[0] & 0xFF;
         if (firstOctet == 0x0D || firstOctet == 0x01 || firstOctet == 0x0E) {
             return "OSI_SESSION_SPDU";
         }
-        if (firstOctet == 0x31 || firstOctet == 0x61 || firstOctet == 0x62) {
-            return "OSI_PRESENTATION_PPDU";
-        }
-        if (firstOctet == 0x60 || firstOctet == 0x61 || firstOctet == 0x64) {
-            return "ACSE_APDU";
-        }
-        if (looksLikeBerApdu(payload)) {
-            return "BER_APDU";
-        }
         return "UNKNOWN_BINARY";
-    }
-
-    private boolean isRfc1006PayloadSupportedByAsn1(String payloadKind) {
-        return "BER_APDU".equals(payloadKind)
-            || "OSI_SESSION_SPDU".equals(payloadKind)
-            || "OSI_PRESENTATION_PPDU".equals(payloadKind)
-            || "ACSE_APDU".equals(payloadKind);
     }
 
     private byte[] extractApplicationPduFromRfc1006Payload(byte[] payload, String payloadKind) {
@@ -576,52 +620,192 @@ public class P3GatewayServer {
     }
 
     private byte[] extractApplicationPduFromSessionEnvelope(byte[] payload) {
-        if (payload == null || payload.length < 2) {
+        if (payload == null || payload.length < 3) {
             return null;
         }
 
-        int pos = 1; // skip SPDU code octet
+        List<BerCandidate> candidates = new ArrayList<>();
 
-        while (pos + 1 < payload.length) {
-            int pi = payload[pos] & 0xFF;
-            int li = payload[pos + 1] & 0xFF;
-            pos += 2;
+        int index = 1;
+        while (index + 1 < payload.length) {
+            int pi = payload[index] & 0xFF;
+            int li = payload[index + 1] & 0xFF;
+            index += 2;
 
-            if (pos + li > payload.length) {
-                logger.debug("P3 gateway session SPDU parameter overruns payload: pi=0x{} li={}", String.format("%02X", pi), li);
-                return null;
+            if (index + li > payload.length) {
+                break;
             }
 
-            byte[] paramValue = Arrays.copyOfRange(payload, pos, pos + li);
-            pos += li;
+            byte[] value = Arrays.copyOfRange(payload, index, index + li);
+            index += li;
 
-            try {
-                BerTlv tlv = BerCodec.decodeSingle(paramValue);
+            logger.info(
+                "P3 gateway session parse pi=0x{} li={} value-first-bytes={}",
+                String.format("%02X", pi),
+                li,
+                toHexPreview(value, 32)
+            );
 
-                // Reject tiny primitive BER values like BOOLEAN / ENUMERATED / INTEGER.
-                if (!tlv.constructed()) {
-                    continue;
-                }
-
-                String nestedKind = classifyRfc1006Payload(paramValue);
-                if ("OSI_PRESENTATION_PPDU".equals(nestedKind)
-                    || "ACSE_APDU".equals(nestedKind)
-                    || "BER_APDU".equals(nestedKind)) {
-                    logger.debug(
-                        "P3 gateway session SPDU parameter pi=0x{} contains nested kind={} firstBytes={}",
-                        String.format("%02X", pi),
-                        nestedKind,
-                        toHexPreview(paramValue, 64)
-                    );
-                    return extractApplicationPduFromAsn1Envelope(paramValue, nestedKind);
-                }
-            } catch (RuntimeException ignored) {
-                // not a BER value we care about
+            if (looksLikeBerContainerParameter(pi, value)) {
+                collectBerCandidatesFromParameterValue(pi, value, candidates);
             }
         }
 
-        logger.debug("P3 gateway did not find constructed application BER inside session SPDU");
-        return null;
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        BerCandidate best = candidates.stream()
+            .max((a, b) -> Integer.compare(a.score(), b.score()))
+            .orElse(null);
+
+        if (best == null || best.score() <= 0) {
+            return null;
+        }
+
+        logger.info(
+            "P3 gateway session selected BER payload offset={} kind={} score={} firstBytes={}",
+            best.offset(),
+            best.kind(),
+            best.score(),
+            toHexPreview(best.bytes(), 64)
+        );
+
+        byte[] extracted = extractApplicationPduFromAsn1Envelope(best.bytes(), best.kind());
+        if (extracted != null) {
+            logger.info(
+                "P3 gateway session extracted inner application payload len={} first-bytes={}",
+                extracted.length,
+                toHexPreview(extracted, 64)
+            );
+            return extracted;
+        }
+
+        return best.bytes();
+    }
+
+    private boolean looksLikeBerContainerParameter(int parameterId, byte[] value) {
+        if (value == null || value.length < 2) {
+            return false;
+        }
+
+        if (parameterId == 0xC0 || parameterId == 0xC1 || parameterId == 0xC2) {
+            return true;
+        }
+
+        return looksLikeBerApdu(value);
+    }
+
+    private void collectBerCandidatesFromParameterValue(int parameterId, byte[] value, List<BerCandidate> candidates) {
+        if (value == null || value.length < 2) {
+            return;
+        }
+
+        for (int offset = 0; offset < value.length - 1; offset++) {
+            byte[] slice = Arrays.copyOfRange(value, offset, value.length);
+            if (!looksLikeBerApdu(slice)) {
+                continue;
+            }
+
+            try {
+                BerTlv tlv = BerCodec.decodeSingle(slice);
+                int totalLength = tlv.headerLength() + tlv.length();
+                if (totalLength <= 0 || totalLength > slice.length) {
+                    continue;
+                }
+
+                byte[] candidateBytes = Arrays.copyOfRange(slice, 0, totalLength);
+                if (looksLikePrintableText(candidateBytes)) {
+                    continue;
+                }
+
+                String kind = classifyRfc1006Payload(candidateBytes);
+                int score = scoreSessionBerCandidate(tlv, kind, candidateBytes);
+                if (score <= 0) {
+                    continue;
+                }
+
+                logger.info(
+                    "P3 gateway session BER candidate offset={} tagClass={} constructed={} tagNumber={} len={} kind={} score={} firstBytes={}",
+                    offset,
+                    tlv.tagClass(),
+                    tlv.constructed(),
+                    tlv.tagNumber(),
+                    tlv.length(),
+                    kind,
+                    score,
+                    toHexPreview(candidateBytes, 96)
+                );
+
+                candidates.add(new BerCandidate(offset, candidateBytes, kind, score));
+            } catch (RuntimeException ignored) {
+                // not BER at this offset
+            }
+        }
+    }
+
+    private int scoreSessionBerCandidate(BerTlv tlv, String kind, byte[] encoded) {
+        if (tlv == null || encoded == null || encoded.length == 0) {
+            return 0;
+        }
+        if (looksLikePrintableText(encoded)) {
+            return 0;
+        }
+
+        if (tlv.tagClass() == TAG_CLASS_APPLICATION && tlv.constructed()
+            && (tlv.tagNumber() == 0 || tlv.tagNumber() == 1)) {
+            return 1000;
+        }
+
+        if (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() == 30) {
+            return 700;
+        }
+
+        if (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed() && tlv.tagNumber() == 0) {
+            return 500;
+        }
+
+        if ("OSI_PRESENTATION_PPDU".equals(kind)
+            && tlv.constructed()
+            && tlv.tagClass() == TAG_CLASS_UNIVERSAL
+            && hasNestedBerStructure(tlv)) {
+            return 300;
+        }
+
+        if ("BER_APDU".equals(kind) && tlv.constructed() && hasNestedBerStructure(tlv)) {
+            return 100;
+        }
+
+        return 0;
+    }
+
+    private boolean hasNestedBerStructure(BerTlv tlv) {
+        if (tlv == null || !tlv.constructed()) {
+            return false;
+        }
+        try {
+            List<BerTlv> nested = BerCodec.decodeAll(tlv.value());
+            return !nested.isEmpty();
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private boolean looksLikePrintableText(byte[] value) {
+        if (value == null || value.length == 0) {
+            return false;
+        }
+
+        int limit = Math.min(value.length, 24);
+        int printable = 0;
+        for (int i = 0; i < limit; i++) {
+            int ch = value[i] & 0xFF;
+            if (ch >= 0x20 && ch <= 0x7E) {
+                printable++;
+            }
+        }
+
+        return printable >= (limit * 8 / 10);
     }
 
     private byte[] extractApplicationPduFromAsn1Envelope(byte[] candidate, String payloadKind) {
@@ -629,50 +813,59 @@ public class P3GatewayServer {
             return null;
         }
 
-        logger.debug(
-            "P3 gateway ASN.1 envelope unwrap start kind={} firstBytes={}",
-            payloadKind,
-            toHexPreview(candidate, 64)
-        );
+        byte[] current = candidate;
+        String currentKind = payloadKind;
 
-        if ("BER_APDU".equals(payloadKind)) {
-            return candidate;
+        if ("OSI_PRESENTATION_PPDU".equals(currentKind)) {
+            current = unwrapPresentation(current);
+            if (current == null) {
+                return null;
+            }
+            currentKind = classifyRfc1006Payload(current);
         }
 
-        if ("OSI_PRESENTATION_PPDU".equals(payloadKind)) {
-            byte[] unwrapped = unwrapPresentation(candidate);
-            if (unwrapped == null) {
-                logger.debug("P3 gateway failed to unwrap presentation PPDU");
+        if ("ACSE_APDU".equals(currentKind)
+            || startsWithApplicationTag(current, 0)
+            || startsWithApplicationTag(current, 1)) {
+
+            byte[] acseUserData = unwrapAcse(current);
+            if (acseUserData == null) {
                 return null;
             }
 
-            String nestedKind = classifyRfc1006Payload(unwrapped);
-            logger.debug(
-                "P3 gateway unwrapped presentation PPDU nestedKind={} firstBytes={}",
-                nestedKind,
-                toHexPreview(unwrapped, 64)
-            );
-            return extractApplicationPduFromAsn1Envelope(unwrapped, nestedKind);
-        }
-
-        if ("ACSE_APDU".equals(payloadKind)
-            || (candidate.length > 0 && ((candidate[0] & 0xFF) == 0x60 || (candidate[0] & 0xFF) == 0x61))) {
-            byte[] acseUserData = unwrapAcse(candidate);
-            if (acseUserData == null) {
-                logger.debug("P3 gateway ACSE unwrap yielded no user-data; passing ACSE APDU through");
-                return candidate;
+            String nestedKind = classifyRfc1006Payload(acseUserData);
+            if ("OSI_PRESENTATION_PPDU".equals(nestedKind) || "ACSE_APDU".equals(nestedKind)) {
+                return extractApplicationPduFromAsn1Envelope(acseUserData, nestedKind);
             }
 
-            String nestedKind = classifyRfc1006Payload(acseUserData);
-            logger.debug(
-                "P3 gateway unwrapped ACSE user-data nestedKind={} firstBytes={}",
-                nestedKind,
-                toHexPreview(acseUserData, 64)
-            );
-            return extractApplicationPduFromAsn1Envelope(acseUserData, nestedKind);
+            byte[] gateway = findGatewayApdu(acseUserData);
+            if (gateway != null) {
+                return gateway;
+            }
+
+            return acseUserData;
         }
 
-        return candidate;
+        byte[] gateway = findGatewayApdu(current);
+        if (gateway != null) {
+            return gateway;
+        }
+
+        return current;
+    }
+
+    private boolean startsWithApplicationTag(byte[] value, int tagNumber) {
+        if (value == null || value.length == 0) {
+            return false;
+        }
+        try {
+            BerTlv tlv = BerCodec.decodeSingle(value);
+            return tlv.tagClass() == TAG_CLASS_APPLICATION
+                && tlv.constructed()
+                && tlv.tagNumber() == tagNumber;
+        } catch (RuntimeException ex) {
+            return false;
+        }
     }
 
     private byte[] unwrapPresentation(byte[] ppdu) {
@@ -685,22 +878,17 @@ public class P3GatewayServer {
             List<BerTlv> fields = BerCodec.decodeAll(root.value());
             for (BerTlv field : fields) {
                 if (field.tagClass() == TAG_CLASS_CONTEXT && (field.tagNumber() == 30 || field.tagNumber() == 0)) {
-                    byte[] value = field.value();
-                    String nestedKind = classifyRfc1006Payload(value);
-                    if ("BER_APDU".equals(nestedKind)
-                        || "OSI_PRESENTATION_PPDU".equals(nestedKind)
-                        || "ACSE_APDU".equals(nestedKind)) {
-                        return value;
+                    byte[] direct = field.value();
+                    String directKind = classifyRfc1006Payload(direct);
+                    if ("BER_APDU".equals(directKind) || "OSI_PRESENTATION_PPDU".equals(directKind) || "ACSE_APDU".equals(directKind)) {
+                        return direct;
                     }
 
                     try {
-                        List<BerTlv> nested = BerCodec.decodeAll(value);
-                        for (BerTlv child : nested) {
+                        for (BerTlv child : BerCodec.decodeAll(field.value())) {
                             byte[] encoded = BerCodec.encode(child);
-                            nestedKind = classifyRfc1006Payload(encoded);
-                            if ("BER_APDU".equals(nestedKind)
-                                || "OSI_PRESENTATION_PPDU".equals(nestedKind)
-                                || "ACSE_APDU".equals(nestedKind)) {
+                            String childKind = classifyRfc1006Payload(encoded);
+                            if ("BER_APDU".equals(childKind) || "OSI_PRESENTATION_PPDU".equals(childKind) || "ACSE_APDU".equals(childKind)) {
                                 return encoded;
                             }
                         }
@@ -709,7 +897,6 @@ public class P3GatewayServer {
                     }
                 }
             }
-
             return null;
         } catch (RuntimeException ex) {
             logger.debug("Failed to unwrap presentation PPDU: {}", ex.getMessage());
@@ -720,48 +907,67 @@ public class P3GatewayServer {
     private byte[] unwrapAcse(byte[] acseApdu) {
         try {
             BerTlv acse = BerCodec.decodeSingle(acseApdu);
-            if (acse.tagClass() != TAG_CLASS_APPLICATION || !acse.constructed()) {
-                return null;
-            }
-
-            for (BerTlv field : BerCodec.decodeAll(acse.value())) {
-                if (field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 30) {
-                    byte[] value = field.value();
-                    String nestedKind = classifyRfc1006Payload(value);
-                    if ("BER_APDU".equals(nestedKind)
-                        || "OSI_PRESENTATION_PPDU".equals(nestedKind)
-                        || "ACSE_APDU".equals(nestedKind)) {
-                        return value;
-                    }
-
-                    try {
-                        List<BerTlv> nested = BerCodec.decodeAll(value);
-                        for (BerTlv child : nested) {
-                            byte[] encoded = BerCodec.encode(child);
-                            nestedKind = classifyRfc1006Payload(encoded);
-                            if ("BER_APDU".equals(nestedKind)
-                                || "OSI_PRESENTATION_PPDU".equals(nestedKind)
-                                || "ACSE_APDU".equals(nestedKind)) {
-                                return encoded;
-                            }
-                        }
-                    } catch (RuntimeException ignored) {
-                        // continue
-                    }
-                }
-            }
-
-            return null;
+            return unwrapAcseNode(acse);
         } catch (RuntimeException ex) {
             logger.debug("Failed to unwrap ACSE APDU: {}", ex.getMessage());
             return null;
         }
     }
 
-    private byte[] findAnyBerValue(byte[] data) {
+    private byte[] unwrapAcseNode(BerTlv node) {
+        if (node == null) {
+            return null;
+        }
+
+        try {
+            if (node.tagClass() == TAG_CLASS_CONTEXT && node.tagNumber() == 30) {
+                byte[] externalOrInner = unwrapExternalOrNested(node.value());
+                if (externalOrInner != null) {
+                    return externalOrInner;
+                }
+            }
+
+            if (node.constructed()) {
+                for (BerTlv child : BerCodec.decodeAll(node.value())) {
+                    byte[] found = unwrapAcseNode(child);
+                    if (found != null) {
+                        return found;
+                    }
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // continue
+        }
+
+        return null;
+    }
+
+    private byte[] unwrapExternalOrNested(byte[] data) {
         if (data == null || data.length < 2) {
             return null;
         }
+
+        try {
+            BerTlv tlv = BerCodec.decodeSingle(data);
+
+            if (isGatewayApdu(tlv)
+                || (tlv.tagClass() == TAG_CLASS_APPLICATION && tlv.constructed())
+                || (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed())) {
+                return BerCodec.encode(tlv);
+            }
+
+            if (tlv.constructed()) {
+                for (BerTlv child : BerCodec.decodeAll(tlv.value())) {
+                    byte[] found = unwrapExternalOrNested(BerCodec.encode(child));
+                    if (found != null) {
+                        return found;
+                    }
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // continue
+        }
+
         for (int i = 0; i < data.length - 1; i++) {
             byte[] slice = Arrays.copyOfRange(data, i, data.length);
             if (!looksLikeBerApdu(slice)) {
@@ -770,11 +976,25 @@ public class P3GatewayServer {
             try {
                 BerTlv tlv = BerCodec.decodeSingle(slice);
                 int totalLength = tlv.headerLength() + tlv.length();
-                return Arrays.copyOfRange(slice, 0, totalLength);
+                byte[] candidate = Arrays.copyOfRange(slice, 0, totalLength);
+
+                if (isGatewayApdu(tlv)
+                    || (tlv.tagClass() == TAG_CLASS_APPLICATION && tlv.constructed())
+                    || (tlv.tagClass() == TAG_CLASS_CONTEXT && tlv.constructed())) {
+                    return candidate;
+                }
+
+                if (tlv.constructed()) {
+                    byte[] nested = unwrapExternalOrNested(tlv.value());
+                    if (nested != null) {
+                        return nested;
+                    }
+                }
             } catch (RuntimeException ignored) {
-                // continue scanning
+                // continue
             }
         }
+
         return null;
     }
 
@@ -782,10 +1002,12 @@ public class P3GatewayServer {
         if (data == null) {
             return null;
         }
+
         byte[] direct = findGatewayApduRecursive(data);
         if (direct != null) {
             return direct;
         }
+
         try {
             BerTlv tlv = BerCodec.decodeSingle(data);
             if (isGatewayApdu(tlv)) {
@@ -833,20 +1055,25 @@ public class P3GatewayServer {
         if (applicationResponse == null) {
             return new byte[0];
         }
+
         if ("BER_APDU".equals(inboundKind)) {
             byte[] preserved = replaceInboundGatewayApdu(inboundPayload, applicationResponse);
             return preserved != null ? preserved : applicationResponse;
         }
+
         if ("ACSE_APDU".equals(inboundKind)) {
             return wrapAcseEnvelope(applicationResponse, inboundPayload);
         }
+
         if ("OSI_PRESENTATION_PPDU".equals(inboundKind)) {
             byte[] acse = wrapAcseEnvelope(applicationResponse, null);
             return wrapPresentationEnvelope(acse, inboundPayload);
         }
+
         if ("OSI_SESSION_SPDU".equals(inboundKind)) {
             return wrapSessionEnvelope(applicationResponse, inboundPayload);
         }
+
         byte[] preserved = replaceInboundGatewayApdu(inboundPayload, applicationResponse);
         return preserved != null ? preserved : applicationResponse;
     }
@@ -855,6 +1082,7 @@ public class P3GatewayServer {
         if (inboundPayload == null || inboundPayload.length == 0) {
             return null;
         }
+
         if ("OSI_SESSION_SPDU".equals(classifyRfc1006Payload(inboundPayload))) {
             int berOffset = findFirstBerOffset(inboundPayload);
             if (berOffset < 0) {
@@ -866,11 +1094,13 @@ public class P3GatewayServer {
             if (replaced == null) {
                 return null;
             }
+
             byte[] wrapped = new byte[prefix.length + replaced.length];
             System.arraycopy(prefix, 0, wrapped, 0, prefix.length);
             System.arraycopy(replaced, 0, wrapped, prefix.length, replaced.length);
             return wrapped;
         }
+
         return replaceGatewayApduInBer(inboundPayload, applicationResponse);
     }
 
@@ -878,6 +1108,7 @@ public class P3GatewayServer {
         if (berData == null || berData.length == 0) {
             return null;
         }
+
         try {
             BerTlv root = BerCodec.decodeSingle(berData);
             BerTlv rewritten = replaceGatewayApduInTlv(root, replacement);
@@ -898,12 +1129,14 @@ public class P3GatewayServer {
         if (!tlv.constructed()) {
             return null;
         }
+
         List<BerTlv> nested = BerCodec.decodeAll(tlv.value());
         for (int i = 0; i < nested.size(); i++) {
             BerTlv updatedChild = replaceGatewayApduInTlv(nested.get(i), replacement);
             if (updatedChild == null) {
                 continue;
             }
+
             nested.set(i, updatedChild);
             byte[] encodedChildren = BerCodec.encodeAll(nested);
             return new BerTlv(
@@ -915,6 +1148,7 @@ public class P3GatewayServer {
                 encodedChildren
             );
         }
+
         return null;
     }
 
@@ -922,10 +1156,12 @@ public class P3GatewayServer {
         if (inboundPayload == null || inboundPayload.length == 0) {
             return applicationResponse;
         }
+
         int berOffset = findFirstBerOffset(inboundPayload);
         if (berOffset < 0) {
             return applicationResponse;
         }
+
         byte[] prefix = Arrays.copyOfRange(inboundPayload, 0, berOffset);
         byte[] nested = Arrays.copyOfRange(inboundPayload, berOffset, inboundPayload.length);
         String nestedKind = classifyRfc1006Payload(nested);
@@ -948,6 +1184,7 @@ public class P3GatewayServer {
         if (payload.length > 0 && isSessionSpduCode(payload[0])) {
             start = 1;
         }
+
         for (int i = start; i < payload.length - 1; i++) {
             byte[] slice = Arrays.copyOfRange(payload, i, payload.length);
             if (!looksLikeBerApdu(slice)) {
@@ -957,7 +1194,7 @@ public class P3GatewayServer {
                 BerCodec.decodeSingle(slice);
                 return i;
             } catch (RuntimeException ignored) {
-                // continue scanning
+                // continue
             }
         }
         return -1;
@@ -973,7 +1210,16 @@ public class P3GatewayServer {
         try {
             if (inboundPresentation != null && inboundPresentation.length > 0) {
                 BerTlv inbound = BerCodec.decodeSingle(inboundPresentation);
-                return BerCodec.encode(new BerTlv(mapPresentationResponseClass(inbound), true, mapPresentationResponseTag(inbound), 0, userData.length, userData));
+                return BerCodec.encode(
+                    new BerTlv(
+                        mapPresentationResponseClass(inbound),
+                        true,
+                        mapPresentationResponseTag(inbound),
+                        0,
+                        userData.length,
+                        userData
+                    )
+                );
             }
         } catch (RuntimeException ex) {
             logger.debug("Failed to preserve inbound presentation envelope: {}", ex.getMessage());
@@ -994,7 +1240,6 @@ public class P3GatewayServer {
         }
         return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, 1, 0, userInfo.length, userInfo));
     }
-
 
     private byte mapSessionResponseCode(byte inboundCode) {
         return switch (inboundCode & 0xFF) {
@@ -1062,7 +1307,6 @@ public class P3GatewayServer {
                 return protocolKind == ProtocolKind.BER_APDU
                     || protocolKind == ProtocolKind.RFC1006_TPKT;
             }
-
             return protocolKind == ProtocolKind.RFC1006_TPKT;
         }
 
@@ -1075,6 +1319,9 @@ public class P3GatewayServer {
     }
 
     private record CotpFrame(byte type, boolean endOfTsdu, byte[] userData, byte[] payload) {
+    }
+
+    private record BerCandidate(int offset, byte[] bytes, String kind, int score) {
     }
 
     private static final class NamedDaemonThreadFactory implements ThreadFactory {

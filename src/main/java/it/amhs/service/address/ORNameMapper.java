@@ -32,6 +32,10 @@ public final class ORNameMapper {
     }
 
     public static ORName fromBer(BerTlv originator) {
+        if (originator == null) {
+            throw new IllegalArgumentException("ORName cannot be null");
+        }
+
         if (!originator.constructed()) {
             return fromLegacyIa5(new String(originator.value(), StandardCharsets.US_ASCII));
         }
@@ -42,30 +46,76 @@ public final class ORNameMapper {
 
         for (BerTlv field : fields) {
             if (field.tagClass() == 2 && field.tagNumber() == 0) {
-                directoryName = Optional.of(decodeDirectoryName(field));
-            } else if (field.tagClass() == 2 && field.tagNumber() == 1 && field.constructed()) {
-                decodeStructuredAddress(field, attributes);
-            } else if (field.tagClass() == 2 && field.tagNumber() == 1) {
-                attributes.putAll(ORAddress.parse(decodeString(field)).attributes());
+                try {
+                    directoryName = Optional.of(decodeDirectoryName(field));
+                } catch (RuntimeException ignored) {
+                    // keep searching
+                }
+                continue;
+            }
+
+            if (field.tagClass() == 2 && field.tagNumber() == 1) {
+                tryDecodeOrAddressField(field, attributes);
+                if (!attributes.isEmpty()) {
+                    break;
+                }
             }
         }
 
-        if (attributes.isEmpty() && directoryName.isPresent()) {
-            attributes.putAll(mapDirectoryNameToOrAddress(directoryName.get()));
-            attributes.putIfAbsent("CN", directoryName.get());
+        if (attributes.isEmpty()) {
+            throw new IllegalArgumentException("Structured ORName missing decodable O/R address");
         }
 
-        if (attributes.isEmpty()) {
-            throw new IllegalArgumentException("Structured ORName missing O/R address");
+        if (!looksLikeRealOrAddress(attributes)) {
+            throw new IllegalArgumentException("Structured ORName produced incomplete or invalid O/R address");
         }
+
         return new ORName(directoryName, ORAddress.of(attributes));
     }
 
     private static List<BerTlv> extractOrNameFields(BerTlv originator) {
-        if (originator.tagClass() == 2 && (originator.tagNumber() == 0 || originator.tagNumber() == 1)) {
-            return List.of(originator);
+        if (originator == null || !originator.constructed()) {
+            return List.of();
         }
-        return BerCodec.decodeAll(originator.value());
+
+        try {
+            List<BerTlv> direct = BerCodec.decodeAll(originator.value());
+            if (direct.size() == 1) {
+                BerTlv only = direct.get(0);
+                if (only.constructed() && only.isUniversal() && only.tagNumber() == 16) {
+                    try {
+                        return BerCodec.decodeAll(only.value());
+                    } catch (RuntimeException ignored) {
+                        // fall through
+                    }
+                }
+            }
+            return direct;
+        } catch (RuntimeException ignored) {
+            return List.of();
+        }
+    }
+
+    private static void tryDecodeOrAddressField(BerTlv field, Map<String, String> attributes) {
+        if (field == null || !field.constructed()) {
+            return;
+        }
+
+        // Common case: context[1] wrapping one inner constructed address node.
+        try {
+            List<BerTlv> children = BerCodec.decodeAll(field.value());
+            if (children.size() == 1 && children.get(0).constructed()) {
+                decodeStructuredAddress(children.get(0), attributes);
+                if (!attributes.isEmpty()) {
+                    return;
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // continue
+        }
+
+        // Fallback: some encodings place the address components directly inside context[1].
+        decodeStructuredAddress(field, attributes);
     }
 
     private static String decodeDirectoryName(BerTlv field) {
@@ -85,42 +135,6 @@ public final class ORNameMapper {
             throw new IllegalArgumentException("DirectoryName does not contain decodable attributes");
         }
         return String.join(",", values);
-    }
-
-    private static Map<String, String> mapDirectoryNameToOrAddress(String directoryName) {
-        Map<String, String> mapped = new LinkedHashMap<>();
-        for (String token : directoryName.split(",")) {
-            int equalsIndex = token.indexOf('=');
-            if (equalsIndex <= 0) {
-                continue;
-            }
-            String type = token.substring(0, equalsIndex).trim().toUpperCase(Locale.ROOT);
-            String value = token.substring(equalsIndex + 1).trim();
-            if (value.isEmpty()) {
-                continue;
-            }
-
-            switch (type) {
-                case "C" -> mapped.putIfAbsent("C", value);
-                case "O" -> mapped.putIfAbsent("O", value);
-                case "OU" -> {
-                    if (!mapped.containsKey("OU1")) {
-                        mapped.put("OU1", value);
-                    } else if (!mapped.containsKey("OU2")) {
-                        mapped.put("OU2", value);
-                    } else if (!mapped.containsKey("OU3")) {
-                        mapped.put("OU3", value);
-                    } else if (!mapped.containsKey("OU4")) {
-                        mapped.put("OU4", value);
-                    }
-                }
-                case "CN" -> mapped.putIfAbsent("CN", value);
-                default -> {
-                    // Ignore non O/R-address attributes while preserving canonical directoryName.
-                }
-            }
-        }
-        return mapped;
     }
 
     private static List<String> decodeDirectoryDistinguishedName(List<BerTlv> roots) {
@@ -161,46 +175,103 @@ public final class ORNameMapper {
         }
     }
 
-    private static void decodeStructuredAddress(BerTlv field, Map<String, String> attributes) {
-        List<BerTlv> nodes = BerCodec.decodeAll(field.value());
-        for (BerTlv node : nodes) {
-            if (node.constructed()) {
-                if (node.tagClass() == 2) {
-                    List<BerTlv> children = BerCodec.decodeAll(node.value());
-                    if (children.size() == 1 && !children.get(0).constructed()) {
-                        attributes.put(mapAddressTag(node.tagClass(), node.tagNumber()), decodeString(children.get(0)));
-                        continue;
-                    }
-                }
-                decodeStructuredAddress(node, attributes);
+    private static void decodeStructuredAddress(BerTlv node, Map<String, String> attributes) {
+        if (node == null || !node.constructed()) {
+            return;
+        }
+
+        List<BerTlv> children = BerCodec.decodeAll(node.value());
+        for (BerTlv child : children) {
+            if (child.tagClass() != 2) {
                 continue;
             }
-            String value = decodeString(node);
-            String key = mapAddressTag(node.tagClass(), node.tagNumber());
-            attributes.put(key, value);
+
+            String key = mapKnownAddressTag(child.tagNumber());
+            if (key == null) {
+                continue;
+            }
+
+            String value = decodeAddressComponentValue(child);
+            if (!value.isEmpty()) {
+                attributes.putIfAbsent(key, value);
+            }
         }
     }
 
-    private static String mapAddressTag(int tagClass, int tagNumber) {
-        if (tagClass == 2) {
-            return switch (tagNumber) {
-                case 0 -> "C";
-                case 1 -> "ADMD";
-                case 2 -> "PRMD";
-                case 3 -> "O";
-                case 4 -> "OU1";
-                case 5 -> "OU2";
-                case 6 -> "OU3";
-                case 7 -> "OU4";
-                case 8 -> "CN";
-                case 9 -> "S";
-                case 10 -> "G";
-                case 11 -> "I";
-                case 12 -> "NUMUID";
-                default -> "EXT-CTX-" + tagNumber;
-            };
+    private static String decodeAddressComponentValue(BerTlv tlv) {
+        if (!tlv.constructed()) {
+            return decodeString(tlv).trim();
         }
-        return "EXT-TAG-" + tagClass + "-" + tagNumber;
+
+        try {
+            List<BerTlv> nested = BerCodec.decodeAll(tlv.value());
+            if (nested.size() == 1 && !nested.get(0).constructed()) {
+                return decodeString(nested.get(0)).trim();
+            }
+        } catch (RuntimeException ignored) {
+            // continue below
+        }
+
+        List<String> values = new ArrayList<>();
+        collectPrimitiveStrings(tlv, values);
+        return values.stream()
+            .filter(s -> !s.isBlank())
+            .findFirst()
+            .orElse("");
+    }
+
+    private static void collectPrimitiveStrings(BerTlv node, List<String> values) {
+        if (node == null) {
+            return;
+        }
+
+        if (!node.constructed()) {
+            values.add(decodeString(node));
+            return;
+        }
+
+        try {
+            for (BerTlv child : BerCodec.decodeAll(node.value())) {
+                collectPrimitiveStrings(child, values);
+            }
+        } catch (RuntimeException ignored) {
+            // ignore undecodable branch
+        }
+    }
+
+    private static String mapKnownAddressTag(int tagNumber) {
+        return switch (tagNumber) {
+            case 0 -> "C";
+            case 1 -> "ADMD";
+            case 2 -> "PRMD";
+            case 3 -> "O";
+            case 4 -> "OU1";
+            case 5 -> "OU2";
+            case 6 -> "OU3";
+            case 7 -> "OU4";
+            case 8 -> "CN";
+            case 9 -> "S";
+            case 10 -> "G";
+            case 11 -> "I";
+            case 12 -> "NUMUID";
+            default -> null;
+        };
+    }
+
+    private static boolean looksLikeRealOrAddress(Map<String, String> attributes) {
+        if (attributes.isEmpty()) {
+            return false;
+        }
+
+        if (attributes.containsKey("CN")) {
+            return true;
+        }
+
+        if (attributes.containsKey("O") && (attributes.containsKey("PRMD") || attributes.containsKey("ADMD"))) {
+            return true;
+        }
+
+        return attributes.containsKey("O") && attributes.containsKey("C");
     }
 
     private static String decodeString(BerTlv tlv) {
@@ -216,9 +287,9 @@ public final class ORNameMapper {
         }
 
         return switch (tlv.tagNumber()) {
-            case 12 -> new String(tlv.value(), StandardCharsets.UTF_8); // UTF8String
-            case 19, 22, 25 -> new String(tlv.value(), StandardCharsets.US_ASCII); // Printable/IA5/Graphic
-            case 20 -> new String(tlv.value(), StandardCharsets.ISO_8859_1); // TeletexString approximation
+            case 12 -> new String(tlv.value(), StandardCharsets.UTF_8);
+            case 19, 22, 25 -> new String(tlv.value(), StandardCharsets.US_ASCII);
+            case 20 -> new String(tlv.value(), StandardCharsets.ISO_8859_1);
             case 30 -> decodeBmpString(tlv.value());
             case 28 -> decodeUniversalString(tlv.value());
             default -> new String(tlv.value(), StandardCharsets.UTF_8);

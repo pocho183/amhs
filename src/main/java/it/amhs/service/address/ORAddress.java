@@ -16,7 +16,7 @@ public final class ORAddress {
     private static final Pattern DOMAIN_DEFINED_KEY = Pattern.compile("^DDA-[A-Z0-9][A-Z0-9-]{0,31}$");
     private static final Pattern EXTENSION_KEY = Pattern.compile("^(EXT|X)-[A-Z0-9][A-Z0-9-]{0,31}$");
     private static final Pattern ATTRIBUTE_PATTERN = Pattern.compile("(?:^|[\\s/;,])\\s*([A-Za-z][A-Za-z0-9-]*)\\s*=\\s*(\"(?:[^\"]|\\\\\")*\"|[^/;,]*)");
-    private static final Pattern PRINTABLE_STRING = Pattern.compile("^[A-Z0-9 '(),\\-.:=?]*$");
+    private static final Pattern PRINTABLE_STRING = Pattern.compile("^[A-Za-z0-9 '(),\\-.:=?]*$");
     private static final Pattern IA5_STRING = Pattern.compile("^[\\x20-\\x7E]*$");
     private static final List<Character> DISALLOWED_VALUE_CHARS = List.of('/', '+', '"');
     private static final Map<String, Integer> MAX_LENGTHS = Map.ofEntries(
@@ -186,10 +186,6 @@ public final class ORAddress {
             if (DISALLOWED_VALUE_CHARS.contains(ch)) {
                 throw new IllegalArgumentException("O/R attribute " + key + " contains disallowed character: " + ch);
             }
-        }
-
-        if (!IA5_STRING.matcher(value).matches()) {
-            return;
         }
 
         if (!PRINTABLE_STRING.matcher(value).matches()) {

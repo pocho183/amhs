@@ -3,8 +3,8 @@ package it.amhs.service.protocol.p3;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -45,14 +45,18 @@ public class P3GatewaySessionService {
     private final RelayRoutingService relayRoutingService;
     private final AMHSMessageRepository messageRepository;
     private final AMHSDeliveryReportRepository deliveryReportRepository;
+
     private final long defaultStatusWaitTimeoutMs;
     private final long defaultStatusRetryIntervalMs;
+
     private final boolean authRequired;
     private final String expectedUsername;
     private final String expectedPassword;
+
     private final String defaultProtocolIndex;
     private final String defaultProtocolAddress;
     private final String defaultServerAddress;
+
     private final SecurityLabelPolicy securityLabelPolicy = new SecurityLabelPolicy();
     private final ConcurrentMap<String, Long> submissionCorrelationTable = new ConcurrentHashMap<>();
 
@@ -81,8 +85,8 @@ public class P3GatewaySessionService {
         this.defaultStatusWaitTimeoutMs = Math.max(0L, defaultStatusWaitTimeoutMs);
         this.defaultStatusRetryIntervalMs = Math.max(1L, defaultStatusRetryIntervalMs);
         this.authRequired = authRequired;
-        this.expectedUsername = expectedUsername;
-        this.expectedPassword = expectedPassword;
+        this.expectedUsername = trimToNull(expectedUsername);
+        this.expectedPassword = trimToNull(expectedPassword);
         this.defaultProtocolIndex = defaultProtocolIndex;
         this.defaultProtocolAddress = defaultProtocolAddress;
         this.defaultServerAddress = defaultServerAddress;
@@ -104,20 +108,31 @@ public class P3GatewaySessionService {
 
         String[] segments = trimmed.split("\\s+", 2);
         String operation = segments[0].toUpperCase();
+
         ParsedAttributes parsedAttributes = segments.length > 1
             ? parseAttributes(segments[1])
             : new ParsedAttributes(Map.of(), null);
+
         if (parsedAttributes.error() != null) {
-            logger.warn("P3 command op={} rejected due to malformed attributes detail={}", operation, parsedAttributes.error());
+            logger.warn(
+                "P3 command op={} rejected due to malformed attributes detail={}",
+                operation,
+                parsedAttributes.error()
+            );
             return parsedAttributes.error();
         }
 
         Map<String, String> attributes = parsedAttributes.attributes();
         String attributeValidationError = validateAttributeNames(operation, attributes);
         if (attributeValidationError != null) {
-            logger.warn("P3 command op={} rejected due to unsupported attribute set attrs={}", operation, redactSensitiveAttributes(attributes));
+            logger.warn(
+                "P3 command op={} rejected due to unsupported attribute set attrs={}",
+                operation,
+                redactSensitiveAttributes(attributes)
+            );
             return attributeValidationError;
         }
+
         logger.info(
             "P3 command op={} bound={} attrs={}",
             operation,
@@ -134,6 +149,7 @@ public class P3GatewaySessionService {
             case "UNBIND", "RELEASE", "QUIT" -> unbind(state);
             default -> "ERR code=unsupported-operation detail=Unsupported operation " + operation;
         };
+
         logger.info("P3 command op={} result={}", operation, response);
         return response;
     }
@@ -144,28 +160,23 @@ public class P3GatewaySessionService {
             return "ERR code=association detail=Bind received on already bound association";
         }
 
-        String username = attributes.getOrDefault("username", "");
-        String password = attributes.getOrDefault("password", "");
-        String senderAddress = attributes.getOrDefault("sender", "");
-        String channelName = attributes.getOrDefault("channel", AMHSChannelService.DEFAULT_CHANNEL_NAME);
-        String securityLabel = attributes.getOrDefault("security-label", "");
-        String gatewayPolicyLabel = attributes.getOrDefault("gateway-policy-label", "");
+        String providedUsername = trimToNull(attributes.get("username"));
+        String providedPassword = trimToNull(attributes.get("password"));
+        String senderAddress = trimToNull(attributes.get("sender"));
+        String requestedChannel = trimToNull(attributes.get("channel"));
+        String securityLabel = trimToNull(attributes.get("security-label"));
+        String gatewayPolicyLabel = trimToNull(attributes.get("gateway-policy-label"));
 
-        if (!StringUtils.hasText(senderAddress) && !authRequired && StringUtils.hasText(username)) {
-            try {
-                senderAddress = ORAddress.parse(username).toCanonicalString();
-                logger.info("P3 bind using username as sender fallback sender={}", senderAddress);
-            } catch (IllegalArgumentException ex) {
-                logger.debug("P3 bind username is not a valid sender fallback value username={}", username);
-            }
-        }
+        String effectiveChannel = StringUtils.hasText(requestedChannel)
+            ? requestedChannel
+            : AMHSChannelService.DEFAULT_CHANNEL_NAME;
 
         if (!StringUtils.hasText(senderAddress)) {
             logger.warn("P3 bind rejected: missing sender address");
-            return "ERR code=invalid-or-address detail=Missing sender address; provide BIND sender=/ADMD=.../PRMD=.../O=.../OU1=.../CN=... (include /C=XX when required by your policy)";
+            return "ERR code=invalid-or-address detail=Missing sender address";
         }
 
-        ORAddress parsedSender;
+        final ORAddress parsedSender;
         try {
             parsedSender = ORAddress.parse(senderAddress);
             complianceValidator.validateIcaoOrAddress(parsedSender.toCanonicalString(), "sender");
@@ -174,22 +185,75 @@ public class P3GatewaySessionService {
             return "ERR code=invalid-or-address detail=" + ex.getMessage();
         }
 
+        String canonicalSender = parsedSender.toCanonicalString();
+
+        /*
+         * ICAO/P3 rule used here:
+         *
+         * - textual gateway bind:
+         *     username + password + sender
+         *
+         * - native P3 bind:
+         *     password + sender
+         *     authenticated identity == sender O/R address
+         */
+        String effectiveIdentity = StringUtils.hasText(providedUsername)
+            ? providedUsername
+            : canonicalSender;
+
         if (authRequired) {
-            if (!StringUtils.hasText(username) || !StringUtils.hasText(password)) {
-                logger.warn("P3 bind rejected: missing credentials for sender={}", parsedSender.toCanonicalString());
+            if (!StringUtils.hasText(providedPassword)) {
+                logger.warn(
+                    "P3 bind rejected: authentication failed sender={} identity={} reason=missing password",
+                    canonicalSender,
+                    effectiveIdentity
+                );
                 return "ERR code=auth-failed detail=Missing credentials";
             }
-            if (!expectedUsername.equals(username) || !expectedPassword.equals(password)) {
-                logger.warn("P3 bind rejected: invalid credentials username={}", username);
+
+            boolean gatewayCredentialMatch =
+                StringUtils.hasText(providedUsername)
+                    && StringUtils.hasText(expectedUsername)
+                    && StringUtils.hasText(expectedPassword)
+                    && expectedUsername.equals(providedUsername)
+                    && expectedPassword.equals(providedPassword);
+
+            boolean nativeP3CredentialMatch =
+                !StringUtils.hasText(providedUsername)
+                    && StringUtils.hasText(expectedPassword)
+                    && expectedPassword.equals(providedPassword);
+
+            if (!gatewayCredentialMatch && !nativeP3CredentialMatch) {
+                logger.warn(
+                    "P3 bind rejected: authentication failed sender={} identity={} reason=invalid credentials",
+                    canonicalSender,
+                    effectiveIdentity
+                );
                 return "ERR code=auth-failed detail=Invalid credentials";
             }
         }
 
-        try {
-            complianceValidator.validateAuthenticatedIdentityBinding(parsedSender.toCanonicalString(), username);
-        } catch (IllegalArgumentException ex) {
-            logger.warn("P3 bind rejected: identity binding failed username={} reason={}", username, ex.getMessage());
-            return "ERR code=authz-failed detail=" + ex.getMessage();
+        if (StringUtils.hasText(providedUsername)) {
+            try {
+                complianceValidator.validateAuthenticatedIdentityBinding(
+                    canonicalSender,
+                    providedUsername
+                );
+            } catch (IllegalArgumentException ex) {
+                logger.warn(
+                    "P3 bind rejected: identity binding failed identity={} sender={} reason={}",
+                    providedUsername,
+                    canonicalSender,
+                    ex.getMessage()
+                );
+                return "ERR code=authz-failed detail=" + ex.getMessage();
+            }
+        } else {
+            logger.info(
+                "P3 bind native identity accepted sender={} authenticated-identity={}",
+                canonicalSender,
+                effectiveIdentity
+            );
         }
 
         if (StringUtils.hasText(gatewayPolicyLabel) && !StringUtils.hasText(securityLabel)) {
@@ -221,20 +285,37 @@ public class P3GatewaySessionService {
             }
         }
 
-        AMHSChannel channel;
+        logger.info(
+            "P3 bind effective channel sender={} requested-channel={} resolved-channel={}",
+            canonicalSender,
+            requestedChannel,
+            effectiveChannel
+        );
+
+        final AMHSChannel channel;
         try {
-            channel = channelService.requireEnabledChannel(channelName);
+            channel = channelService.requireEnabledChannel(effectiveChannel);
         } catch (IllegalArgumentException ex) {
-            logger.warn("P3 bind rejected: channel policy failure channel={} reason={}", channelName, ex.getMessage());
+            logger.warn(
+                "P3 bind rejected: channel policy failure channel={} reason={}",
+                effectiveChannel,
+                ex.getMessage()
+            );
             return "ERR code=channel-policy detail=" + ex.getMessage();
         }
 
         state.bound = true;
-        state.username = username;
-        state.senderOrAddress = parsedSender.toCanonicalString();
+        state.username = effectiveIdentity;
+        state.senderOrAddress = canonicalSender;
         state.channelName = channel.getName();
         state.lastReadReportId = null;
-        logger.info("P3 bind accepted sender={} username={} channel={}", state.senderOrAddress, state.username, state.channelName);
+
+        logger.info(
+            "P3 bind accepted sender={} authenticated-identity={} channel={}",
+            state.senderOrAddress,
+            state.username,
+            state.channelName
+        );
         return "OK code=bind-accepted sender=" + state.senderOrAddress;
     }
 
@@ -249,16 +330,26 @@ public class P3GatewaySessionService {
         String subject = attributes.getOrDefault("subject", null);
 
         if (!StringUtils.hasText(recipientAddress)) {
-            logger.warn("P3 submit rejected: missing recipient sender={} channel={}", state.senderOrAddress, state.channelName);
+            logger.warn(
+                "P3 submit rejected: missing recipient sender={} channel={}",
+                state.senderOrAddress,
+                state.channelName
+            );
             return "ERR code=invalid-or-address detail=Missing recipient address";
         }
+
         if (!StringUtils.hasText(body)) {
-            logger.warn("P3 submit rejected: empty body sender={} channel={}", state.senderOrAddress, state.channelName);
+            logger.warn(
+                "P3 submit rejected: empty body sender={} channel={}",
+                state.senderOrAddress,
+                state.channelName
+            );
             return "ERR code=invalid-message detail=Body cannot be empty";
         }
 
         ORAddress sender = ORAddress.parse(state.senderOrAddress);
-        ORAddress recipient;
+
+        final ORAddress recipient;
         try {
             recipient = ORAddress.parse(recipientAddress);
             complianceValidator.validateIcaoOrAddress(recipient.toCanonicalString(), "recipient");
@@ -269,11 +360,20 @@ public class P3GatewaySessionService {
 
         if (relayRoutingService.hasRoutesConfigured()
             && relayRoutingService.findNextHop(new AMHSMessageEnvelope(recipient, ""), 0).isEmpty()) {
-            logger.warn("P3 submit rejected: no route for recipient={} channel={}", recipient.toCanonicalString(), state.channelName);
+            logger.warn(
+                "P3 submit rejected: no route for recipient={} channel={}",
+                recipient.toCanonicalString(),
+                state.channelName
+            );
             return "ERR code=routing-policy detail=No route found for recipient";
         }
 
-        String submissionId = deterministicSubmissionId(state.senderOrAddress, recipient.toCanonicalString(), body, subject == null ? "" : subject);
+        String submissionId = deterministicSubmissionId(
+            state.senderOrAddress,
+            recipient.toCanonicalString(),
+            body,
+            subject == null ? "" : subject
+        );
 
         X400MessageRequest request = new X400MessageRequest(
             submissionId,
@@ -311,6 +411,7 @@ public class P3GatewaySessionService {
 
         AMHSMessage storedMessage = x400MessageService.storeFromP3(request);
         submissionCorrelationTable.put(submissionId, storedMessage.getId());
+
         logger.info(
             "P3 submit accepted sender={} recipient={} channel={} submissionId={} messageId={}",
             state.senderOrAddress,
@@ -334,11 +435,20 @@ public class P3GatewaySessionService {
             return "ERR code=invalid-command detail=Missing submission-id";
         }
 
-        ParsedNumber waitTimeout = parseNonNegativeLong(attributes.get("wait-timeout-ms"), defaultStatusWaitTimeoutMs, "wait-timeout-ms");
+        ParsedNumber waitTimeout = parseNonNegativeLong(
+            attributes.get("wait-timeout-ms"),
+            defaultStatusWaitTimeoutMs,
+            "wait-timeout-ms"
+        );
         if (waitTimeout.error() != null) {
             return waitTimeout.error();
         }
-        ParsedNumber retryInterval = parseNonNegativeLong(attributes.get("retry-interval-ms"), defaultStatusRetryIntervalMs, "retry-interval-ms");
+
+        ParsedNumber retryInterval = parseNonNegativeLong(
+            attributes.get("retry-interval-ms"),
+            defaultStatusRetryIntervalMs,
+            "retry-interval-ms"
+        );
         if (retryInterval.error() != null) {
             return retryInterval.error();
         }
@@ -348,7 +458,10 @@ public class P3GatewaySessionService {
         Instant deadline = Instant.now().plusMillis(Math.max(0L, waitTimeoutMs));
 
         StatusSnapshot snapshot = loadStatus(submissionId);
-        while (snapshot != null && snapshot.drStatus.equals("PENDING") && waitTimeoutMs > 0 && Instant.now().isBefore(deadline)) {
+        while (snapshot != null
+            && snapshot.drStatus.equals("PENDING")
+            && waitTimeoutMs > 0
+            && Instant.now().isBefore(deadline)) {
             long remainingMs = Math.max(1L, Duration.between(Instant.now(), deadline).toMillis());
             try {
                 Thread.sleep(Math.min(retryIntervalMs, remainingMs));
@@ -387,6 +500,7 @@ public class P3GatewaySessionService {
         Optional<AMHSMessage> maybeMessage = internalMessageId != null
             ? messageRepository.findById(internalMessageId)
             : Optional.empty();
+
         if (maybeMessage.isEmpty()) {
             maybeMessage = messageRepository.findByMessageId(submissionId);
         }
@@ -396,6 +510,7 @@ public class P3GatewaySessionService {
 
         AMHSMessage message = maybeMessage.get();
         submissionCorrelationTable.put(submissionId, message.getId());
+
         Optional<AMHSDeliveryReport> latestReport = deliveryReportRepository.findByMessage(message).stream()
             .max((left, right) -> left.getGeneratedAt().compareTo(right.getGeneratedAt()));
 
@@ -429,7 +544,6 @@ public class P3GatewaySessionService {
         }
     }
 
-
     private String readMailbox(SessionState state, Map<String, String> attributes, String operationName) {
         if (!state.bound) {
             logger.warn("P3 read rejected: operation before bind");
@@ -451,11 +565,20 @@ public class P3GatewaySessionService {
             return "ERR code=invalid-or-address detail=" + ex.getMessage();
         }
 
-        ParsedNumber waitTimeout = parseNonNegativeLong(attributes.get("wait-timeout-ms"), defaultStatusWaitTimeoutMs, "wait-timeout-ms");
+        ParsedNumber waitTimeout = parseNonNegativeLong(
+            attributes.get("wait-timeout-ms"),
+            defaultStatusWaitTimeoutMs,
+            "wait-timeout-ms"
+        );
         if (waitTimeout.error() != null) {
             return waitTimeout.error();
         }
-        ParsedNumber retryInterval = parseNonNegativeLong(attributes.get("retry-interval-ms"), defaultStatusRetryIntervalMs, "retry-interval-ms");
+
+        ParsedNumber retryInterval = parseNonNegativeLong(
+            attributes.get("retry-interval-ms"),
+            defaultStatusRetryIntervalMs,
+            "retry-interval-ms"
+        );
         if (retryInterval.error() != null) {
             return retryInterval.error();
         }
@@ -493,7 +616,9 @@ public class P3GatewaySessionService {
 
     private AMHSDeliveryReport loadNextReport(String recipient, Long afterId) {
         long cursor = afterId == null ? 0L : Math.max(0L, afterId);
-        return deliveryReportRepository.findByRecipientIgnoreCaseAndIdGreaterThanOrderByIdAsc(recipient, cursor).stream()
+        return deliveryReportRepository
+            .findByRecipientIgnoreCaseAndIdGreaterThanOrderByIdAsc(recipient, cursor)
+            .stream()
             .findFirst()
             .orElse(null);
     }
@@ -510,12 +635,14 @@ public class P3GatewaySessionService {
         state.channelName = null;
         state.lastReadReportId = null;
         state.closed = true;
+
         logger.info("P3 release completed");
         return "OK code=release";
     }
 
     private ParsedAttributes parseAttributes(String rawAttributes) {
         Map<String, String> attributes = new LinkedHashMap<>();
+
         for (String token : Arrays.stream(rawAttributes.split(";")).map(String::trim).toList()) {
             if (!StringUtils.hasText(token)) {
                 continue;
@@ -523,15 +650,23 @@ public class P3GatewaySessionService {
 
             String[] kv = token.split("=", 2);
             if (kv.length != 2 || !StringUtils.hasText(kv[0])) {
-                return new ParsedAttributes(Map.of(), "ERR code=invalid-command detail=Malformed attribute token '" + token + "'");
+                return new ParsedAttributes(
+                    Map.of(),
+                    "ERR code=invalid-command detail=Malformed attribute token '" + token + "'"
+                );
             }
 
             String key = kv[0].trim().toLowerCase();
             if (attributes.containsKey(key)) {
-                return new ParsedAttributes(Map.of(), "ERR code=invalid-command detail=Duplicate attribute '" + key + "'");
+                return new ParsedAttributes(
+                    Map.of(),
+                    "ERR code=invalid-command detail=Duplicate attribute '" + key + "'"
+                );
             }
+
             attributes.put(key, kv[1].trim());
         }
+
         return new ParsedAttributes(attributes, null);
     }
 
@@ -558,12 +693,21 @@ public class P3GatewaySessionService {
                 + ": "
                 + String.join(",", unsupportedAttributes);
         }
+
         return null;
     }
 
     private Set<String> allowedAttributesForOperation(String operation) {
         return switch (operation) {
-            case "BIND" -> Set.of("username", "password", "sender", "channel", "security-label", "gateway-policy-label", "external-profile-claim");
+            case "BIND" -> Set.of(
+                "username",
+                "password",
+                "sender",
+                "channel",
+                "security-label",
+                "gateway-policy-label",
+                "external-profile-claim"
+            );
             case "SUBMIT" -> Set.of("recipient", "subject", "body");
             case "RETRIEVE", "STATUS" -> Set.of("submission-id", "wait-timeout-ms", "retry-interval-ms");
             case "REPORT", "READ" -> Set.of("recipient", "wait-timeout-ms", "retry-interval-ms");
@@ -578,6 +722,10 @@ public class P3GatewaySessionService {
             redacted.put("password", "***");
         }
         return redacted;
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     static String deterministicSubmissionId(String sender, String recipient, String body, String subject) {
@@ -598,7 +746,12 @@ public class P3GatewaySessionService {
         }
     }
 
-    private record StatusSnapshot(AMHSMessage message, AMHSDeliveryReport latestReport, String drStatus, String ipnStatus) {
+    private record StatusSnapshot(
+        AMHSMessage message,
+        AMHSDeliveryReport latestReport,
+        String drStatus,
+        String ipnStatus
+    ) {
     }
 
     private record ParsedNumber(long value, String error) {

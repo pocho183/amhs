@@ -7,10 +7,12 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +22,6 @@ import org.springframework.util.StringUtils;
 import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
 import it.amhs.service.address.ORAddress;
-import it.amhs.service.address.ORNameMapper;
 
 /**
  * BER/ASN.1 gateway protocol for P3 ingress.
@@ -33,9 +34,11 @@ public class P3Asn1GatewayProtocol {
 
     private static final Logger logger = LoggerFactory.getLogger(P3Asn1GatewayProtocol.class);
 
-    private static final int TAG_CLASS_CONTEXT = 2;
-    private static final int TAG_CLASS_APPLICATION = 1;
     private static final int TAG_CLASS_UNIVERSAL = 0;
+    private static final int TAG_CLASS_APPLICATION = 1;
+    private static final int TAG_CLASS_CONTEXT = 2;
+
+    private static final int TAG_UNIVERSAL_INTEGER = 2;
     private static final int TAG_UNIVERSAL_SEQUENCE = 16;
 
     private static final int ROSE_INVOKE = 1;
@@ -58,11 +61,11 @@ public class P3Asn1GatewayProtocol {
     static final int APDU_STATUS_RESPONSE = 5;
     static final int APDU_RELEASE_REQUEST = 6;
     static final int APDU_RELEASE_RESPONSE = 7;
+    static final int APDU_ERROR = 8;
     static final int APDU_REPORT_REQUEST = 9;
     static final int APDU_REPORT_RESPONSE = 10;
     static final int APDU_READ_REQUEST = 11;
     static final int APDU_READ_RESPONSE = 12;
-    static final int APDU_ERROR = 8;
 
     private static final Set<Integer> EXTERNAL_CLAIMED_APDU_VARIANTS = Set.of(
         APDU_BIND_REQUEST,
@@ -82,9 +85,6 @@ public class P3Asn1GatewayProtocol {
 
     private static final Set<Integer> REQUEST_BIND_FIELD_TAGS = Set.of(0, 1, 2, 3);
     private static final Set<Integer> REQUEST_COMMON_FIELD_TAGS = Set.of(0, 1, 2);
-    
-    private static final Pattern CHANNEL_NAME_PATTERN = Pattern.compile("(?i)[a-z0-9][a-z0-9._-]{0,15}");
-    private static final List<String> PREFERRED_CHANNEL_NAMES = List.of("p3", "amhs", "x400", "mta", "mts");
 
     private final P3GatewaySessionService sessionService;
 
@@ -100,7 +100,14 @@ public class P3Asn1GatewayProtocol {
             logger.info("P3 ASN.1 malformed APDU decode failed: {}", ex.getMessage());
             return error("malformed-apdu", "Unable to decode BER APDU");
         }
-        logger.info("P3 ASN.1 incoming APDU tagClass={} constructed={} tagNumber={} len={}", apdu.tagClass(), apdu.constructed(), apdu.tagNumber(), apdu.length());
+
+        logger.info(
+            "P3 ASN.1 incoming APDU tagClass={} constructed={} tagNumber={} len={}",
+            apdu.tagClass(),
+            apdu.constructed(),
+            apdu.tagNumber(),
+            apdu.length()
+        );
 
         if (isRtseApdu(apdu)) {
             return handleRtse(session, apdu);
@@ -114,7 +121,7 @@ public class P3Asn1GatewayProtocol {
             return roseReject(0, "unexpected-rose-apdu");
         }
 
-        if (apdu.tagClass() != TAG_CLASS_CONTEXT || !apdu.constructed() || !looksLikeGatewayApdu(apdu)) {
+        if (apdu.tagClass() != TAG_CLASS_CONTEXT || !apdu.constructed()) {
             return error("invalid-apdu", "Expected gateway APDU");
         }
 
@@ -124,11 +131,42 @@ public class P3Asn1GatewayProtocol {
                 logger.info("P3 ASN.1 bind candidate payload={}", toHex(apdu.value()));
                 yield mapBind(session, apdu.value());
             }
-            case APDU_SUBMIT_REQUEST -> mapSubmit(session, apdu.value());
-            case APDU_STATUS_REQUEST -> mapStatus(session, apdu.value());
-            case APDU_REPORT_REQUEST -> mapReport(session, apdu.value());
-            case APDU_READ_REQUEST -> mapRead(session, apdu.value());
-            case APDU_RELEASE_REQUEST -> mapRelease(session);
+
+            case APDU_SUBMIT_REQUEST -> {
+                if (!looksLikeGatewayApdu(apdu)) {
+                    yield error("invalid-apdu", "Expected gateway APDU");
+                }
+                yield mapSubmit(session, apdu.value());
+            }
+
+            case APDU_STATUS_REQUEST -> {
+                if (!looksLikeGatewayApdu(apdu)) {
+                    yield error("invalid-apdu", "Expected gateway APDU");
+                }
+                yield mapStatus(session, apdu.value());
+            }
+
+            case APDU_REPORT_REQUEST -> {
+                if (!looksLikeGatewayApdu(apdu)) {
+                    yield error("invalid-apdu", "Expected gateway APDU");
+                }
+                yield mapReport(session, apdu.value());
+            }
+
+            case APDU_READ_REQUEST -> {
+                if (!looksLikeGatewayApdu(apdu)) {
+                    yield error("invalid-apdu", "Expected gateway APDU");
+                }
+                yield mapRead(session, apdu.value());
+            }
+
+            case APDU_RELEASE_REQUEST -> {
+                if (!looksLikeGatewayApdu(apdu)) {
+                    yield error("invalid-apdu", "Expected gateway APDU");
+                }
+                yield mapRelease(session);
+            }
+
             default -> error("unsupported-operation", "Unsupported APDU " + apdu.tagNumber());
         };
     }
@@ -151,7 +189,10 @@ public class P3Asn1GatewayProtocol {
 
         byte[] nestedApdu = findGatewayOrRoseApdu(rtseApdu);
         if (nestedApdu == null) {
-            return wrapRtseResponse(rtseApdu.tagNumber(), error("unsupported-operation", "RTSE APDU did not contain a supported gateway operation"));
+            return wrapRtseResponse(
+                rtseApdu.tagNumber(),
+                error("unsupported-operation", "RTSE APDU did not contain a supported gateway operation")
+            );
         }
 
         byte[] nestedResponse = handle(session, nestedApdu);
@@ -169,8 +210,7 @@ public class P3Asn1GatewayProtocol {
             return BerCodec.encode(tlv);
         }
 
-        boolean gatewayCandidate = looksLikeGatewayApdu(tlv);
-        if (gatewayCandidate) {
+        if (looksLikeGatewayApdu(tlv)) {
             logger.info(
                 "P3 ASN.1 accepted gateway candidate tag={} len={} hex={}",
                 tlv.tagNumber(),
@@ -198,7 +238,6 @@ public class P3Asn1GatewayProtocol {
                 tlv.tagNumber(),
                 ex.getMessage()
             );
-            return null;
         }
 
         return null;
@@ -226,81 +265,40 @@ public class P3Asn1GatewayProtocol {
             return false;
         }
 
-        if (fields.isEmpty()) {
-            logger.debug(
-                "P3 ASN.1 gateway candidate rejected tag={} len={} reason=no-fields",
-                tlv.tagNumber(),
-                tlv.value().length
-            );
-            return false;
-        }
-
-        Set<Integer> seenTags = new java.util.HashSet<>();
+        Set<Integer> seenTags = new HashSet<>();
         boolean hasConstructedField = false;
 
         for (BerTlv field : fields) {
             if (field.tagClass() != TAG_CLASS_CONTEXT) {
-                logger.debug(
-                    "P3 ASN.1 gateway candidate rejected tag={} reason=non-context-field fieldTagClass={} fieldTagNumber={}",
-                    tlv.tagNumber(),
-                    field.tagClass(),
-                    field.tagNumber()
-                );
                 return false;
             }
-
             if (!isLikelyScalarField(field)) {
-                logger.debug(
-                    "P3 ASN.1 gateway candidate rejected tag={} reason=non-scalar-field fieldTagNumber={}",
-                    tlv.tagNumber(),
-                    field.tagNumber()
-                );
                 return false;
             }
-
             if (field.constructed()) {
                 hasConstructedField = true;
             }
             seenTags.add(field.tagNumber());
         }
 
-        boolean accepted = switch (tlv.tagNumber()) {
-            case APDU_BIND_REQUEST ->
-                // Reject tiny fake nodes like A0 03 80 01 01.
-                fields.size() >= 2
-                    && hasConstructedField
-                    && REQUEST_BIND_FIELD_TAGS.containsAll(seenTags);
+        return switch (tlv.tagNumber()) {
+            case APDU_BIND_REQUEST -> {
+                boolean canonicalGatewayBind =
+                    fields.size() >= 2
+                        && hasConstructedField
+                        && REQUEST_BIND_FIELD_TAGS.containsAll(seenTags);
+
+                boolean nativeStructuredBind = StringUtils.hasText(findSenderAddressFromStructuredBer(tlv.value()));
+                yield canonicalGatewayBind || nativeStructuredBind;
+            }
 
             case APDU_SUBMIT_REQUEST, APDU_STATUS_REQUEST, APDU_REPORT_REQUEST, APDU_READ_REQUEST, APDU_ERROR ->
-                !seenTags.isEmpty()
-                    && REQUEST_COMMON_FIELD_TAGS.containsAll(seenTags);
+                !seenTags.isEmpty() && REQUEST_COMMON_FIELD_TAGS.containsAll(seenTags);
 
             case APDU_RELEASE_REQUEST -> true;
 
             default -> false;
         };
-
-        if (!accepted) {
-            logger.debug(
-                "P3 ASN.1 gateway candidate rejected tag={} len={} fieldCount={} seenTags={} hasConstructedField={}",
-                tlv.tagNumber(),
-                tlv.value().length,
-                fields.size(),
-                seenTags,
-                hasConstructedField
-            );
-        } else {
-            logger.debug(
-                "P3 ASN.1 gateway candidate matched tag={} len={} fieldCount={} seenTags={} hasConstructedField={}",
-                tlv.tagNumber(),
-                tlv.value().length,
-                fields.size(),
-                seenTags,
-                hasConstructedField
-            );
-        }
-
-        return accepted;
     }
 
     static Set<Integer> externalClaimedApduVariants() {
@@ -310,7 +308,7 @@ public class P3Asn1GatewayProtocol {
     private boolean isGatewayApduTag(int tagNumber) {
         return EXTERNAL_CLAIMED_APDU_VARIANTS.contains(tagNumber);
     }
-    
+
     private boolean isLikelyScalarField(BerTlv field) {
         if (!field.constructed()) {
             return true;
@@ -323,7 +321,6 @@ public class P3Asn1GatewayProtocol {
         }
     }
 
-
     private byte[] wrapRtseResponse(int inboundRtseTag, byte[] nestedResponse) {
         int responseTag = switch (inboundRtseTag) {
             case RTSE_RTORQ -> RTSE_RTOAC;
@@ -332,6 +329,7 @@ public class P3Asn1GatewayProtocol {
             case RTSE_RTORJ, RTSE_RTAB -> inboundRtseTag;
             default -> RTSE_RTORJ;
         };
+
         byte[] any = BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, 0, 0, nestedResponse.length, nestedResponse));
         return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, responseTag, 0, any.length, any));
     }
@@ -384,11 +382,11 @@ public class P3Asn1GatewayProtocol {
                 continue;
             }
 
-            if (!field.constructed() && field.tagClass() == TAG_CLASS_UNIVERSAL && field.tagNumber() == 2 && invokeId == null) {
+            if (!field.constructed() && field.tagClass() == TAG_CLASS_UNIVERSAL && field.tagNumber() == TAG_UNIVERSAL_INTEGER && invokeId == null) {
                 invokeId = decodeInteger(field.value());
                 continue;
             }
-            if (!field.constructed() && field.tagClass() == TAG_CLASS_UNIVERSAL && field.tagNumber() == 2 && operationCode == null) {
+            if (!field.constructed() && field.tagClass() == TAG_CLASS_UNIVERSAL && field.tagNumber() == TAG_UNIVERSAL_INTEGER && operationCode == null) {
                 operationCode = decodeInteger(field.value());
                 continue;
             }
@@ -400,6 +398,7 @@ public class P3Asn1GatewayProtocol {
         if (invokeId == null || operationCode == null) {
             throw new IllegalArgumentException("ROSE invoke-id or operation-code missing");
         }
+
         return new RoseInvoke(invokeId, operationCode, argument);
     }
 
@@ -412,7 +411,6 @@ public class P3Asn1GatewayProtocol {
                 return BerCodec.decodeAll(maybeSequence.value());
             }
         } catch (RuntimeException ignored) {
-            // fallback to decoding as direct field list
         }
         return BerCodec.decodeAll(value);
     }
@@ -433,21 +431,20 @@ public class P3Asn1GatewayProtocol {
             case APDU_REPORT_REQUEST -> mapReport(session, argument);
             case APDU_READ_REQUEST -> mapRead(session, argument);
             case APDU_RELEASE_REQUEST -> mapRelease(session);
-            case APDU_BIND_RESPONSE, APDU_SUBMIT_RESPONSE, APDU_STATUS_RESPONSE, APDU_ERROR, APDU_RELEASE_RESPONSE, APDU_REPORT_RESPONSE, APDU_READ_RESPONSE ->
+
+            case APDU_BIND_RESPONSE, APDU_SUBMIT_RESPONSE, APDU_STATUS_RESPONSE,
+                 APDU_ERROR, APDU_RELEASE_RESPONSE, APDU_REPORT_RESPONSE, APDU_READ_RESPONSE ->
                 error("invalid-operation-role", "ROSE invoke requires a request operation code, got " + operationCode);
+
             default -> error("unsupported-operation", "Unsupported ROSE operation " + operationCode);
         };
     }
 
     private byte[] roseReturnResult(int invokeId, byte[] payload) {
-        byte[] sequence = BerCodec.encode(new BerTlv(
-            TAG_CLASS_UNIVERSAL,
-            true,
-            TAG_UNIVERSAL_SEQUENCE,
-            0,
-            concat(List.of(encodeIntegerUniversal(invokeId), payload)).length,
-            concat(List.of(encodeIntegerUniversal(invokeId), payload))
-        ));
+        byte[] content = concat(List.of(encodeIntegerUniversal(invokeId), payload));
+        byte[] sequence = BerCodec.encode(
+            new BerTlv(TAG_CLASS_UNIVERSAL, true, TAG_UNIVERSAL_SEQUENCE, 0, content.length, content)
+        );
         return BerCodec.encode(new BerTlv(TAG_CLASS_APPLICATION, true, ROSE_RETURN_RESULT, 0, sequence.length, sequence));
     }
 
@@ -505,14 +502,16 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] mapBind(P3GatewaySessionService.SessionState session, byte[] payload) {
         logger.info("P3 ASN.1 bind candidate payload={}", toHex(payload));
+
         Map<Integer, String> fields = decodeBindFields(payload);
-        if (fields.isEmpty()) {
+        if (fields.isEmpty() || !StringUtils.hasText(fields.get(2))) {
             logger.warn("P3 ASN.1 bind rejected: unsupported native bind argument shape");
             return error(
                 "unsupported-native-p3-bind",
                 "Bind argument did not contain gateway fields or a decodable X.411 ORName sender"
             );
         }
+
         logger.info(
             "P3 ASN.1 bind request fields username={} sender={} channel={} password-present={}",
             safe(fields.get(0)),
@@ -520,11 +519,13 @@ public class P3Asn1GatewayProtocol {
             safe(fields.get(3)),
             StringUtils.hasText(fields.get(1))
         );
+
         String command = "BIND"
             + " username=" + value(fields.get(0))
             + ";password=" + value(fields.get(1))
             + ";sender=" + value(fields.get(2))
             + ";channel=" + value(fields.get(3));
+
         String response = sessionService.handleCommand(session, command);
         logger.info("P3 ASN.1 bind gateway-response={}", response);
 
@@ -535,214 +536,378 @@ public class P3Asn1GatewayProtocol {
     }
 
     private Map<Integer, String> decodeBindFields(byte[] payload) {
-        Map<Integer, String> fields = decodeContextUtf8Fields(payload);
+        Map<Integer, String> fields = new HashMap<>();
 
-        if (StringUtils.hasText(fields.get(2))) {
+        try {
+            BerTlv root = BerCodec.decodeSingle(payload);
+
+            String sender = extractSenderFromBind(root);
+            if (StringUtils.hasText(sender)) {
+                fields.put(2, sender);
+                logger.info("P3 ASN.1 structured bind decode recovered sender={}", sender);
+            }
+
+            String password = extractPasswordFromBind(root);
+            if (StringUtils.hasText(password)) {
+                fields.put(1, password);
+            }
+
+            String username = extractUsernameFromBind(root);
+            if (StringUtils.hasText(username)) {
+                fields.put(0, username);
+            }
+
+            String channel = extractChannelFromBind(root);
+            if (StringUtils.hasText(channel)) {
+                fields.put(3, channel);
+            }
+
             return fields;
+        } catch (RuntimeException ex) {
+            logger.debug("P3 ASN.1 bind decode failed: {}", ex.getMessage());
+            return Map.of();
+        }
+    }
+
+    private String extractSenderFromBind(BerTlv root) {
+        BerTlv addressNode = findAddressContainer(root);
+        if (addressNode == null) {
+            return null;
         }
 
-        String structuredSender = findSenderAddressFromStructuredBer(payload);
-        if (StringUtils.hasText(structuredSender)) {
-            fields.putIfAbsent(2, structuredSender);
-            logger.info("P3 ASN.1 structured bind decode recovered sender={} without gateway credential fields", safe(structuredSender));
-            return fields;
+        Map<String, String> attrs = new LinkedHashMap<>();
+        collectNativeOrAddressAttributes(addressNode, attrs);
+        normalizeNativeOrAddressAttributes(attrs);
+
+        if (!looksLikeAddressCandidate(attrs)) {
+            logger.info("P3 ASN.1 native bind candidate missing mandatory attrs={}", attrs);
+            return null;
         }
 
-        if (!fields.isEmpty()) {
-            return fields;
+        if (!hasAnyOrganizationalIdentity(attrs)) {
+            logger.info("P3 ASN.1 native bind candidate missing OU/CN attrs={}", attrs);
+            return null;
         }
 
-        logger.warn(
-            "P3 ASN.1 bind payload did not expose canonical context-tagged bind fields; "
-                + "falling back to diagnostic textual atom inference (heuristic compatibility mode)"
-        );
-
-        List<String> atoms = extractTextualAtoms(payload);
-        String sender = findSenderAddress(atoms);
-        String channel = findChannelName(atoms, sender);
-
-        Map<Integer, String> inferred = new HashMap<>();
-        if (StringUtils.hasText(sender)) {
-            inferred.put(2, sender);
+        try {
+            String canonical = ORAddress.of(attrs).toCanonicalString();
+            logger.info("P3 ASN.1 native bind candidate accepted attrs={} canonical={}", attrs, canonical);
+            return canonical;
+        } catch (RuntimeException ex) {
+            logger.info(
+                "P3 ASN.1 native bind candidate rejected by ORAddress builder attrs={} reason={}",
+                attrs,
+                ex.getMessage()
+            );
+            return null;
         }
-        if (StringUtils.hasText(channel)) {
-            inferred.put(3, channel);
+    }
+
+    private String extractPasswordFromBind(BerTlv root) {
+        BerTlv addressNode = findAddressContainer(root);
+        return findPasswordOutsideAddress(root, addressNode);
+    }
+
+    private String extractUsernameFromBind(BerTlv root) {
+        BerTlv addressNode = findAddressContainer(root);
+        return findUtf8ContextValueOutsideAddress(root, addressNode, 0);
+    }
+
+    private String extractChannelFromBind(BerTlv root) {
+        BerTlv addressNode = findAddressContainer(root);
+        return findUtf8ContextValueOutsideAddress(root, addressNode, 3);
+    }
+
+    private String findPasswordOutsideAddress(BerTlv node, BerTlv addressNode) {
+        if (node == null || node == addressNode) {
+            return null;
         }
 
-        if (!inferred.isEmpty()) {
-            logger.info("P3 ASN.1 heuristic bind inference recovered sender={} channel={}", safe(sender), safe(channel));
+        if (!node.constructed()) {
+            return null;
         }
 
-        return inferred;
+        if (node.tagClass() == TAG_CLASS_CONTEXT && node.tagNumber() == 2) {
+            try {
+                List<BerTlv> nested = BerCodec.decodeAll(node.value());
+                if (nested.size() == 1 && !nested.get(0).constructed()) {
+                    String decoded = decodeBerStringValue(nested.get(0));
+                    if (StringUtils.hasText(decoded) && !"Local".equalsIgnoreCase(decoded)) {
+                        return decoded;
+                    }
+                }
+            } catch (RuntimeException ignored) {
+            }
+        }
+
+        try {
+            for (BerTlv child : BerCodec.decodeAll(node.value())) {
+                if (child == addressNode) {
+                    continue;
+                }
+                String found = findPasswordOutsideAddress(child, addressNode);
+                if (StringUtils.hasText(found)) {
+                    return found;
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+
+        return null;
+    }
+
+    private String findUtf8ContextValueOutsideAddress(BerTlv node, BerTlv addressNode, int wantedTag) {
+        if (node == null || node == addressNode) {
+            return null;
+        }
+
+        if (!node.constructed()) {
+            return null;
+        }
+
+        if (node.tagClass() == TAG_CLASS_CONTEXT && node.tagNumber() == wantedTag) {
+            try {
+                List<BerTlv> nested = BerCodec.decodeAll(node.value());
+                if (nested.size() == 1 && !nested.get(0).constructed()) {
+                    String decoded = decodeBerStringValue(nested.get(0));
+                    if (StringUtils.hasText(decoded)) {
+                        return decoded;
+                    }
+                }
+            } catch (RuntimeException ignored) {
+            }
+        }
+
+        try {
+            for (BerTlv child : BerCodec.decodeAll(node.value())) {
+                if (child == addressNode) {
+                    continue;
+                }
+                String found = findUtf8ContextValueOutsideAddress(child, addressNode, wantedTag);
+                if (StringUtils.hasText(found)) {
+                    return found;
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+
+        return null;
+    }
+
+    private BerTlv findAddressContainer(BerTlv node) {
+        if (node == null || !node.constructed()) {
+            return null;
+        }
+
+        try {
+            List<BerTlv> children = BerCodec.decodeAll(node.value());
+
+            boolean hasCountry = false;
+            boolean hasAdmd = false;
+            boolean hasPrmd = false;
+            boolean hasOrgLike = false;
+
+            for (BerTlv child : children) {
+                if (isAddressAttributeTag(child, TAG_CLASS_APPLICATION, 1)) {
+                    hasCountry = true;
+                } else if (isAddressAttributeTag(child, TAG_CLASS_APPLICATION, 2)) {
+                    hasAdmd = true;
+                } else if (isAddressAttributeTag(child, TAG_CLASS_CONTEXT, 2)) {
+                    hasPrmd = true;
+                } else if (isAddressAttributeTag(child, TAG_CLASS_CONTEXT, 3)) {
+                    hasOrgLike = true;
+                }
+            }
+
+            if (hasCountry && hasAdmd && hasPrmd && hasOrgLike) {
+                return node;
+            }
+
+            for (BerTlv child : children) {
+                BerTlv found = findAddressContainer(child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+
+        return null;
+    }
+
+    private boolean isAddressAttributeTag(BerTlv tlv, int expectedClass, int expectedTag) {
+        if (tlv == null || tlv.tagClass() != expectedClass || tlv.tagNumber() != expectedTag) {
+            return false;
+        }
+
+        if (!tlv.constructed()) {
+            return StringUtils.hasText(decodeBerStringValue(tlv));
+        }
+
+        try {
+            List<BerTlv> nested = BerCodec.decodeAll(tlv.value());
+            return nested.size() == 1 && !nested.get(0).constructed()
+                && StringUtils.hasText(decodeBerStringValue(nested.get(0)));
+        } catch (RuntimeException ex) {
+            return false;
+        }
     }
 
     private String findSenderAddressFromStructuredBer(byte[] payload) {
         if (payload == null || payload.length == 0) {
             return null;
         }
-        List<BerTlv> bindFields;
-        try {
-            bindFields = decodeContextFieldList(payload);
-        } catch (RuntimeException ignored) {
-            return null;
-        }
-        if (bindFields.isEmpty()) {
-            return null;
-        }
-
-        if (bindFields.size() > 2) {
-            String sender = decodeOrNameCandidate(bindFields.get(2));
-            if (StringUtils.hasText(sender)) {
-                return sender;
-            }
-        }
-
-        // Compatibility fallback for variants that preserve explicit sender tag.
-        for (BerTlv field : bindFields) {
-            if (field.tagClass() == TAG_CLASS_CONTEXT && field.tagNumber() == 2) {
-                String sender = decodeOrNameCandidate(field);
-                if (StringUtils.hasText(sender)) {
-                    return sender;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private String decodeOrNameCandidate(BerTlv candidate) {
-        try {
-            var orName = ORNameMapper.fromBer(candidate);
-            if (orName != null && orName.orAddress() != null) {
-                return orName.orAddress().toCanonicalString();
-            }
-        } catch (RuntimeException ignored) {
-        }
-
-        if (!candidate.constructed()) {
-            return null;
-        }
-
-        List<BerTlv> nested;
-        try {
-            nested = BerCodec.decodeAll(candidate.value());
-        } catch (RuntimeException ignored) {
-            return null;
-        }
-
-        if (nested.size() != 1) {
-            return null;
-        }
 
         try {
-            return ORNameMapper.fromBer(nested.get(0)).orAddress().toCanonicalString();
-        } catch (RuntimeException ignored) {
+            BerTlv root = BerCodec.decodeSingle(payload);
+            return extractSenderFromBind(root);
+        } catch (RuntimeException ex) {
+            logger.debug("P3 ASN.1 structured bind decode failed: {}", ex.getMessage());
             return null;
         }
     }
 
-    private List<String> extractTextualAtoms(byte[] payload) {
+    private boolean hasAnyOrganizationalIdentity(Map<String, String> attrs) {
+        return StringUtils.hasText(attrs.get("OU1"))
+            || StringUtils.hasText(attrs.get("OU2"))
+            || StringUtils.hasText(attrs.get("OU3"))
+            || StringUtils.hasText(attrs.get("OU4"))
+            || StringUtils.hasText(attrs.get("CN"));
+    }
+
+    private boolean looksLikeAddressCandidate(Map<String, String> attrs) {
+        return StringUtils.hasText(attrs.get("C"))
+            && StringUtils.hasText(attrs.get("ADMD"))
+            && StringUtils.hasText(attrs.get("PRMD"))
+            && StringUtils.hasText(attrs.get("O"));
+    }
+
+    private void collectNativeOrAddressAttributes(BerTlv node, Map<String, String> attrs) {
+        if (node == null) {
+            return;
+        }
+
+        String key = switch (node.tagClass()) {
+            case TAG_CLASS_APPLICATION -> switch (node.tagNumber()) {
+                case 1 -> "C";
+                case 2 -> "ADMD";
+                default -> null;
+            };
+            case TAG_CLASS_CONTEXT -> switch (node.tagNumber()) {
+                case 2 -> "PRMD";
+                case 3 -> "O";
+                case 4 -> "OU1";
+                case 5 -> "OU2";
+                case 6 -> "OU3";
+                case 7 -> "OU4";
+                case 8 -> "CN";
+                default -> null;
+            };
+            default -> null;
+        };
+
+        if (key != null) {
+            String decoded = decodeBerStringValue(node);
+            if (StringUtils.hasText(decoded) && !attrs.containsKey(key)) {
+                attrs.put(key, decoded);
+            }
+        }
+
+        if (!node.constructed()) {
+            return;
+        }
+
+        try {
+            for (BerTlv child : BerCodec.decodeAll(node.value())) {
+                collectNativeOrAddressAttributes(child, attrs);
+            }
+        } catch (RuntimeException ignored) {
+            // stop descending this branch
+        }
+    }
+
+    private void normalizeNativeOrAddressAttributes(Map<String, String> attrs) {
+        if (!attrs.containsKey("C")) {
+            String maybeCountry = attrs.get("CN");
+            if (maybeCountry != null && maybeCountry.matches("[A-Z]{2}")) {
+                attrs.remove("CN");
+                attrs.put("C", maybeCountry);
+            }
+        }
+
+        if ("changeit".equalsIgnoreCase(attrs.get("PRMD"))) {
+            attrs.remove("PRMD");
+        }
+
+        compactOrganizationalUnits(attrs);
+    }
+
+    private void compactOrganizationalUnits(Map<String, String> attrs) {
         List<String> values = new ArrayList<>();
-        collectTextualAtoms(payload, values);
-        return values.stream().filter(StringUtils::hasText).distinct().toList();
-    }
 
-    private void collectTextualAtoms(byte[] encoded, List<String> values) {
-        if (encoded == null || encoded.length == 0) {
-            return;
-        }
-        try {
-            BerTlv root = BerCodec.decodeSingle(encoded);
-            collectTextualAtoms(root, values);
-            return;
-        } catch (RuntimeException ignored) {
-            // fall back to a field list decode
-        }
-        try {
-            for (BerTlv field : BerCodec.decodeAll(encoded)) {
-                collectTextualAtoms(field, values);
+        for (int i = 1; i <= 4; i++) {
+            String value = attrs.remove("OU" + i);
+            if (StringUtils.hasText(value)) {
+                values.add(value);
             }
-        } catch (RuntimeException ignored) {
-            // ignore non-BER content
+        }
+
+        for (int i = 0; i < values.size(); i++) {
+            attrs.put("OU" + (i + 1), values.get(i));
         }
     }
 
-    private void collectTextualAtoms(BerTlv tlv, List<String> values) {
+    private String decodeBerStringValue(BerTlv tlv) {
+        if (tlv == null) {
+            return null;
+        }
+
         if (tlv.constructed()) {
             try {
-                for (BerTlv nested : BerCodec.decodeAll(tlv.value())) {
-                    collectTextualAtoms(nested, values);
+                List<BerTlv> nested = BerCodec.decodeAll(tlv.value());
+                if (nested.size() == 1) {
+                    return decodeBerStringValue(nested.get(0));
                 }
             } catch (RuntimeException ignored) {
-                // not a decodable BER sequence of children
-            }
-            return;
-        }
-
-        if (tlv.tagClass() != TAG_CLASS_UNIVERSAL) {
-            maybeAddPrintable(values, tlv.value());
-            return;
-        }
-
-        switch (tlv.tagNumber()) {
-            case 2 -> values.add(decodeIntegerAsString(tlv.value()));
-            case 4, 12, 19, 22, 26, 27, 28, 30 -> maybeAddPrintable(values, tlv.value());
-            default -> {
-                // ignore non-text universal primitives
-            }
-        }
-    }
-
-    private void maybeAddPrintable(List<String> values, byte[] raw) {
-        if (raw == null || raw.length == 0) {
-            return;
-        }
-        String decoded = new String(raw, StandardCharsets.UTF_8).trim();
-        if (!StringUtils.hasText(decoded) || !isMostlyPrintable(decoded)) {
-            return;
-        }
-        values.add(decoded);
-    }
-
-    private boolean isMostlyPrintable(String value) {
-        long printable = value.chars().filter(ch -> ch >= 32 && ch < 127).count();
-        return printable >= Math.max(1, value.length() - 1);
-    }
-
-    private String findSenderAddress(List<String> atoms) {
-        for (String atom : atoms) {
-            try {
-                return ORAddress.parse(atom).toCanonicalString();
-            } catch (IllegalArgumentException ignored) {
-                // continue
-            }
-        }
-        return null;
-    }
-
-    private String findChannelName(List<String> atoms, String sender) {
-        List<String> candidates = atoms.stream()
-            .filter(StringUtils::hasText)
-            .filter(value -> !value.equals(sender))
-            .filter(value -> CHANNEL_NAME_PATTERN.matcher(value).matches())
-            .distinct()
-            .toList();
-
-        for (String preferredChannelName : PREFERRED_CHANNEL_NAMES) {
-            for (String candidate : candidates) {
-                if (candidate.equalsIgnoreCase(preferredChannelName)) {
-                    return candidate;
-                }
+                return null;
             }
         }
 
-        if (candidates.size() == 1) {
-            return candidates.get(0);
-        }
-
-        return null;
+        return switch (tlv.tagClass()) {
+            case TAG_CLASS_UNIVERSAL -> switch (tlv.tagNumber()) {
+                case 12 -> new String(tlv.value(), StandardCharsets.UTF_8).trim();
+                case 19, 22, 25, 26, 27 -> new String(tlv.value(), StandardCharsets.US_ASCII).trim();
+                case 20 -> new String(tlv.value(), StandardCharsets.ISO_8859_1).trim();
+                case 28 -> decodeUniversalStringSafe(tlv.value());
+                case 30 -> decodeBmpStringSafe(tlv.value());
+                default -> new String(tlv.value(), StandardCharsets.UTF_8).trim();
+            };
+            default -> new String(tlv.value(), StandardCharsets.UTF_8).trim();
+        };
     }
 
+    private String decodeBmpStringSafe(byte[] value) {
+        if ((value.length & 1) != 0) {
+            return null;
+        }
+        return new String(value, StandardCharsets.UTF_16BE).trim();
+    }
+
+    private String decodeUniversalStringSafe(byte[] value) {
+        if ((value.length & 3) != 0) {
+            return null;
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < value.length; i += 4) {
+            int codePoint = ((value[i] & 0xFF) << 24)
+                | ((value[i + 1] & 0xFF) << 16)
+                | ((value[i + 2] & 0xFF) << 8)
+                | (value[i + 3] & 0xFF);
+            builder.appendCodePoint(codePoint);
+        }
+        return builder.toString().trim();
+    }
+    
     private byte[] mapSubmit(P3GatewaySessionService.SessionState session, byte[] payload) {
         Map<Integer, String> fields = decodeContextUtf8Fields(payload);
         logger.info(
@@ -751,10 +916,12 @@ public class P3Asn1GatewayProtocol {
             safe(fields.get(1)),
             value(fields.get(2)).getBytes(StandardCharsets.UTF_8).length
         );
+
         String command = "SUBMIT"
             + " recipient=" + value(fields.get(0))
             + ";subject=" + value(fields.get(1))
             + ";body=" + value(fields.get(2));
+
         String response = sessionService.handleCommand(session, command);
         logger.info("P3 ASN.1 submit gateway-response={}", response);
 
@@ -772,10 +939,12 @@ public class P3Asn1GatewayProtocol {
             safe(fields.get(1)),
             safe(fields.get(2))
         );
+
         String command = "STATUS"
             + " submission-id=" + value(fields.get(0))
             + ";wait-timeout-ms=" + value(fields.get(1))
             + ";retry-interval-ms=" + value(fields.get(2));
+
         String response = sessionService.handleCommand(session, command);
         logger.info("P3 ASN.1 status gateway-response={}", response);
 
@@ -788,15 +957,17 @@ public class P3Asn1GatewayProtocol {
     private byte[] mapReport(P3GatewaySessionService.SessionState session, byte[] payload) {
         Map<Integer, String> fields = decodeContextUtf8Fields(payload);
         logger.info(
-            "P3 ASN.1 report request fields recipient={} wait-timeout-ms={} retry-interval-ms={} ",
+            "P3 ASN.1 report request fields recipient={} wait-timeout-ms={} retry-interval-ms={}",
             safe(fields.get(0)),
             safe(fields.get(1)),
             safe(fields.get(2))
         );
+
         String command = "REPORT"
             + " recipient=" + value(fields.get(0))
             + ";wait-timeout-ms=" + value(fields.get(1))
             + ";retry-interval-ms=" + value(fields.get(2));
+
         String response = sessionService.handleCommand(session, command);
         logger.info("P3 ASN.1 report gateway-response={}", response);
 
@@ -809,15 +980,17 @@ public class P3Asn1GatewayProtocol {
     private byte[] mapRead(P3GatewaySessionService.SessionState session, byte[] payload) {
         Map<Integer, String> fields = decodeContextUtf8Fields(payload);
         logger.info(
-            "P3 ASN.1 read request fields recipient={} wait-timeout-ms={} retry-interval-ms={} ",
+            "P3 ASN.1 read request fields recipient={} wait-timeout-ms={} retry-interval-ms={}",
             safe(fields.get(0)),
             safe(fields.get(1)),
             safe(fields.get(2))
         );
+
         String command = "READ"
             + " recipient=" + value(fields.get(0))
             + ";wait-timeout-ms=" + value(fields.get(1))
             + ";retry-interval-ms=" + value(fields.get(2));
+
         String response = sessionService.handleCommand(session, command);
         logger.info("P3 ASN.1 read gateway-response={}", response);
 
@@ -875,6 +1048,7 @@ public class P3Asn1GatewayProtocol {
             if (field.tagClass() != TAG_CLASS_CONTEXT) {
                 continue;
             }
+
             if (field.constructed()) {
                 String nested = decodeConstructedFieldValue(field);
                 if (StringUtils.hasText(nested)) {
@@ -890,24 +1064,75 @@ public class P3Asn1GatewayProtocol {
     private String decodeConstructedFieldValue(BerTlv field) {
         List<String> atoms = new ArrayList<>();
         collectTextualAtoms(field, atoms);
-        List<String> text = atoms.stream().filter(StringUtils::hasText).toList();
+        List<String> text = atoms.stream().filter(StringUtils::hasText).distinct().toList();
+
         if (text.isEmpty()) {
             return null;
         }
-        String sender = findSenderAddress(text.stream().distinct().toList());
+
+        String sender = findSenderAddress(text);
         if (StringUtils.hasText(sender)) {
             return sender;
         }
 
-        List<String> unique = text.stream().distinct().toList();
-        if (unique.size() == 1) {
-            return unique.get(0);
+        if (text.size() == 1) {
+            return text.get(0);
         }
 
         logger.debug(
-            "P3 ASN.1 constructed field value is ambiguous; skipping heuristic selection from candidates={}.",
-            unique.size()
+            "P3 ASN.1 constructed field value is ambiguous; skipping heuristic selection from candidates={}",
+            text.size()
         );
+        return null;
+    }
+
+    private void collectTextualAtoms(BerTlv tlv, List<String> values) {
+        if (tlv.constructed()) {
+            try {
+                for (BerTlv nested : BerCodec.decodeAll(tlv.value())) {
+                    collectTextualAtoms(nested, values);
+                }
+            } catch (RuntimeException ignored) {
+            }
+            return;
+        }
+
+        if (tlv.tagClass() != TAG_CLASS_UNIVERSAL) {
+            maybeAddPrintable(values, tlv.value());
+            return;
+        }
+
+        switch (tlv.tagNumber()) {
+            case TAG_UNIVERSAL_INTEGER -> values.add(decodeIntegerAsString(tlv.value()));
+            case 4, 12, 19, 22, 26, 27, 28, 30 -> maybeAddPrintable(values, tlv.value());
+            default -> {
+            }
+        }
+    }
+
+    private void maybeAddPrintable(List<String> values, byte[] raw) {
+        if (raw == null || raw.length == 0) {
+            return;
+        }
+        String decoded = new String(raw, StandardCharsets.UTF_8).trim();
+        if (!StringUtils.hasText(decoded) || !isMostlyPrintable(decoded)) {
+            return;
+        }
+        values.add(decoded);
+    }
+
+    private boolean isMostlyPrintable(String value) {
+        long printable = value.chars().filter(ch -> ch >= 32 && ch < 127).count();
+        return printable >= Math.max(1, value.length() - 1);
+    }
+
+    private String findSenderAddress(List<String> atoms) {
+        for (String atom : atoms) {
+            try {
+                return ORAddress.parse(atom).toCanonicalString();
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
         return null;
     }
 
@@ -920,7 +1145,6 @@ public class P3Asn1GatewayProtocol {
                 return BerCodec.decodeAll(maybeSequence.value());
             }
         } catch (RuntimeException ignored) {
-            // fallback to decoding as a direct context-tagged field list
         }
         return BerCodec.decodeAll(payload);
     }
@@ -957,8 +1181,9 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] encodeIntegerUniversal(int value) {
         if (value == 0) {
-            return BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, 2, 0, 1, new byte[] { 0x00 }));
+            return BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, TAG_UNIVERSAL_INTEGER, 0, 1, new byte[] { 0x00 }));
         }
+
         int remaining = value;
         byte[] buf = new byte[4];
         int index = buf.length;
@@ -966,10 +1191,11 @@ public class P3Asn1GatewayProtocol {
             buf[--index] = (byte) (remaining & 0xFF);
             remaining >>>= 8;
         }
+
         int len = buf.length - index;
         byte[] bytes = new byte[len];
         System.arraycopy(buf, index, bytes, 0, len);
-        return BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, 2, 0, bytes.length, bytes));
+        return BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, TAG_UNIVERSAL_INTEGER, 0, bytes.length, bytes));
     }
 
     private Map<String, String> parseResponse(String response) {
@@ -998,7 +1224,6 @@ public class P3Asn1GatewayProtocol {
         }
         return out.toByteArray();
     }
-
 
     private String toHex(byte[] value) {
         if (value == null || value.length == 0) {
