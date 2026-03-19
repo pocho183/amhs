@@ -117,11 +117,9 @@ public class ICAOP3ClientSimulationTest {
     private static byte[] nativeBindRequest(String password, String channel) {
         BerTlv senderAddress = nativeAddress();
         byte[] payload = concat(
-            // Keep the explicit channel field ahead of the OR-address subtree so the native bind
-            // heuristics resolve ATFM instead of the nested O=ORG attribute.
             wrappedUtf8Context(2, password),
-            wrappedUtf8Context(3, channel),
-            BerCodec.encode(senderAddress)
+            BerCodec.encode(senderAddress),
+            wrappedUtf8Context(3, channel)
         );
         byte[] bindArgument = BerCodec.encode(new BerTlv(0, true, 16, 0, payload.length, payload));
         return BerCodec.encode(new BerTlv(2, true, APDU_BIND_REQUEST, 0, bindArgument.length, bindArgument));
