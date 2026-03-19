@@ -366,7 +366,7 @@ public class RFC1006Service {
                 logger.warn("Rejected ACSE AARQ: {}", ex.getMessage());
                 associationState.bound = false;
                 associationState.active = false;
-                AcseModels.AAREApdu reject = buildRejectedAare(ex.getMessage());
+                AcseModels.AAREApdu reject = buildRejectedAare(Optional.ofNullable(aarq.applicationContextName()), ex.getMessage());
                 associationState.acseStateMachine.onOutbound(reject);
                 sendRFC1006(out, acseAssociationProtocol.encode(reject));
                 return;
@@ -375,14 +375,16 @@ public class RFC1006Service {
             associationState.active = true;
             logger.info("Accepted ACSE AARQ for application context {}", aarq.applicationContextName());
             java.util.Set<Integer> acceptedPresentationContextIds = negotiateAcceptedPresentationContextIds(aarq);
+
             AcseModels.AAREApdu accept = new AcseModels.AAREApdu(
-                true,
-                java.util.Optional.of("accepted"),
-                java.util.Optional.empty(),
-                java.util.Optional.empty(),
-                List.of(ICAO_AMHS_P1_OID),
-                acceptedPresentationContextIds
-            );
+            	    Optional.of(aarq.applicationContextName()),
+            	    true,
+            	    Optional.of("accepted"),
+            	    Optional.empty(),
+            	    Optional.empty(),
+            	    List.of(ICAO_AMHS_P1_OID),
+            	    acceptedPresentationContextIds
+            	);
             associationState.acseStateMachine.onOutbound(accept);
             sendRFC1006(out, acseAssociationProtocol.encode(accept));
             return;
@@ -407,14 +409,16 @@ public class RFC1006Service {
         logger.info("Received ACSE {} while waiting for P1 transfer PDUs", apdu.getClass().getSimpleName());
     }
 
-    AcseModels.AAREApdu buildRejectedAare(String diagnosticText) {
+    AcseModels.AAREApdu buildRejectedAare(Optional<String> applicationContextName, String diagnosticText) {
         AcseModels.ResultSourceDiagnostic resultSourceDiagnostic = mapAarqDiagnostic(diagnosticText);
         return new AcseModels.AAREApdu(
+            applicationContextName == null ? Optional.empty() : applicationContextName,
             false,
             Optional.ofNullable(diagnosticText).filter(StringUtils::hasText),
             Optional.of(resultSourceDiagnostic),
             Optional.empty(),
-            List.of(ICAO_AMHS_P1_OID)
+            List.of(ICAO_AMHS_P1_OID),
+            Set.of()
         );
     }
 

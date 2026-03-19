@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -23,12 +22,6 @@ import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
 import it.amhs.service.address.ORAddress;
 
-/**
- * BER/ASN.1 gateway protocol for P3 ingress.
- *
- * <p>This codec provides a binary protocol surface for the AMHS P3 gateway and maps
- * APDUs to the existing session service workflow (bind/submit/status/release).
- */
 @Component
 public class P3Asn1GatewayProtocol {
 
@@ -40,6 +33,13 @@ public class P3Asn1GatewayProtocol {
 
     private static final int TAG_UNIVERSAL_INTEGER = 2;
     private static final int TAG_UNIVERSAL_SEQUENCE = 16;
+    private static final int TAG_UNIVERSAL_UTF8STRING = 12;
+    private static final int TAG_UNIVERSAL_PRINTABLESTRING = 19;
+    private static final int TAG_UNIVERSAL_IA5STRING = 22;
+    private static final int TAG_UNIVERSAL_VISIBLESTRING = 26;
+    private static final int TAG_UNIVERSAL_GENERALSTRING = 27;
+    private static final int TAG_UNIVERSAL_UNIVERSALSTRING = 28;
+    private static final int TAG_UNIVERSAL_BMPSTRING = 30;
 
     private static final int ROSE_INVOKE = 1;
     private static final int ROSE_RETURN_RESULT = 2;
@@ -503,31 +503,41 @@ public class P3Asn1GatewayProtocol {
     private byte[] mapBind(P3GatewaySessionService.SessionState session, byte[] payload) {
         logger.info("P3 ASN.1 bind candidate payload={}", toHex(payload));
 
-        Map<Integer, String> fields = decodeBindFields(payload);
-        if (fields.isEmpty() || !StringUtils.hasText(fields.get(2))) {
+        DecodedBind bind = decodeBind(payload);
+        if (bind.fields().isEmpty() || !StringUtils.hasText(bind.fields().get(2))) {
             logger.warn("P3 ASN.1 bind rejected: unsupported native bind argument shape");
-            return error(
-                "unsupported-native-p3-bind",
-                "Bind argument did not contain gateway fields or a decodable X.411 ORName sender"
-            );
+            return bind.style() == BindStyle.NATIVE
+                ? nativeBindReject("unsupported-native-p3-bind", "Unsupported native bind argument shape")
+                : error(
+                    "unsupported-native-p3-bind",
+                    "Bind argument did not contain gateway fields or a decodable X.411 ORName sender"
+                );
         }
 
         logger.info(
-            "P3 ASN.1 bind request fields username={} sender={} channel={} password-present={}",
-            safe(fields.get(0)),
-            safe(fields.get(2)),
-            safe(fields.get(3)),
-            StringUtils.hasText(fields.get(1))
+            "P3 ASN.1 bind request style={} username={} sender={} channel={} password-present={}",
+            bind.style(),
+            safe(bind.fields().get(0)),
+            safe(bind.fields().get(2)),
+            safe(bind.fields().get(3)),
+            StringUtils.hasText(bind.fields().get(1))
         );
 
         String command = "BIND"
-            + " username=" + value(fields.get(0))
-            + ";password=" + value(fields.get(1))
-            + ";sender=" + value(fields.get(2))
-            + ";channel=" + value(fields.get(3));
+            + " username=" + value(bind.fields().get(0))
+            + ";password=" + value(bind.fields().get(1))
+            + ";sender=" + value(bind.fields().get(2))
+            + ";channel=" + value(bind.fields().get(3));
 
         String response = sessionService.handleCommand(session, command);
         logger.info("P3 ASN.1 bind gateway-response={}", response);
+
+        if (bind.style() == BindStyle.NATIVE) {
+            if (response.startsWith("OK")) {
+                return nativeBindAccept(bind.fields().get(2), bind.fields().get(3));
+            }
+            return nativeBindRejectFromResponse(response);
+        }
 
         if (response.startsWith("OK")) {
             return envelope(APDU_BIND_RESPONSE, encodeKeyValuePayload(parseResponse(response)));
@@ -535,7 +545,21 @@ public class P3Asn1GatewayProtocol {
         return errorFromResponse(response);
     }
 
-    private Map<Integer, String> decodeBindFields(byte[] payload) {
+    private DecodedBind decodeBind(byte[] payload) {
+        Map<Integer, String> gatewayFields = decodeContextUtf8Fields(payload);
+        if (!gatewayFields.isEmpty() && REQUEST_BIND_FIELD_TAGS.containsAll(gatewayFields.keySet())) {
+            return new DecodedBind(gatewayFields, BindStyle.GATEWAY);
+        }
+
+        Map<Integer, String> nativeFields = decodeNativeBindFields(payload);
+        if (!nativeFields.isEmpty()) {
+            return new DecodedBind(nativeFields, BindStyle.NATIVE);
+        }
+
+        return new DecodedBind(Map.of(), BindStyle.NATIVE);
+    }
+
+    private Map<Integer, String> decodeNativeBindFields(byte[] payload) {
         Map<Integer, String> fields = new HashMap<>();
 
         try {
@@ -564,9 +588,36 @@ public class P3Asn1GatewayProtocol {
 
             return fields;
         } catch (RuntimeException ex) {
-            logger.debug("P3 ASN.1 bind decode failed: {}", ex.getMessage());
+            logger.debug("P3 ASN.1 native bind decode failed: {}", ex.getMessage());
             return Map.of();
         }
+    }
+
+    private byte[] nativeBindAccept(String sender, String channel) {
+        return envelope(APDU_BIND_RESPONSE, encodeContextInteger(0, 0));
+    }
+
+    /**
+     * Minimal native bind reject.
+     *
+     *   [1] {
+     *      [0] INTEGER 1
+     *      [2] UTF8String detail
+     *   }
+     */
+    private byte[] nativeBindRejectFromResponse(String response) {
+        Map<String, String> parsed = parseResponse(response);
+        String detail = parsed.getOrDefault("detail", response);
+        String code = parsed.getOrDefault("code", "bind-rejected");
+        return nativeBindReject(code, detail);
+    }
+
+    private byte[] nativeBindReject(String code, String detail) {
+        List<byte[]> fields = new ArrayList<>();
+        fields.add(encodeContextInteger(0, 1)); // rejected
+        fields.add(encodeUtf8ContextField(1, code));
+        fields.add(encodeUtf8ContextField(2, detail));
+        return envelope(APDU_BIND_RESPONSE, concat(fields));
     }
 
     private String extractSenderFromBind(BerTlv root) {
@@ -822,7 +873,6 @@ public class P3Asn1GatewayProtocol {
                 collectNativeOrAddressAttributes(child, attrs);
             }
         } catch (RuntimeException ignored) {
-            // stop descending this branch
         }
     }
 
@@ -875,11 +925,12 @@ public class P3Asn1GatewayProtocol {
 
         return switch (tlv.tagClass()) {
             case TAG_CLASS_UNIVERSAL -> switch (tlv.tagNumber()) {
-                case 12 -> new String(tlv.value(), StandardCharsets.UTF_8).trim();
-                case 19, 22, 25, 26, 27 -> new String(tlv.value(), StandardCharsets.US_ASCII).trim();
+                case TAG_UNIVERSAL_UTF8STRING -> new String(tlv.value(), StandardCharsets.UTF_8).trim();
+                case TAG_UNIVERSAL_PRINTABLESTRING, TAG_UNIVERSAL_IA5STRING, 25, TAG_UNIVERSAL_VISIBLESTRING, TAG_UNIVERSAL_GENERALSTRING ->
+                    new String(tlv.value(), StandardCharsets.US_ASCII).trim();
                 case 20 -> new String(tlv.value(), StandardCharsets.ISO_8859_1).trim();
-                case 28 -> decodeUniversalStringSafe(tlv.value());
-                case 30 -> decodeBmpStringSafe(tlv.value());
+                case TAG_UNIVERSAL_UNIVERSALSTRING -> decodeUniversalStringSafe(tlv.value());
+                case TAG_UNIVERSAL_BMPSTRING -> decodeBmpStringSafe(tlv.value());
                 default -> new String(tlv.value(), StandardCharsets.UTF_8).trim();
             };
             default -> new String(tlv.value(), StandardCharsets.UTF_8).trim();
@@ -907,7 +958,7 @@ public class P3Asn1GatewayProtocol {
         }
         return builder.toString().trim();
     }
-    
+
     private byte[] mapSubmit(P3GatewaySessionService.SessionState session, byte[] payload) {
         Map<Integer, String> fields = decodeContextUtf8Fields(payload);
         logger.info(
@@ -1104,7 +1155,9 @@ public class P3Asn1GatewayProtocol {
 
         switch (tlv.tagNumber()) {
             case TAG_UNIVERSAL_INTEGER -> values.add(decodeIntegerAsString(tlv.value()));
-            case 4, 12, 19, 22, 26, 27, 28, 30 -> maybeAddPrintable(values, tlv.value());
+            case 4, TAG_UNIVERSAL_UTF8STRING, TAG_UNIVERSAL_PRINTABLESTRING, TAG_UNIVERSAL_IA5STRING,
+                 TAG_UNIVERSAL_VISIBLESTRING, TAG_UNIVERSAL_GENERALSTRING, TAG_UNIVERSAL_UNIVERSALSTRING,
+                 TAG_UNIVERSAL_BMPSTRING -> maybeAddPrintable(values, tlv.value());
             default -> {
             }
         }
@@ -1160,8 +1213,14 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] encodeUtf8ContextField(int tagNumber, String value) {
         byte[] bytes = value == null ? new byte[0] : value.getBytes(StandardCharsets.UTF_8);
-        byte[] utf8 = BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, 12, 0, bytes.length, bytes));
+        byte[] utf8 = BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, TAG_UNIVERSAL_UTF8STRING, 0, bytes.length, bytes));
         return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, tagNumber, 0, utf8.length, utf8));
+    }
+
+
+    private byte[] encodeContextInteger(int tagNumber, int value) {
+        byte[] integer = encodeIntegerUniversal(value);
+        return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, tagNumber, 0, integer.length, integer));
     }
 
     private String decodeIntegerAsString(byte[] value) {
@@ -1238,6 +1297,14 @@ public class P3Asn1GatewayProtocol {
 
     private String safe(String value) {
         return StringUtils.hasText(value) ? value : "<empty>";
+    }
+
+    private enum BindStyle {
+        GATEWAY,
+        NATIVE
+    }
+
+    private record DecodedBind(Map<Integer, String> fields, BindStyle style) {
     }
 
     private record RoseInvoke(int invokeId, int operationCode, byte[] argument) {

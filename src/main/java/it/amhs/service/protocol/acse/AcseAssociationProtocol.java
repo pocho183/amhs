@@ -134,8 +134,11 @@ public class AcseAssociationProtocol {
     private byte[] encodeAare(AcseModels.AAREApdu aare) {
         int result = aare.accepted() ? 0 : 1;
         byte[] payload = concat(
+            aare.applicationContextName().map(v -> encodeOid(1, v)).orElse(new byte[0]),
             encodeResult(2, result),
-            aare.resultSourceDiagnostic().map(this::encodeResultSourceDiagnostic).orElseGet(() -> aare.diagnostic().map(v -> encodeGraphicString(10, v)).orElse(new byte[0])),
+            aare.resultSourceDiagnostic()
+                .map(this::encodeResultSourceDiagnostic)
+                .orElseGet(() -> aare.diagnostic().map(v -> encodeGraphicString(10, v)).orElse(new byte[0])),
             encodeAarePresentationNegotiation(aare),
             aare.userInformation().map(v -> encodeUserInformation(30, v)).orElse(new byte[0])
         );
@@ -162,8 +165,18 @@ public class AcseAssociationProtocol {
             .map(this::decodePresentationContexts)
             .orElseGet(PresentationContextParseResult::empty);
 
-        return new AcseModels.AAREApdu(result == 0, diagnostic, rsd, userInfo,
-            presentationContexts.abstractSyntaxOids(), presentationContexts.acceptedContextIdentifiers());
+        Optional<String> appCtx = BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 1)
+        	    .map(this::decodeOid);
+
+        	return new AcseModels.AAREApdu(
+        	    appCtx,
+        	    result == 0,
+        	    diagnostic,
+        	    rsd,
+        	    userInfo,
+        	    presentationContexts.abstractSyntaxOids(),
+        	    presentationContexts.acceptedContextIdentifiers()
+        	);
     }
 
     private byte[] encodeRlrq(AcseModels.RLRQApdu rlrq) {
@@ -274,14 +287,6 @@ public class AcseAssociationProtocol {
     private byte[] encodeOctetString(int tagNumber, byte[] value) {
         byte[] octetString = BerCodec.encode(new BerTlv(0, false, 4, 0, value.length, value));
         return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, tagNumber, 0, octetString.length, octetString));
-    }
-
-    private byte[] decodeOctetString(BerTlv wrapped) {
-        BerTlv octets = BerCodec.decodeSingle(wrapped.value());
-        if (!octets.isUniversal() || octets.tagNumber() != 4) {
-            throw new IllegalArgumentException("ACSE expected OCTET STRING inside field [" + wrapped.tagNumber() + "]");
-        }
-        return octets.value();
     }
 
     private byte[] decodeAuthenticationValue(BerTlv wrapped) {

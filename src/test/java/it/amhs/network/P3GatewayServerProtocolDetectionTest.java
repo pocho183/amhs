@@ -18,7 +18,7 @@ class P3GatewayServerProtocolDetectionTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        server = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "GATEWAY_MULTI_PROTOCOL", null, null, null);
+        server = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "GATEWAY_MULTI_PROTOCOL", null, null, null, null);
         detectProtocol = P3GatewayServer.class.getDeclaredMethod("detectProtocol", byte[].class);
         detectProtocol.setAccessible(true);
         classifyRfc1006Payload = P3GatewayServer.class.getDeclaredMethod("classifyRfc1006Payload", byte[].class);
@@ -279,7 +279,7 @@ class P3GatewayServerProtocolDetectionTest {
 
     @Test
     void standardProfileRejectsTextAndBer() throws Exception {
-        P3GatewayServer strictServer = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "STANDARD_P3", null, null, null);
+        P3GatewayServer strictServer = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "STANDARD_P3", null, null, null, null);
         Method isProtocolAllowed = P3GatewayServer.class.getDeclaredMethod("isProtocolAllowed", Class.forName("it.amhs.network.P3GatewayServer$ProtocolKind"));
         isProtocolAllowed.setAccessible(true);
 
@@ -294,7 +294,7 @@ class P3GatewayServerProtocolDetectionTest {
 
     @Test
     void multiProtocolProfileRejectsTextButAllowsBerAndRfc1006() throws Exception {
-        P3GatewayServer gatewayServer = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "GATEWAY_MULTI_PROTOCOL", null, null, null);
+        P3GatewayServer gatewayServer = new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "GATEWAY_MULTI_PROTOCOL", null, null, null, null);
         Method isProtocolAllowed = P3GatewayServer.class.getDeclaredMethod("isProtocolAllowed", Class.forName("it.amhs.network.P3GatewayServer$ProtocolKind"));
         isProtocolAllowed.setAccessible(true);
 
@@ -310,7 +310,7 @@ class P3GatewayServerProtocolDetectionTest {
     @Test
     void rejectsInvalidListenerProfile() {
         try {
-            new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "bad-profile", null, null, null);
+            new P3GatewayServer("0.0.0.0", 1988, 1, false, false, false, "bad-profile", null, null, null, null);
         } catch (IllegalArgumentException ex) {
             assertEquals(true, ex.getMessage().contains("listener-profile"));
             return;

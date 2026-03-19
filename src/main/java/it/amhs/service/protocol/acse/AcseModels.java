@@ -79,32 +79,35 @@ public final class AcseModels {
     }
 
     public record AAREApdu(
-        boolean accepted,
-        Optional<String> diagnostic,
-        Optional<ResultSourceDiagnostic> resultSourceDiagnostic,
-        Optional<byte[]> userInformation,
-        List<String> presentationContextOids,
-        Set<Integer> acceptedPresentationContextIds
-    ) implements AcseApdu {
-        public AAREApdu(boolean accepted, Optional<String> diagnostic) {
-            this(accepted, diagnostic, Optional.empty(), Optional.empty(), List.of(), Set.of());
-        }
+    	    Optional<String> applicationContextName,
+    	    boolean accepted,
+    	    Optional<String> diagnostic,
+    	    Optional<ResultSourceDiagnostic> resultSourceDiagnostic,
+    	    Optional<byte[]> userInformation,
+    	    List<String> presentationContextOids,
+    	    Set<Integer> acceptedPresentationContextIds
+    	) implements AcseApdu {
+    	    public AAREApdu(boolean accepted, Optional<String> diagnostic) {
+    	        this(Optional.empty(), accepted, diagnostic, Optional.empty(), Optional.empty(), List.of(), Set.of());
+    	    }
 
-        public AAREApdu(
-            boolean accepted,
-            Optional<String> diagnostic,
-            Optional<ResultSourceDiagnostic> resultSourceDiagnostic,
-            Optional<byte[]> userInformation,
-            List<String> presentationContextOids
-        ) {
-            this(accepted, diagnostic, resultSourceDiagnostic, userInformation, presentationContextOids, Set.of());
-        }
+    	    public AAREApdu(
+    	        Optional<String> applicationContextName,
+    	        boolean accepted,
+    	        Optional<String> diagnostic,
+    	        Optional<ResultSourceDiagnostic> resultSourceDiagnostic,
+    	        Optional<byte[]> userInformation,
+    	        List<String> presentationContextOids
+    	    ) {
+    	        this(applicationContextName, accepted, diagnostic, resultSourceDiagnostic, userInformation, presentationContextOids, Set.of());
+    	    }
 
-        public AAREApdu {
-            presentationContextOids = List.copyOf(presentationContextOids);
-            acceptedPresentationContextIds = Set.copyOf(acceptedPresentationContextIds);
-        }
-    }
+    	    public AAREApdu {
+    	        applicationContextName = applicationContextName == null ? Optional.empty() : applicationContextName;
+    	        presentationContextOids = List.copyOf(presentationContextOids);
+    	        acceptedPresentationContextIds = Set.copyOf(acceptedPresentationContextIds);
+    	    }
+    	}
 
     public record ABRTApdu(String source, Optional<String> diagnostic) implements AcseApdu {
     }
