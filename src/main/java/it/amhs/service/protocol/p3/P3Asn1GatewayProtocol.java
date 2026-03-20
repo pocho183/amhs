@@ -113,6 +113,27 @@ public class P3Asn1GatewayProtocol {
             return handleRtse(session, apdu);
         }
 
+        // IMPORTANT:
+        // context-specific tags belong first to P3, not ROSE
+        if (apdu.tagClass() == TAG_CLASS_CONTEXT && apdu.constructed()) {
+            if (isGatewayApduTag(apdu.tagNumber()) && looksLikeGatewayApdu(apdu)) {
+                return handleGatewayApdu(session, apdu);
+            }
+
+            if (isNativeP3Apdu(apdu)) {
+                return handleNativeP3Apdu(session, apdu);
+            }
+
+            logger.warn(
+                "P3 ASN.1 unsupported context APDU tag={} len={} hex={}",
+                apdu.tagNumber(),
+                apdu.length(),
+                toHex(encodedPdu)
+            );
+            return error("unsupported-native-p3-apdu", "Unsupported native P3 APDU");
+        }
+
+        // ROSE only after excluding context-specific P3 APDUs
         if (isRoseInvoke(apdu)) {
             return handleRoseInvoke(session, apdu);
         }
@@ -121,54 +142,64 @@ public class P3Asn1GatewayProtocol {
             return roseReject(0, "unexpected-rose-apdu");
         }
 
-        if (apdu.tagClass() != TAG_CLASS_CONTEXT || !apdu.constructed()) {
-            return error("invalid-apdu", "Expected gateway APDU");
-        }
+        return error("invalid-apdu", "Expected P3 APDU");
+    }
 
+    private byte[] handleGatewayApdu(P3GatewaySessionService.SessionState session, BerTlv apdu) {
         return switch (apdu.tagNumber()) {
             case APDU_BIND_REQUEST -> {
-                logger.info("P3 ASN.1 bind candidate raw={}", toHex(BerCodec.encode(apdu)));
-                logger.info("P3 ASN.1 bind candidate payload={}", toHex(apdu.value()));
+                logger.info("P3 ASN.1 gateway bind candidate raw={}", toHex(BerCodec.encode(apdu)));
+                logger.info("P3 ASN.1 gateway bind candidate payload={}", toHex(apdu.value()));
                 yield mapBind(session, apdu.value());
             }
-
-            case APDU_SUBMIT_REQUEST -> {
-                if (!looksLikeGatewayApdu(apdu)) {
-                    yield error("invalid-apdu", "Expected gateway APDU");
-                }
-                yield mapSubmit(session, apdu.value());
-            }
-
-            case APDU_STATUS_REQUEST -> {
-                if (!looksLikeGatewayApdu(apdu)) {
-                    yield error("invalid-apdu", "Expected gateway APDU");
-                }
-                yield mapStatus(session, apdu.value());
-            }
-
-            case APDU_REPORT_REQUEST -> {
-                if (!looksLikeGatewayApdu(apdu)) {
-                    yield error("invalid-apdu", "Expected gateway APDU");
-                }
-                yield mapReport(session, apdu.value());
-            }
-
-            case APDU_READ_REQUEST -> {
-                if (!looksLikeGatewayApdu(apdu)) {
-                    yield error("invalid-apdu", "Expected gateway APDU");
-                }
-                yield mapRead(session, apdu.value());
-            }
-
-            case APDU_RELEASE_REQUEST -> {
-                if (!looksLikeGatewayApdu(apdu)) {
-                    yield error("invalid-apdu", "Expected gateway APDU");
-                }
-                yield mapRelease(session);
-            }
-
+            case APDU_SUBMIT_REQUEST -> mapSubmit(session, apdu.value());
+            case APDU_STATUS_REQUEST -> mapStatus(session, apdu.value());
+            case APDU_REPORT_REQUEST -> mapReport(session, apdu.value());
+            case APDU_READ_REQUEST -> mapRead(session, apdu.value());
+            case APDU_RELEASE_REQUEST -> mapRelease(session);
             default -> error("unsupported-operation", "Unsupported APDU " + apdu.tagNumber());
         };
+    }
+
+    private boolean isNativeP3Apdu(BerTlv apdu) {
+        if (apdu == null || apdu.tagClass() != TAG_CLASS_CONTEXT || !apdu.constructed()) {
+            return false;
+        }
+
+        if (apdu.tagNumber() != APDU_SUBMIT_REQUEST) {
+            return false;
+        }
+
+        return apdu.length() > 32 && looksLikeNativeBind(apdu);
+    }
+
+    private void logBerTree(String prefix, BerTlv tlv) {
+        if (tlv == null) {
+            logger.info("{} <null>", prefix);
+            return;
+        }
+
+        logger.info(
+            "{} tagClass={} constructed={} tag={} len={}",
+            prefix,
+            tlv.tagClass(),
+            tlv.constructed(),
+            tlv.tagNumber(),
+            tlv.length()
+        );
+
+        if (!tlv.constructed()) {
+            return;
+        }
+
+        try {
+            int index = 0;
+            for (BerTlv child : BerCodec.decodeAll(tlv.value())) {
+                logBerTree(prefix + "." + index++, child);
+            }
+        } catch (RuntimeException ex) {
+            logger.info("{} <decode-error {}>", prefix, ex.getMessage());
+        }
     }
 
     private boolean isRtseApdu(BerTlv apdu) {
@@ -198,6 +229,89 @@ public class P3Asn1GatewayProtocol {
         byte[] nestedResponse = handle(session, nestedApdu);
         return wrapRtseResponse(rtseApdu.tagNumber(), nestedResponse);
     }
+    
+    private byte[] handleNativeP3Apdu(P3GatewaySessionService.SessionState session, BerTlv apdu) {
+        byte[] encoded = BerCodec.encode(apdu);
+
+        logger.info(
+            "P3 ASN.1 native P3 APDU detected tag={} len={} hex={}",
+            apdu.tagNumber(),
+            apdu.length(),
+            toHex(encoded)
+        );
+
+        if (looksLikeNativeBind(apdu)) {
+            logger.info("P3 ASN.1 native bind-shaped APDU accepted on outer tag={}", apdu.tagNumber());
+            return mapBind(session, encoded);
+        }
+
+        return error(
+            "unsupported-native-p3-apdu",
+            "Native P3 APDU decoding not implemented yet for tag " + apdu.tagNumber()
+        );
+    }
+    
+    private boolean looksLikeNativeBind(BerTlv apdu) {
+        try {
+            String sender = extractSenderFromBind(apdu);
+            String password = extractPasswordFromBind(apdu);
+            String username = extractUsernameFromBind(apdu);
+
+            if (StringUtils.hasText(sender)) {
+                logger.info(
+                    "P3 ASN.1 native bind-shape detected sender={} username={} password-present={}",
+                    sender,
+                    safe(username),
+                    StringUtils.hasText(password)
+                );
+                return true;
+            }
+
+            // fallback heuristic: username/password pair often exists even if address extraction
+            // is not perfect yet
+            if (StringUtils.hasText(username) && StringUtils.hasText(password)) {
+                logger.info(
+                    "P3 ASN.1 native bind-shape heuristic matched username={} password-present=true",
+                    username
+                );
+                return true;
+            }
+
+            return false;
+        } catch (RuntimeException ex) {
+            logger.debug("P3 ASN.1 native bind-shape detection failed: {}", ex.getMessage());
+            return false;
+        }
+    }
+    
+    private void logBerTree(String prefix, BerTlv tlv, int depth, int maxDepth) {
+        if (tlv == null || depth > maxDepth) {
+            return;
+        }
+
+        logger.info(
+            "{} tagClass={} constructed={} tag={} len={}",
+            prefix,
+            tlv.tagClass(),
+            tlv.constructed(),
+            tlv.tagNumber(),
+            tlv.length()
+        );
+
+        if (!tlv.constructed() || depth == maxDepth) {
+            return;
+        }
+
+        try {
+            List<BerTlv> children = BerCodec.decodeAll(tlv.value());
+            for (int i = 0; i < children.size(); i++) {
+                logBerTree(prefix + "." + i, children.get(i), depth + 1, maxDepth);
+            }
+        } catch (RuntimeException ex) {
+            logger.debug("{} tree decode stopped: {}", prefix, ex.getMessage());
+        }
+    }
+
 
     private byte[] findGatewayOrRoseApdu(BerTlv tlv) {
         if (isRoseInvoke(tlv)) {
@@ -213,6 +327,16 @@ public class P3Asn1GatewayProtocol {
         if (looksLikeGatewayApdu(tlv)) {
             logger.info(
                 "P3 ASN.1 accepted gateway candidate tag={} len={} hex={}",
+                tlv.tagNumber(),
+                tlv.value().length,
+                toHex(BerCodec.encode(tlv))
+            );
+            return BerCodec.encode(tlv);
+        }
+
+        if (isNativeP3Apdu(tlv)) {
+            logger.info(
+                "P3 ASN.1 accepted native candidate tag={} len={} hex={}",
                 tlv.tagNumber(),
                 tlv.value().length,
                 toHex(BerCodec.encode(tlv))
@@ -265,6 +389,10 @@ public class P3Asn1GatewayProtocol {
             return false;
         }
 
+        if (fields.isEmpty()) {
+            return false;
+        }
+
         Set<Integer> seenTags = new HashSet<>();
         boolean hasConstructedField = false;
 
@@ -285,17 +413,23 @@ public class P3Asn1GatewayProtocol {
             case APDU_BIND_REQUEST -> {
                 boolean canonicalGatewayBind =
                     fields.size() >= 2
+                        && fields.size() <= 8
                         && hasConstructedField
-                        && REQUEST_BIND_FIELD_TAGS.containsAll(seenTags);
+                        && REQUEST_BIND_FIELD_TAGS.containsAll(seenTags)
+                        && fields.stream().allMatch(this::isGatewayScalarField);
 
                 boolean nativeStructuredBind = StringUtils.hasText(findSenderAddressFromStructuredBer(tlv.value()));
                 yield canonicalGatewayBind || nativeStructuredBind;
             }
 
-            case APDU_SUBMIT_REQUEST, APDU_STATUS_REQUEST, APDU_REPORT_REQUEST, APDU_READ_REQUEST, APDU_ERROR ->
-                !seenTags.isEmpty() && REQUEST_COMMON_FIELD_TAGS.containsAll(seenTags);
+            case APDU_SUBMIT_REQUEST, APDU_STATUS_REQUEST, APDU_REPORT_REQUEST, APDU_READ_REQUEST, APDU_ERROR -> {
+                yield !seenTags.isEmpty()
+                    && fields.size() <= 8
+                    && REQUEST_COMMON_FIELD_TAGS.containsAll(seenTags)
+                    && fields.stream().allMatch(this::isGatewayScalarField);
+            }
 
-            case APDU_RELEASE_REQUEST -> true;
+            case APDU_RELEASE_REQUEST -> tlv.value().length == 0 || fields.size() <= 2;
 
             default -> false;
         };
@@ -321,6 +455,27 @@ public class P3Asn1GatewayProtocol {
         }
     }
 
+    private boolean isGatewayScalarField(BerTlv field) {
+        if (field.tagClass() != TAG_CLASS_CONTEXT) {
+            return false;
+        }
+
+        if (!field.constructed()) {
+            return true;
+        }
+
+        try {
+            List<BerTlv> nested = BerCodec.decodeAll(field.value());
+            if (nested.size() != 1) {
+                return false;
+            }
+            BerTlv inner = nested.get(0);
+            return inner.tagClass() == TAG_CLASS_UNIVERSAL && !inner.constructed();
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
     private byte[] wrapRtseResponse(int inboundRtseTag, byte[] nestedResponse) {
         int responseTag = switch (inboundRtseTag) {
             case RTSE_RTORQ -> RTSE_RTOAC;
@@ -336,15 +491,15 @@ public class P3Asn1GatewayProtocol {
 
     private boolean isRoseInvoke(BerTlv apdu) {
         return apdu.constructed()
-            && apdu.tagNumber() == ROSE_INVOKE
-            && (apdu.tagClass() == TAG_CLASS_APPLICATION || apdu.tagClass() == TAG_CLASS_CONTEXT);
+            && apdu.tagClass() == TAG_CLASS_APPLICATION
+            && apdu.tagNumber() == ROSE_INVOKE;
     }
 
     private boolean isRoseApdu(BerTlv apdu) {
         return apdu.constructed()
+            && apdu.tagClass() == TAG_CLASS_APPLICATION
             && apdu.tagNumber() >= ROSE_INVOKE
-            && apdu.tagNumber() <= ROSE_REJECT
-            && (apdu.tagClass() == TAG_CLASS_APPLICATION || apdu.tagClass() == TAG_CLASS_CONTEXT);
+            && apdu.tagNumber() <= ROSE_REJECT;
     }
 
     private byte[] handleRoseInvoke(P3GatewaySessionService.SessionState session, BerTlv invoke) {
@@ -382,14 +537,22 @@ public class P3Asn1GatewayProtocol {
                 continue;
             }
 
-            if (!field.constructed() && field.tagClass() == TAG_CLASS_UNIVERSAL && field.tagNumber() == TAG_UNIVERSAL_INTEGER && invokeId == null) {
+            if (!field.constructed()
+                && field.tagClass() == TAG_CLASS_UNIVERSAL
+                && field.tagNumber() == TAG_UNIVERSAL_INTEGER
+                && invokeId == null) {
                 invokeId = decodeInteger(field.value());
                 continue;
             }
-            if (!field.constructed() && field.tagClass() == TAG_CLASS_UNIVERSAL && field.tagNumber() == TAG_UNIVERSAL_INTEGER && operationCode == null) {
+
+            if (!field.constructed()
+                && field.tagClass() == TAG_CLASS_UNIVERSAL
+                && field.tagNumber() == TAG_UNIVERSAL_INTEGER
+                && operationCode == null) {
                 operationCode = decodeInteger(field.value());
                 continue;
             }
+
             if (argument.length == 0) {
                 argument = BerCodec.encode(field);
             }
@@ -500,10 +663,47 @@ public class P3Asn1GatewayProtocol {
         return out.toByteArray();
     }
 
+    private DecodedBind decodeBind(byte[] payload) {
+        Map<Integer, String> gatewayFields = decodeContextUtf8Fields(payload);
+        if (!gatewayFields.isEmpty() && REQUEST_BIND_FIELD_TAGS.containsAll(gatewayFields.keySet())) {
+            return new DecodedBind(gatewayFields, BindStyle.GATEWAY);
+        }
+
+        Map<Integer, String> nativeFields = decodeNativeBindFields(payload);
+        if (!nativeFields.isEmpty()) {
+            return new DecodedBind(nativeFields, BindStyle.NATIVE);
+        }
+
+        // Retry native decode if caller passed only a TLV value that itself contains one root element.
+        try {
+            List<BerTlv> nested = BerCodec.decodeAll(payload);
+            if (nested.size() == 1) {
+                byte[] encodedRoot = BerCodec.encode(nested.get(0));
+                nativeFields = decodeNativeBindFields(encodedRoot);
+                if (!nativeFields.isEmpty()) {
+                    return new DecodedBind(nativeFields, BindStyle.NATIVE);
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+
+        return new DecodedBind(Map.of(), BindStyle.NATIVE);
+    }
+    
     private byte[] mapBind(P3GatewaySessionService.SessionState session, byte[] payload) {
         logger.info("P3 ASN.1 bind candidate payload={}", toHex(payload));
 
         DecodedBind bind = decodeBind(payload);
+
+        logger.info(
+            "P3 ASN.1 bind decoded style={} username={} sender={} channel={} password-present={}",
+            bind.style(),
+            safe(bind.fields().get(0)),
+            safe(bind.fields().get(2)),
+            safe(bind.fields().get(3)),
+            StringUtils.hasText(bind.fields().get(1))
+        );
+
         if (bind.fields().isEmpty() || !StringUtils.hasText(bind.fields().get(2))) {
             logger.warn("P3 ASN.1 bind rejected: unsupported native bind argument shape");
             return bind.style() == BindStyle.NATIVE
@@ -513,15 +713,6 @@ public class P3Asn1GatewayProtocol {
                     "Bind argument did not contain gateway fields or a decodable X.411 ORName sender"
                 );
         }
-
-        logger.info(
-            "P3 ASN.1 bind request style={} username={} sender={} channel={} password-present={}",
-            bind.style(),
-            safe(bind.fields().get(0)),
-            safe(bind.fields().get(2)),
-            safe(bind.fields().get(3)),
-            StringUtils.hasText(bind.fields().get(1))
-        );
 
         String command = "BIND"
             + " username=" + value(bind.fields().get(0))
@@ -543,20 +734,6 @@ public class P3Asn1GatewayProtocol {
             return envelope(APDU_BIND_RESPONSE, encodeKeyValuePayload(parseResponse(response)));
         }
         return errorFromResponse(response);
-    }
-
-    private DecodedBind decodeBind(byte[] payload) {
-        Map<Integer, String> gatewayFields = decodeContextUtf8Fields(payload);
-        if (!gatewayFields.isEmpty() && REQUEST_BIND_FIELD_TAGS.containsAll(gatewayFields.keySet())) {
-            return new DecodedBind(gatewayFields, BindStyle.GATEWAY);
-        }
-
-        Map<Integer, String> nativeFields = decodeNativeBindFields(payload);
-        if (!nativeFields.isEmpty()) {
-            return new DecodedBind(nativeFields, BindStyle.NATIVE);
-        }
-
-        return new DecodedBind(Map.of(), BindStyle.NATIVE);
     }
 
     private Map<Integer, String> decodeNativeBindFields(byte[] payload) {
@@ -597,14 +774,6 @@ public class P3Asn1GatewayProtocol {
         return envelope(APDU_BIND_RESPONSE, encodeContextInteger(0, 0));
     }
 
-    /**
-     * Minimal native bind reject.
-     *
-     *   [1] {
-     *      [0] INTEGER 1
-     *      [2] UTF8String detail
-     *   }
-     */
     private byte[] nativeBindRejectFromResponse(String response) {
         Map<String, String> parsed = parseResponse(response);
         String detail = parsed.getOrDefault("detail", response);
@@ -614,7 +783,7 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] nativeBindReject(String code, String detail) {
         List<byte[]> fields = new ArrayList<>();
-        fields.add(encodeContextInteger(0, 1)); // rejected
+        fields.add(encodeContextInteger(0, 1));
         fields.add(encodeUtf8ContextField(1, code));
         fields.add(encodeUtf8ContextField(2, detail));
         return envelope(APDU_BIND_RESPONSE, concat(fields));
@@ -797,7 +966,8 @@ public class P3Asn1GatewayProtocol {
 
         try {
             List<BerTlv> nested = BerCodec.decodeAll(tlv.value());
-            return nested.size() == 1 && !nested.get(0).constructed()
+            return nested.size() == 1
+                && !nested.get(0).constructed()
                 && StringUtils.hasText(decodeBerStringValue(nested.get(0)));
         } catch (RuntimeException ex) {
             return false;
@@ -926,7 +1096,11 @@ public class P3Asn1GatewayProtocol {
         return switch (tlv.tagClass()) {
             case TAG_CLASS_UNIVERSAL -> switch (tlv.tagNumber()) {
                 case TAG_UNIVERSAL_UTF8STRING -> new String(tlv.value(), StandardCharsets.UTF_8).trim();
-                case TAG_UNIVERSAL_PRINTABLESTRING, TAG_UNIVERSAL_IA5STRING, 25, TAG_UNIVERSAL_VISIBLESTRING, TAG_UNIVERSAL_GENERALSTRING ->
+                case TAG_UNIVERSAL_PRINTABLESTRING,
+                     TAG_UNIVERSAL_IA5STRING,
+                     25,
+                     TAG_UNIVERSAL_VISIBLESTRING,
+                     TAG_UNIVERSAL_GENERALSTRING ->
                     new String(tlv.value(), StandardCharsets.US_ASCII).trim();
                 case 20 -> new String(tlv.value(), StandardCharsets.ISO_8859_1).trim();
                 case TAG_UNIVERSAL_UNIVERSALSTRING -> decodeUniversalStringSafe(tlv.value());
@@ -1155,8 +1329,13 @@ public class P3Asn1GatewayProtocol {
 
         switch (tlv.tagNumber()) {
             case TAG_UNIVERSAL_INTEGER -> values.add(decodeIntegerAsString(tlv.value()));
-            case 4, TAG_UNIVERSAL_UTF8STRING, TAG_UNIVERSAL_PRINTABLESTRING, TAG_UNIVERSAL_IA5STRING,
-                 TAG_UNIVERSAL_VISIBLESTRING, TAG_UNIVERSAL_GENERALSTRING, TAG_UNIVERSAL_UNIVERSALSTRING,
+            case 4,
+                 TAG_UNIVERSAL_UTF8STRING,
+                 TAG_UNIVERSAL_PRINTABLESTRING,
+                 TAG_UNIVERSAL_IA5STRING,
+                 TAG_UNIVERSAL_VISIBLESTRING,
+                 TAG_UNIVERSAL_GENERALSTRING,
+                 TAG_UNIVERSAL_UNIVERSALSTRING,
                  TAG_UNIVERSAL_BMPSTRING -> maybeAddPrintable(values, tlv.value());
             default -> {
             }
@@ -1213,10 +1392,11 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] encodeUtf8ContextField(int tagNumber, String value) {
         byte[] bytes = value == null ? new byte[0] : value.getBytes(StandardCharsets.UTF_8);
-        byte[] utf8 = BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, TAG_UNIVERSAL_UTF8STRING, 0, bytes.length, bytes));
+        byte[] utf8 = BerCodec.encode(
+            new BerTlv(TAG_CLASS_UNIVERSAL, false, TAG_UNIVERSAL_UTF8STRING, 0, bytes.length, bytes)
+        );
         return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, tagNumber, 0, utf8.length, utf8));
     }
-
 
     private byte[] encodeContextInteger(int tagNumber, int value) {
         byte[] integer = encodeIntegerUniversal(value);
@@ -1240,7 +1420,9 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] encodeIntegerUniversal(int value) {
         if (value == 0) {
-            return BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, TAG_UNIVERSAL_INTEGER, 0, 1, new byte[] { 0x00 }));
+            return BerCodec.encode(
+                new BerTlv(TAG_CLASS_UNIVERSAL, false, TAG_UNIVERSAL_INTEGER, 0, 1, new byte[] { 0x00 })
+            );
         }
 
         int remaining = value;
@@ -1254,7 +1436,9 @@ public class P3Asn1GatewayProtocol {
         int len = buf.length - index;
         byte[] bytes = new byte[len];
         System.arraycopy(buf, index, bytes, 0, len);
-        return BerCodec.encode(new BerTlv(TAG_CLASS_UNIVERSAL, false, TAG_UNIVERSAL_INTEGER, 0, bytes.length, bytes));
+        return BerCodec.encode(
+            new BerTlv(TAG_CLASS_UNIVERSAL, false, TAG_UNIVERSAL_INTEGER, 0, bytes.length, bytes)
+        );
     }
 
     private Map<String, String> parseResponse(String response) {
