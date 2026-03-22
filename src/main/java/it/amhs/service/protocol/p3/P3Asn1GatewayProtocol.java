@@ -67,6 +67,8 @@ public class P3Asn1GatewayProtocol {
     static final int APDU_READ_REQUEST = 11;
     static final int APDU_READ_RESPONSE = 12;
 
+    private static final int NATIVE_BIND_OUTER_TAG = 2;
+
     private static final Set<Integer> EXTERNAL_CLAIMED_APDU_VARIANTS = Set.of(
         APDU_BIND_REQUEST,
         APDU_BIND_RESPONSE,
@@ -113,8 +115,6 @@ public class P3Asn1GatewayProtocol {
             return handleRtse(session, apdu);
         }
 
-        // IMPORTANT:
-        // context-specific tags belong first to P3, not ROSE
         if (apdu.tagClass() == TAG_CLASS_CONTEXT && apdu.constructed()) {
             if (isGatewayApduTag(apdu.tagNumber()) && looksLikeGatewayApdu(apdu)) {
                 return handleGatewayApdu(session, apdu);
@@ -133,7 +133,6 @@ public class P3Asn1GatewayProtocol {
             return error("unsupported-native-p3-apdu", "Unsupported native P3 APDU");
         }
 
-        // ROSE only after excluding context-specific P3 APDUs
         if (isRoseInvoke(apdu)) {
             return handleRoseInvoke(session, apdu);
         }
@@ -150,7 +149,7 @@ public class P3Asn1GatewayProtocol {
             case APDU_BIND_REQUEST -> {
                 logger.info("P3 ASN.1 gateway bind candidate raw={}", toHex(BerCodec.encode(apdu)));
                 logger.info("P3 ASN.1 gateway bind candidate payload={}", toHex(apdu.value()));
-                yield mapBind(session, apdu.value());
+                yield mapBind(session, apdu.value(), apdu.tagNumber(), false);
             }
             case APDU_SUBMIT_REQUEST -> mapSubmit(session, apdu.value());
             case APDU_STATUS_REQUEST -> mapStatus(session, apdu.value());
@@ -166,40 +165,15 @@ public class P3Asn1GatewayProtocol {
             return false;
         }
 
-        if (apdu.tagNumber() != APDU_SUBMIT_REQUEST) {
+        if (!isGatewayApduTag(apdu.tagNumber())) {
             return false;
         }
 
-        return apdu.length() > 32 && looksLikeNativeBind(apdu);
-    }
-
-    private void logBerTree(String prefix, BerTlv tlv) {
-        if (tlv == null) {
-            logger.info("{} <null>", prefix);
-            return;
+        if (apdu.tagNumber() == NATIVE_BIND_OUTER_TAG && apdu.length() > 32 && looksLikeNativeBind(apdu)) {
+            return true;
         }
 
-        logger.info(
-            "{} tagClass={} constructed={} tag={} len={}",
-            prefix,
-            tlv.tagClass(),
-            tlv.constructed(),
-            tlv.tagNumber(),
-            tlv.length()
-        );
-
-        if (!tlv.constructed()) {
-            return;
-        }
-
-        try {
-            int index = 0;
-            for (BerTlv child : BerCodec.decodeAll(tlv.value())) {
-                logBerTree(prefix + "." + index++, child);
-            }
-        } catch (RuntimeException ex) {
-            logger.info("{} <decode-error {}>", prefix, ex.getMessage());
-        }
+        return false;
     }
 
     private boolean isRtseApdu(BerTlv apdu) {
@@ -229,7 +203,7 @@ public class P3Asn1GatewayProtocol {
         byte[] nestedResponse = handle(session, nestedApdu);
         return wrapRtseResponse(rtseApdu.tagNumber(), nestedResponse);
     }
-    
+
     private byte[] handleNativeP3Apdu(P3GatewaySessionService.SessionState session, BerTlv apdu) {
         byte[] encoded = BerCodec.encode(apdu);
 
@@ -242,7 +216,7 @@ public class P3Asn1GatewayProtocol {
 
         if (looksLikeNativeBind(apdu)) {
             logger.info("P3 ASN.1 native bind-shaped APDU accepted on outer tag={}", apdu.tagNumber());
-            return mapBind(session, encoded);
+            return mapBind(session, encoded, apdu.tagNumber(), true);
         }
 
         return error(
@@ -250,7 +224,7 @@ public class P3Asn1GatewayProtocol {
             "Native P3 APDU decoding not implemented yet for tag " + apdu.tagNumber()
         );
     }
-    
+
     private boolean looksLikeNativeBind(BerTlv apdu) {
         try {
             String sender = extractSenderFromBind(apdu);
@@ -267,8 +241,6 @@ public class P3Asn1GatewayProtocol {
                 return true;
             }
 
-            // fallback heuristic: username/password pair often exists even if address extraction
-            // is not perfect yet
             if (StringUtils.hasText(username) && StringUtils.hasText(password)) {
                 logger.info(
                     "P3 ASN.1 native bind-shape heuristic matched username={} password-present=true",
@@ -283,35 +255,6 @@ public class P3Asn1GatewayProtocol {
             return false;
         }
     }
-    
-    private void logBerTree(String prefix, BerTlv tlv, int depth, int maxDepth) {
-        if (tlv == null || depth > maxDepth) {
-            return;
-        }
-
-        logger.info(
-            "{} tagClass={} constructed={} tag={} len={}",
-            prefix,
-            tlv.tagClass(),
-            tlv.constructed(),
-            tlv.tagNumber(),
-            tlv.length()
-        );
-
-        if (!tlv.constructed() || depth == maxDepth) {
-            return;
-        }
-
-        try {
-            List<BerTlv> children = BerCodec.decodeAll(tlv.value());
-            for (int i = 0; i < children.size(); i++) {
-                logBerTree(prefix + "." + i, children.get(i), depth + 1, maxDepth);
-            }
-        } catch (RuntimeException ex) {
-            logger.debug("{} tree decode stopped: {}", prefix, ex.getMessage());
-        }
-    }
-
 
     private byte[] findGatewayOrRoseApdu(BerTlv tlv) {
         if (isRoseInvoke(tlv)) {
@@ -588,7 +531,7 @@ public class P3Asn1GatewayProtocol {
 
     private byte[] handleGatewayOperation(P3GatewaySessionService.SessionState session, int operationCode, byte[] argument) {
         return switch (operationCode) {
-            case APDU_BIND_REQUEST -> mapBind(session, argument);
+            case APDU_BIND_REQUEST -> mapBind(session, argument, APDU_BIND_REQUEST, false);
             case APDU_SUBMIT_REQUEST -> mapSubmit(session, argument);
             case APDU_STATUS_REQUEST -> mapStatus(session, argument);
             case APDU_REPORT_REQUEST -> mapReport(session, argument);
@@ -674,7 +617,6 @@ public class P3Asn1GatewayProtocol {
             return new DecodedBind(nativeFields, BindStyle.NATIVE);
         }
 
-        // Retry native decode if caller passed only a TLV value that itself contains one root element.
         try {
             List<BerTlv> nested = BerCodec.decodeAll(payload);
             if (nested.size() == 1) {
@@ -689,8 +631,13 @@ public class P3Asn1GatewayProtocol {
 
         return new DecodedBind(Map.of(), BindStyle.NATIVE);
     }
-    
-    private byte[] mapBind(P3GatewaySessionService.SessionState session, byte[] payload) {
+
+    private byte[] mapBind(
+        P3GatewaySessionService.SessionState session,
+        byte[] payload,
+        int inboundOuterTag,
+        boolean nativeBind
+    ) {
         logger.info("P3 ASN.1 bind candidate payload={}", toHex(payload));
 
         DecodedBind bind = decodeBind(payload);
@@ -706,7 +653,7 @@ public class P3Asn1GatewayProtocol {
 
         if (bind.fields().isEmpty() || !StringUtils.hasText(bind.fields().get(2))) {
             logger.warn("P3 ASN.1 bind rejected: unsupported native bind argument shape");
-            return bind.style() == BindStyle.NATIVE
+            return bind.style() == BindStyle.NATIVE || nativeBind
                 ? nativeBindReject("unsupported-native-p3-bind", "Unsupported native bind argument shape")
                 : error(
                     "unsupported-native-p3-bind",
@@ -723,9 +670,12 @@ public class P3Asn1GatewayProtocol {
         String response = sessionService.handleCommand(session, command);
         logger.info("P3 ASN.1 bind gateway-response={}", response);
 
-        if (bind.style() == BindStyle.NATIVE) {
+        if (bind.style() == BindStyle.NATIVE || nativeBind || inboundOuterTag == NATIVE_BIND_OUTER_TAG) {
             if (response.startsWith("OK")) {
-                return nativeBindAccept(bind.fields().get(2), bind.fields().get(3));
+                Map<String, String> parsed = parseResponse(response);
+                String effectiveSender = parsed.getOrDefault("sender", bind.fields().get(2));
+                String effectiveChannel = parsed.getOrDefault("channel", bind.fields().get(3));
+                return nativeBindAccept(effectiveSender, effectiveChannel);
             }
             return nativeBindRejectFromResponse(response);
         }
@@ -771,7 +721,18 @@ public class P3Asn1GatewayProtocol {
     }
 
     private byte[] nativeBindAccept(String sender, String channel) {
-        return envelope(APDU_BIND_RESPONSE, encodeContextInteger(0, 0));
+        List<byte[]> fields = new ArrayList<>();
+        fields.add(encodeContextInteger(0, 0));
+
+        if (StringUtils.hasText(sender)) {
+            fields.add(encodeUtf8ContextField(1, sender));
+        }
+        if (StringUtils.hasText(channel)) {
+            fields.add(encodeUtf8ContextField(2, channel));
+        }
+
+        byte[] payload = concat(fields);
+        return BerCodec.encode(new BerTlv(TAG_CLASS_CONTEXT, true, 2, 0, payload.length, payload));
     }
 
     private byte[] nativeBindRejectFromResponse(String response) {
@@ -781,12 +742,24 @@ public class P3Asn1GatewayProtocol {
         return nativeBindReject(code, detail);
     }
 
+    /**
+     * Minimal native reject:
+     *
+     * A2 05 A0 03 02 01 01
+     */
     private byte[] nativeBindReject(String code, String detail) {
-        List<byte[]> fields = new ArrayList<>();
-        fields.add(encodeContextInteger(0, 1));
-        fields.add(encodeUtf8ContextField(1, code));
-        fields.add(encodeUtf8ContextField(2, detail));
-        return envelope(APDU_BIND_RESPONSE, concat(fields));
+        byte[] payload = encodeContextInteger(0, 1);
+
+        logger.info(
+            "P3 ASN.1 native bind reject code={} detail={} native-outer-tag={}",
+            code,
+            detail,
+            NATIVE_BIND_OUTER_TAG
+        );
+
+        return BerCodec.encode(
+            new BerTlv(TAG_CLASS_CONTEXT, true, NATIVE_BIND_OUTER_TAG, 0, payload.length, payload)
+        );
     }
 
     private String extractSenderFromBind(BerTlv root) {

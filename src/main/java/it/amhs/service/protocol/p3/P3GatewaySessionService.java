@@ -316,7 +316,7 @@ public class P3GatewaySessionService {
             state.username,
             state.channelName
         );
-        return "OK code=bind-accepted sender=" + state.senderOrAddress;
+        return "OK code=bind-accepted sender=" + state.senderOrAddress + " channel=" + state.channelName;
     }
 
     private String submit(SessionState state, Map<String, String> attributes) {
