@@ -795,6 +795,38 @@ public class P3Asn1GatewayProtocol {
             return null;
         }
     }
+    
+    public boolean isSupportedApplicationApdu(byte[] encodedPdu) {
+        if (encodedPdu == null || encodedPdu.length == 0) {
+            return false;
+        }
+
+        try {
+            BerTlv apdu = BerCodec.decodeSingle(encodedPdu);
+
+            if (isRtseApdu(apdu)) {
+                return true;
+            }
+
+            if (isRoseInvoke(apdu) || isRoseApdu(apdu)) {
+                return true;
+            }
+
+            if (apdu.tagClass() == TAG_CLASS_CONTEXT && apdu.constructed()) {
+                if (isGatewayApduTag(apdu.tagNumber()) && looksLikeGatewayApdu(apdu)) {
+                    return true;
+                }
+
+                if (isNativeP3Apdu(apdu)) {
+                    return true;
+                }
+            }
+
+            return false;
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
 
     private String extractPasswordFromBind(BerTlv root) {
         BerTlv addressNode = findAddressContainer(root);

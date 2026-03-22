@@ -795,60 +795,6 @@ public class P3GatewayServer {
         return out.toByteArray();
     }
 
-    private byte[] replacePresentationPayload(byte[] inboundPpdu, byte[] replacementPayload) {
-        try {
-            logger.info("presentation replace inbound={}", toHexPreview(inboundPpdu, 192));
-            logger.info("presentation replace replacement={}", toHexPreview(replacementPayload, 192));
-
-            BerTlv root = BerCodec.decodeSingle(inboundPpdu);
-
-            if (root.tagClass() != TAG_CLASS_UNIVERSAL || !root.constructed() || root.tagNumber() != 17) {
-                return null;
-            }
-
-            List<BerTlv> children = BerCodec.decodeAll(root.value());
-            ByteArrayOutputStream rebuiltChildren = new ByteArrayOutputStream();
-            boolean replaced = false;
-
-            for (int i = 0; i < children.size(); i++) {
-                BerTlv child = children.get(i);
-                byte[] childEncoded = BerCodec.encode(child);
-
-                logger.info(
-                    "presentation child[{}] tagClass={} constructed={} tagNumber={} len={} first-bytes={}",
-                    i,
-                    child.tagClass(),
-                    child.constructed(),
-                    child.tagNumber(),
-                    child.length(),
-                    toHexPreview(childEncoded, 128)
-                );
-
-                if (!replaced && !isTinyPresentationControl(child)) {
-                    rebuiltChildren.writeBytes(replacementPayload);
-                    replaced = true;
-                } else {
-                    rebuiltChildren.writeBytes(childEncoded);
-                }
-            }
-
-            if (!replaced) {
-                return null;
-            }
-
-            byte[] value = rebuiltChildren.toByteArray();
-            byte[] result = BerCodec.encode(
-                new BerTlv(TAG_CLASS_UNIVERSAL, true, 17, 0, value.length, value)
-            );
-
-            logger.info("presentation replace rebuilt={}", toHexPreview(result, 192));
-            return result;
-        } catch (RuntimeException ex) {
-            logger.warn("Failed to rebuild presentation PPDU: {}", ex.getMessage(), ex);
-            return null;
-        }
-    }
-
     private List<SessionParameter> parseSessionParameters(byte[] spdu, int start) {
         List<SessionParameter> params = new ArrayList<>();
         int index = start;
@@ -913,12 +859,69 @@ public class P3GatewayServer {
                 return null;
             }
 
+            logger.info(
+                "P3 gateway presentation root first-bytes={}",
+                toHexPreview(ppdu, 192)
+            );
+
+            List<Integer> path = findPresentationPayloadPath(root);
+            if (path == null) {
+                logger.info("P3 gateway presentation unwrap result len=-1 first-bytes=<null>");
+                return null;
+            }
+
+            byte[] payload = extractNodeAtPath(root, path);
+            logger.info(
+                "P3 gateway presentation selected nested payload path={} len={} first-bytes={}",
+                path,
+                payload == null ? -1 : payload.length,
+                payload == null ? "<null>" : toHexPreview(payload, 128)
+            );
+            return payload;
+        } catch (RuntimeException ex) {
+            logger.debug("Failed to unwrap presentation PPDU: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private byte[] replacePresentationPayload(byte[] inboundPpdu, byte[] replacementPayload) {
+        try {
+            logger.info("presentation replace inbound={}", toHexPreview(inboundPpdu, 192));
+            logger.info("presentation replace replacement={}", toHexPreview(replacementPayload, 192));
+
+            BerTlv root = BerCodec.decodeSingle(inboundPpdu);
+
+            if (root.tagClass() != TAG_CLASS_UNIVERSAL || !root.constructed() || root.tagNumber() != 17) {
+                return null;
+            }
+
+            List<Integer> path = findPresentationPayloadPath(root);
+            if (path == null) {
+                logger.warn("presentation replace: no payload path found");
+                return null;
+            }
+
+            byte[] rebuilt = replaceNodeAtPath(root, path, replacementPayload);
+            logger.info("presentation replace rebuilt={}", toHexPreview(rebuilt, 192));
+            return rebuilt;
+        } catch (RuntimeException ex) {
+            logger.warn("Failed to rebuild presentation PPDU: {}", ex.getMessage(), ex);
+            return null;
+        }
+    }
+
+    /**
+     * Finds the path to the deepest real application payload inside the Presentation PPDU.
+     * The returned path is a list of child indexes from the Presentation root down to the target node.
+     */
+    private List<Integer> findPresentationPayloadPath(BerTlv root) {
+        try {
             List<BerTlv> children = BerCodec.decodeAll(root.value());
 
             logger.info(
                 "P3 gateway presentation root children count={} first-bytes={}",
                 children.size(),
-                toHexPreview(ppdu, 192)
+                toHexPreview(BerCodec.encode(root), 192)
             );
 
             for (int i = 0; i < children.size(); i++) {
@@ -940,112 +943,150 @@ public class P3GatewayServer {
                     continue;
                 }
 
-                if (isRealAcseApdu(childEncoded)) {
-                    logger.info(
-                        "P3 gateway presentation selected direct ACSE child[{}] len={} first-bytes={}",
-                        i,
-                        childEncoded.length,
-                        toHexPreview(childEncoded, 128)
-                    );
-                    return childEncoded;
-                }
-
-                if (isGatewayApdu(child)) {
-                    logger.info(
-                        "P3 gateway presentation selected direct gateway child[{}] len={} first-bytes={}",
-                        i,
-                        childEncoded.length,
-                        toHexPreview(childEncoded, 128)
-                    );
-                    return childEncoded;
+                List<Integer> nested = findPayloadPathInNode(child);
+                if (nested != null) {
+                    List<Integer> full = new ArrayList<>();
+                    full.add(i);
+                    full.addAll(nested);
+                    return full;
                 }
             }
 
-            for (int i = 0; i < children.size(); i++) {
-                BerTlv child = children.get(i);
-
-                if (isTinyPresentationControl(child)) {
-                    continue;
-                }
-
-                byte[] found = findPresentationFinalPayload(child);
-                if (found != null) {
-                    logger.info(
-                        "P3 gateway presentation selected recursive child[{}] len={} first-bytes={}",
-                        i,
-                        found.length,
-                        toHexPreview(found, 128)
-                    );
-                    return found;
-                }
-            }
-
-            logger.info("P3 gateway presentation unwrap result len=-1 first-bytes=<null>");
             return null;
         } catch (RuntimeException ex) {
-            logger.debug("Failed to unwrap presentation PPDU: {}", ex.getMessage());
+            logger.debug("findPresentationPayloadPath failed: {}", ex.getMessage());
             return null;
         }
     }
 
-    private byte[] findPresentationFinalPayload(BerTlv node) {
+    private List<Integer> findPayloadPathInNode(BerTlv node) {
         if (node == null) {
             return null;
         }
-
-        byte[] encoded = BerCodec.encode(node);
 
         if (isTinyPresentationControl(node)) {
             return null;
         }
 
+        byte[] encoded = BerCodec.encode(node);
+
+        // Prefer real outer protocol APDUs first
         if (isRealAcseApdu(encoded)) {
-            return encoded;
+            return new ArrayList<>();
         }
 
-        if (isGatewayApdu(node)) {
-            return encoded;
+        if (asn1GatewayProtocol.isSupportedApplicationApdu(encoded)) {
+            return new ArrayList<>();
         }
 
         if (!node.constructed()) {
             return null;
         }
 
-        List<BerTlv> children;
         try {
-            children = BerCodec.decodeAll(node.value());
-        } catch (RuntimeException ex) {
-            return null;
-        }
+            List<BerTlv> children = BerCodec.decodeAll(node.value());
 
-        for (BerTlv child : children) {
-            byte[] childEncoded = BerCodec.encode(child);
-
-            if (isTinyPresentationControl(child)) {
-                continue;
+            for (int i = 0; i < children.size(); i++) {
+                BerTlv child = children.get(i);
+                List<Integer> nested = findPayloadPathInNode(child);
+                if (nested != null) {
+                    List<Integer> full = new ArrayList<>();
+                    full.add(i);
+                    full.addAll(nested);
+                    return full;
+                }
             }
-
-            if (isRealAcseApdu(childEncoded)) {
-                return childEncoded;
-            }
-
-            if (isGatewayApdu(child)) {
-                return childEncoded;
-            }
-        }
-
-        for (BerTlv child : children) {
-            if (isTinyPresentationControl(child)) {
-                continue;
-            }
-
-            byte[] found = findPresentationFinalPayload(child);
-            if (found != null) {
-                return found;
-            }
+        } catch (RuntimeException ignored) {
         }
 
         return null;
+    }
+
+    /**
+     * Extracts the BER node at the given child-index path.
+     */
+    private byte[] extractNodeAtPath(BerTlv root, List<Integer> path) {
+        BerTlv current = root;
+
+        for (Integer index : path) {
+            List<BerTlv> children = BerCodec.decodeAll(current.value());
+            if (index < 0 || index >= children.size()) {
+                return null;
+            }
+            current = children.get(index);
+        }
+
+        return BerCodec.encode(current);
+    }
+
+    /**
+     * Rebuilds the entire Presentation PPDU, replacing only the nested node at the given path.
+     */
+    private byte[] replaceNodeAtPath(BerTlv root, List<Integer> path, byte[] replacementPayload) {
+        if (path == null || path.isEmpty()) {
+            return replacementPayload;
+        }
+
+        return replaceNodeAtPathRecursive(root, path, 0, replacementPayload);
+    }
+
+    private byte[] replaceNodeAtPathRecursive(BerTlv current, List<Integer> path, int depth, byte[] replacementPayload) {
+        if (depth == path.size()) {
+            return replacementPayload;
+        }
+
+        if (!current.constructed()) {
+            throw new IllegalArgumentException("Cannot descend into primitive BER node at depth " + depth);
+        }
+
+        List<BerTlv> children = BerCodec.decodeAll(current.value());
+        int wantedIndex = path.get(depth);
+
+        if (wantedIndex < 0 || wantedIndex >= children.size()) {
+            throw new IllegalArgumentException("Invalid child index " + wantedIndex + " at depth " + depth);
+        }
+
+        ByteArrayOutputStream rebuiltChildren = new ByteArrayOutputStream();
+
+        for (int i = 0; i < children.size(); i++) {
+            BerTlv child = children.get(i);
+
+            if (i == wantedIndex) {
+                rebuiltChildren.writeBytes(replaceNodeAtPathRecursive(child, path, depth + 1, replacementPayload));
+            } else {
+                rebuiltChildren.writeBytes(BerCodec.encode(child));
+            }
+        }
+
+        byte[] newValue = rebuiltChildren.toByteArray();
+
+        return BerCodec.encode(
+            new BerTlv(
+                current.tagClass(),
+                current.constructed(),
+                current.tagNumber(),
+                0,
+                newValue.length,
+                newValue
+            )
+        );
+    }
+
+    /**
+     * This method is no longer used for extraction logic, but keep it if other code still references it.
+     * It now delegates to the recursive path-based extraction.
+     */
+    private byte[] findPresentationFinalPayload(BerTlv node) {
+        if (node == null) {
+            return null;
+        }
+
+        List<Integer> path = findPayloadPathInNode(node);
+        if (path == null) {
+            return null;
+        }
+
+        return extractNodeAtPath(node, path);
     }
 
     private boolean isTinyPresentationControl(BerTlv tlv) {
