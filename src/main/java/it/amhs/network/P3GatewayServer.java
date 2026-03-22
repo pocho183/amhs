@@ -256,16 +256,6 @@ public class P3GatewayServer {
                 toHexPreview(pdu, 128)
             );
 
-            if (isIgnorablePostBindBerControl(pdu)) {
-                logger.info(
-                    "P3 gateway connection #{} ignoring post-bind BER control len={} first-bytes={}",
-                    connectionId,
-                    pdu.length,
-                    toHexPreview(pdu, 16)
-                );
-                continue;
-            }
-
             byte[] response = asn1GatewayProtocol.handle(session, pdu);
             output.write(response);
             output.flush();
@@ -349,15 +339,14 @@ public class P3GatewayServer {
                 toHexPreview(payload, 192)
             );
 
-            if (isIgnorablePostBindBerControl(payload)) {
-                logger.info(
-                    "P3 gateway connection #{} ignoring post-bind BER control payload #{} len={} first-bytes={}",
+            if (isSessionAbortSpdu(payload)) {
+                logger.warn(
+                    "P3 gateway connection #{} peer sent Session ABORT payload={}",
                     connectionId,
-                    pduIndex,
-                    payload.length,
-                    toHexPreview(payload, 16)
+                    toHexPreview(payload, 32)
                 );
-                continue;
+                sendRfc1006Disconnect(output);
+                return;
             }
 
             byte[] applicationPdu = extractApplicationPdu(payload, kind);
@@ -378,15 +367,6 @@ public class P3GatewayServer {
                 applicationPdu.length,
                 toHexPreview(applicationPdu, 128)
             );
-
-            if (isIgnorablePostBindBerControl(applicationPdu)) {
-                logger.info(
-                    "P3 gateway connection #{} ignoring extracted post-bind control first-bytes={}",
-                    connectionId,
-                    toHexPreview(applicationPdu, 16)
-                );
-                continue;
-            }
 
             byte[] applicationResponse = asn1GatewayProtocol.handle(session, applicationPdu);
             byte[] wrappedResponse = rewrapResponse(payload, kind, applicationResponse);
@@ -553,6 +533,12 @@ public class P3GatewayServer {
             return "EMPTY";
         }
 
+        int first = payload[0] & 0xFF;
+
+        if (first == 0x0D || first == 0x01 || first == 0x0E || first == 0x19) {
+            return "OSI_SESSION_SPDU";
+        }
+
         try {
             BerTlv tlv = BerCodec.decodeSingle(payload);
 
@@ -568,12 +554,13 @@ public class P3GatewayServer {
         } catch (RuntimeException ignored) {
         }
 
-        int first = payload[0] & 0xFF;
-        if (first == 0x0D || first == 0x01 || first == 0x0E) {
-            return "OSI_SESSION_SPDU";
-        }
-
         return "UNKNOWN_BINARY";
+    }
+
+    private boolean isSessionAbortSpdu(byte[] payload) {
+        return payload != null
+            && payload.length >= 2
+            && (payload[0] & 0xFF) == 0x19;
     }
 
     private byte[] extractApplicationPdu(byte[] payload, String kind) {
@@ -607,27 +594,17 @@ public class P3GatewayServer {
             return new byte[0];
         }
 
-        if ("BER_APDU".equals(inboundKind)) {
+        logger.info("rewrap inboundKind={}", inboundKind);
+        logger.info("rewrap inboundPayload={}", toHexPreview(inboundPayload, 192));
+        logger.info("rewrap applicationResponse={}", toHexPreview(applicationResponse, 192));
+
+        if ("BER_APDU".equals(inboundKind) || "ACSE_APDU".equals(inboundKind)) {
             return applicationResponse;
         }
 
-        if ("ACSE_APDU".equals(inboundKind)) {
-            byte[] inboundAcse = findPreferredAcseForResponse(inboundPayload);
-            if (inboundAcse == null) {
-                return applicationResponse;
-            }
-            return wrapAcseEnvelope(applicationResponse, inboundAcse);
-        }
-
         if ("OSI_PRESENTATION_PPDU".equals(inboundKind)) {
-            byte[] inboundAcse = findPreferredAcseForResponse(inboundPayload);
-
-            if (inboundAcse == null) {
-                return wrapPresentationEnvelope(applicationResponse);
-            }
-
-            byte[] acseResponse = wrapAcseEnvelope(applicationResponse, inboundAcse);
-            return wrapPresentationEnvelope(acseResponse);
+            byte[] rebuiltPresentation = replacePresentationPayload(inboundPayload, applicationResponse);
+            return rebuiltPresentation != null ? rebuiltPresentation : applicationResponse;
         }
 
         if ("OSI_SESSION_SPDU".equals(inboundKind)) {
@@ -640,27 +617,14 @@ public class P3GatewayServer {
             byte[] nestedResponse;
 
             if ("OSI_PRESENTATION_PPDU".equals(nestedKind)) {
-                byte[] inboundAcse = findPreferredAcseForResponse(sessionUserData);
-
-                if (inboundAcse == null) {
-                    nestedResponse = wrapPresentationEnvelope(applicationResponse);
-                } else {
-                    byte[] acseResponse = wrapAcseEnvelope(applicationResponse, inboundAcse);
-                    nestedResponse = wrapPresentationEnvelope(acseResponse);
-                }
-            } else if ("ACSE_APDU".equals(nestedKind)) {
-                byte[] inboundAcse = findPreferredAcseForResponse(sessionUserData);
-                if (inboundAcse == null) {
-                    nestedResponse = applicationResponse;
-                } else {
-                    nestedResponse = wrapAcseEnvelope(applicationResponse, inboundAcse);
-                }
+                byte[] rebuiltPresentation = replacePresentationPayload(sessionUserData, applicationResponse);
+                nestedResponse = rebuiltPresentation != null ? rebuiltPresentation : applicationResponse;
             } else {
                 nestedResponse = applicationResponse;
             }
 
-            byte[] rebuilt = replaceSessionUserData(inboundPayload, nestedResponse);
-            return rebuilt != null ? rebuilt : nestedResponse;
+            byte[] rebuiltSession = replaceSessionUserData(inboundPayload, nestedResponse);
+            return rebuiltSession != null ? rebuiltSession : nestedResponse;
         }
 
         return applicationResponse;
@@ -831,6 +795,60 @@ public class P3GatewayServer {
         return out.toByteArray();
     }
 
+    private byte[] replacePresentationPayload(byte[] inboundPpdu, byte[] replacementPayload) {
+        try {
+            logger.info("presentation replace inbound={}", toHexPreview(inboundPpdu, 192));
+            logger.info("presentation replace replacement={}", toHexPreview(replacementPayload, 192));
+
+            BerTlv root = BerCodec.decodeSingle(inboundPpdu);
+
+            if (root.tagClass() != TAG_CLASS_UNIVERSAL || !root.constructed() || root.tagNumber() != 17) {
+                return null;
+            }
+
+            List<BerTlv> children = BerCodec.decodeAll(root.value());
+            ByteArrayOutputStream rebuiltChildren = new ByteArrayOutputStream();
+            boolean replaced = false;
+
+            for (int i = 0; i < children.size(); i++) {
+                BerTlv child = children.get(i);
+                byte[] childEncoded = BerCodec.encode(child);
+
+                logger.info(
+                    "presentation child[{}] tagClass={} constructed={} tagNumber={} len={} first-bytes={}",
+                    i,
+                    child.tagClass(),
+                    child.constructed(),
+                    child.tagNumber(),
+                    child.length(),
+                    toHexPreview(childEncoded, 128)
+                );
+
+                if (!replaced && !isTinyPresentationControl(child)) {
+                    rebuiltChildren.writeBytes(replacementPayload);
+                    replaced = true;
+                } else {
+                    rebuiltChildren.writeBytes(childEncoded);
+                }
+            }
+
+            if (!replaced) {
+                return null;
+            }
+
+            byte[] value = rebuiltChildren.toByteArray();
+            byte[] result = BerCodec.encode(
+                new BerTlv(TAG_CLASS_UNIVERSAL, true, 17, 0, value.length, value)
+            );
+
+            logger.info("presentation replace rebuilt={}", toHexPreview(result, 192));
+            return result;
+        } catch (RuntimeException ex) {
+            logger.warn("Failed to rebuild presentation PPDU: {}", ex.getMessage(), ex);
+            return null;
+        }
+    }
+
     private List<SessionParameter> parseSessionParameters(byte[] spdu, int start) {
         List<SessionParameter> params = new ArrayList<>();
         int index = start;
@@ -875,7 +893,7 @@ public class P3GatewayServer {
         }
 
         int si = spdu[0] & 0xFF;
-        if (si != 0x0D && si != 0x01 && si != 0x0E) {
+        if (si != 0x0D && si != 0x01 && si != 0x0E && si != 0x19) {
             return -1;
         }
 
@@ -903,8 +921,6 @@ public class P3GatewayServer {
                 toHexPreview(ppdu, 192)
             );
 
-            // PASS 1:
-            // direct children only, skip tiny control fragments, prefer real ACSE or direct gateway APDU
             for (int i = 0; i < children.size(); i++) {
                 BerTlv child = children.get(i);
                 byte[] childEncoded = BerCodec.encode(child);
@@ -920,10 +936,7 @@ public class P3GatewayServer {
                 );
 
                 if (isTinyPresentationControl(child)) {
-                    logger.info(
-                        "P3 gateway presentation child[{}] skipped as tiny control fragment",
-                        i
-                    );
+                    logger.info("P3 gateway presentation child[{}] skipped as tiny control fragment", i);
                     continue;
                 }
 
@@ -948,8 +961,6 @@ public class P3GatewayServer {
                 }
             }
 
-            // PASS 2:
-            // recurse only if no direct match
             for (int i = 0; i < children.size(); i++) {
                 BerTlv child = children.get(i);
 
@@ -1007,7 +1018,6 @@ public class P3GatewayServer {
             return null;
         }
 
-        // Prefer direct real payloads before deeper recursion
         for (BerTlv child : children) {
             byte[] childEncoded = BerCodec.encode(child);
 
@@ -1045,8 +1055,6 @@ public class P3GatewayServer {
 
         byte[] encoded = BerCodec.encode(tlv);
 
-        // Explicitly reject the exact fragment seen in your trace:
-        // A0 03 80 01 01
         if (encoded.length == 5
             && (encoded[0] & 0xFF) == 0xA0
             && (encoded[1] & 0xFF) == 0x03
@@ -1056,7 +1064,6 @@ public class P3GatewayServer {
             return true;
         }
 
-        // Reject very small presentation control nodes
         if (encoded.length <= 8) {
             return true;
         }
@@ -1311,16 +1318,6 @@ public class P3GatewayServer {
 
     private byte mapSessionResponseCode(byte inboundCode) {
         return (byte) (((inboundCode & 0xFF) == 0x0D) ? 0x0E : inboundCode);
-    }
-
-    private boolean isIgnorablePostBindBerControl(byte[] payload) {
-        return payload != null
-            && payload.length == 5
-            && (payload[0] & 0xFF) == 0x19
-            && (payload[1] & 0xFF) == 0x03
-            && (payload[2] & 0xFF) == 0x11
-            && (payload[3] & 0xFF) == 0x01
-            && (payload[4] & 0xFF) == 0x05;
     }
 
     private String commandName(String line) {
