@@ -341,86 +341,105 @@ public class RFC1006Service {
         }
     }
 
-    private void handleAcseAssociationPdu(byte[] payload, OutputStream out, P1AssociationState associationState, CertificateIdentity identity) throws Exception {
-        AcseModels.AcseApdu apdu;
-        try {
-            apdu = acseAssociationProtocol.decode(payload);
-        } catch (IllegalArgumentException ex) {
-            logger.warn("Invalid ACSE association APDU: {}", ex.getMessage());
-            sendRFC1006(out, p1AssociationProtocol.encodeError("invalid-acse-pdu", ex.getMessage()));
-            return;
-        }
+    private void handleAcseAssociationPdu(
+    	    byte[] payload,
+    	    OutputStream out,
+    	    P1AssociationState associationState,
+    	    CertificateIdentity identity
+    	) throws Exception {
+    	    AcseModels.AcseApdu apdu;
+    	    try {
+    	        apdu = acseAssociationProtocol.decode(payload);
+    	    } catch (IllegalArgumentException ex) {
+    	        logger.warn("Invalid ACSE association APDU: {}", ex.getMessage());
+    	        sendRFC1006(out, p1AssociationProtocol.encodeError("invalid-acse-pdu", ex.getMessage()));
+    	        return;
+    	    }
 
-        try {
-            associationState.acseStateMachine.onInbound(apdu);
-        } catch (IllegalStateException ex) {
-            logger.warn("Invalid ACSE state transition: {}", ex.getMessage());
-            sendRFC1006(out, p1AssociationProtocol.encodeError("acse-state", ex.getMessage()));
-            return;
-        }
+    	    try {
+    	        associationState.acseStateMachine.onInbound(apdu);
+    	    } catch (IllegalStateException ex) {
+    	        logger.warn("Invalid ACSE state transition: {}", ex.getMessage());
+    	        sendRFC1006(out, p1AssociationProtocol.encodeError("acse-state", ex.getMessage()));
+    	        return;
+    	    }
 
-        if (apdu instanceof AcseModels.AARQApdu aarq) {
-            try {
-                validateAarqForAmhsP1(aarq, identity.cn(), identity.ou());
-            } catch (IllegalArgumentException ex) {
-                logger.warn("Rejected ACSE AARQ: {}", ex.getMessage());
-                associationState.bound = false;
-                associationState.active = false;
-                AcseModels.AAREApdu reject = buildRejectedAare(Optional.ofNullable(aarq.applicationContextName()), ex.getMessage());
-                associationState.acseStateMachine.onOutbound(reject);
-                sendRFC1006(out, acseAssociationProtocol.encode(reject));
-                return;
-            }
-            associationState.bound = true;
-            associationState.active = true;
-            logger.info("Accepted ACSE AARQ for application context {}", aarq.applicationContextName());
-            java.util.Set<Integer> acceptedPresentationContextIds = negotiateAcceptedPresentationContextIds(aarq);
+    	    if (apdu instanceof AcseModels.AARQApdu aarq) {
+    	        try {
+    	            validateAarqForAmhsP1(aarq, identity.cn(), identity.ou());
+    	        } catch (IllegalArgumentException ex) {
+    	            logger.warn("Rejected ACSE AARQ: {}", ex.getMessage());
+    	            associationState.bound = false;
+    	            associationState.active = false;
 
-            AcseModels.AAREApdu accept = new AcseModels.AAREApdu(
-            	    Optional.of(aarq.applicationContextName()),
-            	    true,
-            	    Optional.of("accepted"),
-            	    Optional.empty(),
-            	    Optional.empty(),
-            	    List.of(ICAO_AMHS_P1_OID),
-            	    acceptedPresentationContextIds
-            	);
-            associationState.acseStateMachine.onOutbound(accept);
-            sendRFC1006(out, acseAssociationProtocol.encode(accept));
-            return;
-        }
+    	            AcseModels.AAREApdu reject =
+    	                buildRejectedAare(Optional.ofNullable(aarq.applicationContextName()), ex.getMessage());
 
-        if (apdu instanceof AcseModels.RLRQApdu) {
-            associationState.bound = false;
-            associationState.active = false;
-            AcseModels.RLREApdu release = new AcseModels.RLREApdu(true);
-            associationState.acseStateMachine.onOutbound(release);
-            sendRFC1006(out, acseAssociationProtocol.encode(release));
-            return;
-        }
+    	            associationState.acseStateMachine.onOutbound(reject);
+    	            sendRFC1006(out, acseAssociationProtocol.encode(reject));
+    	            return;
+    	        }
 
-        if (apdu instanceof AcseModels.ABRTApdu abrt) {
-            associationState.bound = false;
-            associationState.active = false;
-            logger.warn("ACSE association aborted by peer: {}", abrt.diagnostic().orElse(""));
-            return;
-        }
+    	        associationState.bound = true;
+    	        associationState.active = true;
+    	        logger.info("Accepted ACSE AARQ for application context {}", aarq.applicationContextName());
 
-        logger.info("Received ACSE {} while waiting for P1 transfer PDUs", apdu.getClass().getSimpleName());
-    }
+    	        Set<Integer> acceptedPresentationContextIds = negotiateAcceptedPresentationContextIds(aarq);
 
-    AcseModels.AAREApdu buildRejectedAare(Optional<String> applicationContextName, String diagnosticText) {
-        AcseModels.ResultSourceDiagnostic resultSourceDiagnostic = mapAarqDiagnostic(diagnosticText);
-        return new AcseModels.AAREApdu(
-            applicationContextName == null ? Optional.empty() : applicationContextName,
-            false,
-            Optional.ofNullable(diagnosticText).filter(StringUtils::hasText),
-            Optional.of(resultSourceDiagnostic),
-            Optional.empty(),
-            List.of(ICAO_AMHS_P1_OID),
-            Set.of()
-        );
-    }
+    	        AcseModels.AAREApdu accept = new AcseModels.AAREApdu(
+    	            Optional.of(aarq.applicationContextName()),
+    	            true,
+    	            Optional.empty(),
+    	            Optional.of(new AcseModels.ResultSourceDiagnostic(1, 0)),
+    	            Optional.empty(),   // respondingApTitle
+    	            Optional.empty(),   // respondingAeQualifier
+    	            Optional.empty(),   // respondingAeTitle
+    	            Optional.empty(),   // userInformation
+    	            List.of(ICAO_AMHS_P1_OID),
+    	            acceptedPresentationContextIds
+    	        );
+
+    	        associationState.acseStateMachine.onOutbound(accept);
+    	        sendRFC1006(out, acseAssociationProtocol.encode(accept));
+    	        return;
+    	    }
+
+    	    if (apdu instanceof AcseModels.RLRQApdu) {
+    	        associationState.bound = false;
+    	        associationState.active = false;
+
+    	        AcseModels.RLREApdu release = new AcseModels.RLREApdu(true);
+    	        associationState.acseStateMachine.onOutbound(release);
+    	        sendRFC1006(out, acseAssociationProtocol.encode(release));
+    	        return;
+    	    }
+
+    	    if (apdu instanceof AcseModels.ABRTApdu abrt) {
+    	        associationState.bound = false;
+    	        associationState.active = false;
+    	        logger.warn("ACSE association aborted by peer: {}", abrt.diagnostic().orElse(""));
+    	        return;
+    	    }
+
+    	    logger.info("Received ACSE {} while waiting for P1 transfer PDUs", apdu.getClass().getSimpleName());
+    	}
+
+    	private AcseModels.AAREApdu buildRejectedAare(Optional<String> applicationContextName, String diagnosticText) {
+    	    AcseModels.ResultSourceDiagnostic resultSourceDiagnostic = mapAarqDiagnostic(diagnosticText);
+
+    	    return new AcseModels.AAREApdu(
+    	        applicationContextName == null ? Optional.empty() : applicationContextName,
+    	        false,
+    	        Optional.ofNullable(diagnosticText).filter(StringUtils::hasText),
+    	        Optional.of(resultSourceDiagnostic),
+    	        Optional.empty(),   // respondingApTitle
+    	        Optional.empty(),   // respondingAeQualifier
+    	        Optional.empty(),   // respondingAeTitle
+    	        Optional.empty(),   // userInformation
+    	        List.of(ICAO_AMHS_P1_OID),
+    	        Set.of()
+    	    );
+    	}
 
     AcseModels.ResultSourceDiagnostic mapAarqDiagnostic(String diagnosticText) {
         String normalized = diagnosticText == null ? "" : diagnosticText.toLowerCase(Locale.ROOT);
@@ -559,9 +578,22 @@ public class RFC1006Service {
             throw new IllegalArgumentException("ACSE " + side + " AE-title/AE-qualifier requires AP-title");
         }
 
-        if (apTitle.isPresent() && !StringUtils.hasText(apTitle.get().objectIdentifier())) {
-            throw new IllegalArgumentException("ACSE " + side + " AP-title object identifier must not be empty");
+        if (apTitle.isPresent()) {
+            AcseModels.ApTitle value = apTitle.get();
+
+            if (value.isOidForm() && value.objectIdentifier().orElse("").isBlank()) {
+                throw new IllegalArgumentException(
+                    "ACSE " + side + " AP-title object identifier must not be empty"
+                );
+            }
+
+            if (value.isRawBerForm() && value.rawBerBytes().length == 0) {
+                throw new IllegalArgumentException(
+                    "ACSE " + side + " AP-title raw BER must not be empty"
+                );
+            }
         }
+        
         if (aeTitle.isPresent() && !StringUtils.hasText(aeTitle.get())) {
             throw new IllegalArgumentException("ACSE " + side + " AE-title must not be empty");
         }

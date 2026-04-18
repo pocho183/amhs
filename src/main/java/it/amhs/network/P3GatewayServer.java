@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -37,8 +36,8 @@ import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
 import it.amhs.service.protocol.acse.AcseAssociationProtocol;
 import it.amhs.service.protocol.acse.AcseModels;
-import it.amhs.service.protocol.p3.P3Asn1GatewayProtocol;
 import it.amhs.service.protocol.p3.P3GatewaySessionService;
+import it.amhs.service.protocol.p3.P3ProtocolCodec;
 import it.amhs.service.protocol.rfc1006.CotpConnectionTpdu;
 
 @Component
@@ -64,6 +63,14 @@ public class P3GatewayServer {
     private static final int GATEWAY_APDU_MIN_TAG = 0;
     private static final int GATEWAY_APDU_MAX_TAG = 12;
 
+    private static final int PRESENTATION_MODE_SELECTOR_TAG = 0;
+    private static final int PRESENTATION_NORMAL_MODE_PARAMETERS_TAG = 2;
+    private static final int PRESENTATION_CP_CONTEXT_DEFINITION_LIST_TAG = 4;
+    private static final int PRESENTATION_CPA_CONTEXT_DEFINITION_RESULT_LIST_TAG = 5;
+
+    private static final String DEFAULT_PRESENTATION_TRANSFER_SYNTAX_OID = "2.1.1";
+    private static final String DEFAULT_RESPONDING_AP_TITLE_OID = "2.16.56.0.1.0";
+
     private final String host;
     private final int port;
     private final boolean tlsEnabled;
@@ -72,7 +79,7 @@ public class P3GatewayServer {
     private final ListenerProfile listenerProfile;
     private final SSLContext tls;
     private final P3GatewaySessionService sessionService;
-    private final P3Asn1GatewayProtocol asn1GatewayProtocol;
+    private final P3ProtocolCodec p3ProtocolCodec;
     private final AcseAssociationProtocol acseAssociationProtocol;
     private final ExecutorService clientExecutor;
     private final AtomicLong connectionSequence = new AtomicLong(0);
@@ -87,7 +94,7 @@ public class P3GatewayServer {
         @Value("${amhs.p3.gateway.listener-profile:STANDARD_P3}") String listenerProfile,
         SSLContext tls,
         P3GatewaySessionService sessionService,
-        P3Asn1GatewayProtocol asn1GatewayProtocol,
+        P3ProtocolCodec p3ProtocolCodec,
         AcseAssociationProtocol acseAssociationProtocol
     ) {
         if (port < 1 || port > 65_535) {
@@ -105,7 +112,7 @@ public class P3GatewayServer {
         this.listenerProfile = ListenerProfile.from(listenerProfile);
         this.tls = tls;
         this.sessionService = sessionService;
-        this.asn1GatewayProtocol = asn1GatewayProtocol;
+        this.p3ProtocolCodec = p3ProtocolCodec;
         this.acseAssociationProtocol = acseAssociationProtocol;
         this.clientExecutor = Executors.newFixedThreadPool(maxSessions, new NamedDaemonThreadFactory());
 
@@ -204,7 +211,10 @@ public class P3GatewayServer {
     ) throws Exception {
         try (
             BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
-            PrintWriter writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8)), true)
+            PrintWriter writer = new PrintWriter(
+                new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8)),
+                true
+            )
         ) {
             if (textWelcomeEnabled) {
                 writer.println("OK code=gateway-ready");
@@ -240,7 +250,7 @@ public class P3GatewayServer {
         int pduIndex = 0;
 
         while (true) {
-            byte[] pdu = asn1GatewayProtocol.readPdu(input);
+            byte[] pdu = readBerPdu(input);
             if (pdu == null) {
                 logger.info("P3 gateway connection #{} BER session closed after {} APDU(s)", connectionId, pduIndex);
                 return;
@@ -256,7 +266,7 @@ public class P3GatewayServer {
                 toHexPreview(pdu, 128)
             );
 
-            byte[] response = asn1GatewayProtocol.handle(session, pdu);
+            byte[] response = p3ProtocolCodec.handle(session, pdu);
             output.write(response);
             output.flush();
 
@@ -265,6 +275,51 @@ public class P3GatewayServer {
                 return;
             }
         }
+    }
+
+    private byte[] readBerPdu(PushbackInputStream inputStream) throws Exception {
+        int firstOctet = inputStream.read();
+        if (firstOctet < 0) {
+            return null;
+        }
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(firstOctet);
+
+        int secondOctet = inputStream.read();
+        if (secondOctet < 0) {
+            throw new EOFException("Missing BER length octet");
+        }
+        out.write(secondOctet);
+
+        int valueLength;
+        if ((secondOctet & 0x80) == 0) {
+            valueLength = secondOctet;
+        } else {
+            int numLenOctets = secondOctet & 0x7F;
+            if (numLenOctets == 0) {
+                throw new IllegalArgumentException("Indefinite BER length is not supported");
+            }
+
+            byte[] lenBytes = inputStream.readNBytes(numLenOctets);
+            if (lenBytes.length != numLenOctets) {
+                throw new EOFException("Truncated BER length");
+            }
+            out.writeBytes(lenBytes);
+
+            valueLength = 0;
+            for (byte b : lenBytes) {
+                valueLength = (valueLength << 8) | (b & 0xFF);
+            }
+        }
+
+        byte[] value = inputStream.readNBytes(valueLength);
+        if (value.length != valueLength) {
+            throw new EOFException("Truncated BER value");
+        }
+
+        out.writeBytes(value);
+        return out.toByteArray();
     }
 
     private void handleRfc1006Session(
@@ -368,7 +423,7 @@ public class P3GatewayServer {
                 toHexPreview(applicationPdu, 128)
             );
 
-            byte[] applicationResponse = asn1GatewayProtocol.handle(session, applicationPdu);
+            byte[] applicationResponse = p3ProtocolCodec.handle(session, applicationPdu);
             byte[] wrappedResponse = rewrapResponse(payload, kind, applicationResponse);
 
             logger.info(
@@ -598,13 +653,40 @@ public class P3GatewayServer {
         logger.info("rewrap inboundPayload={}", toHexPreview(inboundPayload, 192));
         logger.info("rewrap applicationResponse={}", toHexPreview(applicationResponse, 192));
 
-        if ("BER_APDU".equals(inboundKind) || "ACSE_APDU".equals(inboundKind)) {
+        if ("BER_APDU".equals(inboundKind)) {
             return applicationResponse;
         }
 
+        if ("ACSE_APDU".equals(inboundKind)) {
+            byte[] acseResponse = wrapAcseEnvelope(applicationResponse, inboundPayload);
+            return acseResponse != null ? acseResponse : applicationResponse;
+        }
+
         if ("OSI_PRESENTATION_PPDU".equals(inboundKind)) {
-            byte[] rebuiltPresentation = replacePresentationPayload(inboundPayload, applicationResponse);
-            return rebuiltPresentation != null ? rebuiltPresentation : applicationResponse;
+            byte[] inboundAcse = extractPresentationAcseApdu(inboundPayload);
+            byte[] acseResponse = wrapAcseEnvelope(applicationResponse, inboundAcse);
+            byte[] payloadForPresentation = acseResponse != null ? acseResponse : applicationResponse;
+
+            logger.info(
+                "P3 presentation branch using raw ACSE-for-presentation={}",
+                toHexPreview(payloadForPresentation, 192)
+            );
+
+            byte[] rebuiltPresentation = buildPresentationConnectAccept(
+                inboundPayload,
+                payloadForPresentation
+            );
+
+            if (rebuiltPresentation != null) {
+                logger.info(
+                    "P3 outbound rebuilt presentation len={} first-bytes={}",
+                    rebuiltPresentation.length,
+                    toHexPreview(rebuiltPresentation, 192)
+                );
+                return rebuiltPresentation;
+            }
+
+            return payloadForPresentation;
         }
 
         if ("OSI_SESSION_SPDU".equals(inboundKind)) {
@@ -614,13 +696,30 @@ public class P3GatewayServer {
             }
 
             String nestedKind = classifyPayload(sessionUserData);
-            byte[] nestedResponse;
+            byte[] nestedResponse = applicationResponse;
 
             if ("OSI_PRESENTATION_PPDU".equals(nestedKind)) {
-                byte[] rebuiltPresentation = replacePresentationPayload(sessionUserData, applicationResponse);
-                nestedResponse = rebuiltPresentation != null ? rebuiltPresentation : applicationResponse;
-            } else {
-                nestedResponse = applicationResponse;
+                byte[] inboundAcse = extractPresentationAcseApdu(sessionUserData);
+                byte[] acseResponse = wrapAcseEnvelope(applicationResponse, inboundAcse);
+                byte[] payloadForPresentation = acseResponse != null ? acseResponse : applicationResponse;
+
+                logger.info(
+                    "P3 session->presentation branch using raw ACSE-for-presentation={}",
+                    toHexPreview(payloadForPresentation, 192)
+                );
+
+                byte[] rebuiltPresentation = buildPresentationConnectAccept(
+                    sessionUserData,
+                    payloadForPresentation
+                );
+
+                nestedResponse = rebuiltPresentation != null ? rebuiltPresentation : payloadForPresentation;
+
+            } else if ("ACSE_APDU".equals(nestedKind)) {
+                byte[] acseResponse = wrapAcseEnvelope(applicationResponse, sessionUserData);
+                if (acseResponse != null) {
+                    nestedResponse = acseResponse;
+                }
             }
 
             byte[] rebuiltSession = replaceSessionUserData(inboundPayload, nestedResponse);
@@ -629,65 +728,762 @@ public class P3GatewayServer {
 
         return applicationResponse;
     }
-
-    private byte[] findPreferredAcseForResponse(byte[] data) {
-        if (data == null || data.length == 0) {
+    
+    private byte[] buildRosResultApdu(byte[] p3Payload) {
+        if (p3Payload == null || p3Payload.length == 0) {
             return null;
         }
 
-        if (isRealAcseApdu(data)) {
-            return data;
-        }
-
-        String kind = classifyPayload(data);
-
-        if ("OSI_SESSION_SPDU".equals(kind)) {
-            byte[] sessionUserData = extractSessionUserData(data);
-            return findPreferredAcseForResponse(sessionUserData);
-        }
-
-        if ("OSI_PRESENTATION_PPDU".equals(kind)) {
-            try {
-                BerTlv root = BerCodec.decodeSingle(data);
-                if (!root.constructed()) {
-                    return null;
-                }
-
-                for (BerTlv child : BerCodec.decodeAll(root.value())) {
-                    byte[] encodedChild = BerCodec.encode(child);
-                    byte[] found = findPreferredAcseForResponse(encodedChild);
-                    if (found != null) {
-                        return found;
-                    }
-                }
-            } catch (RuntimeException ex) {
-                logger.debug("Failed to search ACSE inside presentation: {}", ex.getMessage());
+        // If caller already gave us a ROS returnResult APDU, do not wrap again.
+        try {
+            BerTlv tlv = BerCodec.decodeSingle(p3Payload);
+            if (tlv.tagClass() == TAG_CLASS_APPLICATION && tlv.constructed() && tlv.tagNumber() == 1) {
+                return p3Payload;
             }
+        } catch (RuntimeException ignored) {
+        }
+
+        // invokeId = 1
+        byte[] invokeIdField = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_UNIVERSAL,
+                false,
+                2,
+                0,
+                1,
+                new byte[] { 0x01 }
+            )
+        );
+
+        // result = [0] EXPLICIT <bare P3 payload>
+        byte[] resultField = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                true,
+                0,
+                0,
+                p3Payload.length,
+                p3Payload
+            )
+        );
+
+        byte[] seqValue = concat(List.of(invokeIdField, resultField));
+
+        byte[] sequence = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_UNIVERSAL,
+                true,
+                16,
+                0,
+                seqValue.length,
+                seqValue
+            )
+        );
+
+        byte[] ros = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_APPLICATION,
+                true,
+                1,
+                0,
+                sequence.length,
+                sequence
+            )
+        );
+
+        logger.info("P3 ROS returnResult built={}", toHexPreview(ros, 192));
+        return ros;
+    }
+
+    private byte[] extractPresentationAcseApdu(byte[] presentationPpdu) {
+        if (presentationPpdu == null || presentationPpdu.length == 0) {
             return null;
         }
 
         try {
-            BerTlv tlv = BerCodec.decodeSingle(data);
-            if (!tlv.constructed()) {
+            BerTlv root = BerCodec.decodeSingle(presentationPpdu);
+            if (root.tagClass() != TAG_CLASS_UNIVERSAL || !root.constructed() || root.tagNumber() != 17) {
+                return null;
+            }
+            return findAcseApduInNode(root);
+        } catch (RuntimeException ex) {
+            logger.debug("Failed to extract ACSE APDU from Presentation PPDU: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private byte[] findAcseApduInNode(BerTlv node) {
+        if (node == null) {
+            return null;
+        }
+
+        try {
+            byte[] encoded = BerCodec.encode(node);
+
+            if (looksLikeTopLevelAcse(encoded)) {
+                return encoded;
+            }
+
+            if (!node.constructed()) {
                 return null;
             }
 
-            for (BerTlv child : BerCodec.decodeAll(tlv.value())) {
-                byte[] encodedChild = BerCodec.encode(child);
-                byte[] found = findPreferredAcseForResponse(encodedChild);
+            for (BerTlv child : BerCodec.decodeAll(node.value())) {
+                byte[] found = findAcseApduInNode(child);
                 if (found != null) {
                     return found;
                 }
             }
-        } catch (RuntimeException ex) {
-            logger.debug("Failed to search nested ACSE: {}", ex.getMessage());
+        } catch (RuntimeException ignored) {
         }
 
         return null;
     }
+    
+    private byte[] buildPresentationUserDataFromAcse(byte[] acseApdu, int presentationContextId) {
+        if (acseApdu == null || acseApdu.length == 0) {
+            return null;
+        }
+
+        byte[] contextIdField = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_UNIVERSAL,
+                false,
+                2,
+                0,
+                integerBytes(presentationContextId).length,
+                integerBytes(presentationContextId)
+            )
+        );
+
+        // presentation-data-values ::= [0] EXPLICIT ANY
+        // here we carry the ACSE APDU as single-ASN1-type equivalent in the PDV-list
+        byte[] presentationDataValues = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                true,
+                0,
+                0,
+                acseApdu.length,
+                acseApdu
+            )
+        );
+
+        byte[] pdvListValue = concat(List.of(contextIdField, presentationDataValues));
+
+        byte[] pdvList = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_UNIVERSAL,
+                true,
+                16,
+                0,
+                pdvListValue.length,
+                pdvListValue
+            )
+        );
+
+        // fully-encoded-data [APPLICATION 1] IMPLICIT SEQUENCE OF PDV-list
+        // so the APPLICATION 1 value is the concatenated PDV-list item bytes directly
+        return BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_APPLICATION,
+                true,
+                1,
+                0,
+                pdvList.length,
+                pdvList
+            )
+        );
+    }
+
+    private byte[] buildPresentationConnectAccept(byte[] inboundPresentation, byte[] applicationResponse) {
+        try {
+            logger.info("presentation CPA rebuild inbound={}", toHexPreview(inboundPresentation, 192));
+            logger.info("presentation CPA rebuild app-response={}", toHexPreview(applicationResponse, 192));
+
+            BerTlv root = BerCodec.decodeSingle(inboundPresentation);
+            if (root.tagClass() != TAG_CLASS_UNIVERSAL || !root.constructed() || root.tagNumber() != 17) {
+                logger.warn("presentation CPA rebuild: inbound root is not expected Presentation SET");
+                return null;
+            }
+
+            List<BerTlv> rootChildren = BerCodec.decodeAll(root.value());
+
+            BerTlv modeSelector = null;
+            BerTlv inboundNormalModeParameters = null;
+
+            for (BerTlv child : rootChildren) {
+                if (child.tagClass() == TAG_CLASS_CONTEXT
+                    && child.constructed()
+                    && child.tagNumber() == PRESENTATION_MODE_SELECTOR_TAG) {
+                    modeSelector = child;
+                } else if (child.tagClass() == TAG_CLASS_CONTEXT
+                    && child.constructed()
+                    && child.tagNumber() == PRESENTATION_NORMAL_MODE_PARAMETERS_TAG) {
+                    inboundNormalModeParameters = child;
+                }
+            }
+
+            List<byte[]> rebuiltRootChildren = new ArrayList<>();
+
+            if (modeSelector != null) {
+                rebuiltRootChildren.add(BerCodec.encode(modeSelector));
+            }
+
+            byte[] rebuiltNormalModeParameters = buildPresentationNormalModeParameters(
+                inboundNormalModeParameters,
+                applicationResponse
+            );
+            if (rebuiltNormalModeParameters == null) {
+                return null;
+            }
+            rebuiltRootChildren.add(rebuiltNormalModeParameters);
+
+            logger.info("presentation CPA root-children count={}", rebuiltRootChildren.size());
+
+            byte[] newRootValue = concat(rebuiltRootChildren);
+
+            byte[] rebuilt = BerCodec.encode(
+                new BerTlv(
+                    TAG_CLASS_UNIVERSAL,
+                    true,
+                    17,
+                    0,
+                    newRootValue.length,
+                    newRootValue
+                )
+            );
+
+            logger.info("presentation CPA rebuilt={}", toHexPreview(rebuilt, 192));
+            return rebuilt;
+        } catch (RuntimeException ex) {
+            logger.warn("Failed to build Presentation CPA: {}", ex.getMessage(), ex);
+            return null;
+        }
+    }
+
+    private byte[] buildPresentationNormalModeParameters(
+        BerTlv inboundNormalModeParameters,
+        byte[] applicationResponse
+    ) {
+        List<byte[]> children = new ArrayList<>();
+        BerTlv inboundPayloadChild = null;
+        BerTlv inboundContextDefinitionList = null;
+
+        if (inboundNormalModeParameters != null) {
+            try {
+                for (BerTlv child : BerCodec.decodeAll(inboundNormalModeParameters.value())) {
+                    if (isPresentationCpContextDefinitionList(child)) {
+                        inboundContextDefinitionList = child;
+                    } else if (inboundPayloadChild == null) {
+                        inboundPayloadChild = child;
+                    }
+                }
+            } catch (RuntimeException ex) {
+                logger.debug("Could not inspect inbound normal-mode-parameters: {}", ex.getMessage());
+            }
+        }
+
+        byte[] resultList = buildPresentationContextDefinitionResultList(inboundContextDefinitionList);
+        if (resultList != null) {
+            children.add(resultList);
+        }
+
+        byte[] rebuiltPayloadChild = buildPresentationPayloadChildFromInbound(inboundPayloadChild, applicationResponse);
+        if (rebuiltPayloadChild == null) {
+            logger.warn("Could not rebuild presentation payload child");
+            return null;
+        }
+
+        children.add(rebuiltPayloadChild);
+
+        logger.info(
+            "presentation normal-mode-parameters rebuilt with {} child(ren) payload-first-bytes={}",
+            children.size(),
+            toHexPreview(applicationResponse, 128)
+        );
+
+        byte[] value = concat(children);
+
+        return BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                true,
+                PRESENTATION_NORMAL_MODE_PARAMETERS_TAG,
+                0,
+                value.length,
+                value
+            )
+        );
+    }
+
+    private boolean isPresentationCpContextDefinitionList(BerTlv tlv) {
+        return tlv != null
+            && tlv.tagClass() == TAG_CLASS_CONTEXT
+            && tlv.constructed()
+            && tlv.tagNumber() == PRESENTATION_CP_CONTEXT_DEFINITION_LIST_TAG;
+    }
+
+    private byte[] buildPresentationContextDefinitionResultList(BerTlv inboundListChild) {
+        if (inboundListChild == null) {
+            return null;
+        }
+
+        try {
+            List<PresentationContextDefinition> definitions = parsePresentationContextDefinitions(inboundListChild);
+            if (definitions.isEmpty()) {
+                return null;
+            }
+
+            List<byte[]> encodedItems = new ArrayList<>();
+            for (PresentationContextDefinition ignored : definitions) {
+                encodedItems.add(encodePresentationContextResultItem(0, DEFAULT_PRESENTATION_TRANSFER_SYNTAX_OID));
+            }
+
+            byte[] seqValue = concat(encodedItems);
+
+            return BerCodec.encode(
+                new BerTlv(
+                    TAG_CLASS_CONTEXT,
+                    true,
+                    PRESENTATION_CPA_CONTEXT_DEFINITION_RESULT_LIST_TAG,
+                    0,
+                    seqValue.length,
+                    seqValue
+                )
+            );
+        } catch (RuntimeException ex) {
+            logger.warn("Failed to build presentation-context-definition-result-list: {}", ex.getMessage(), ex);
+            return null;
+        }
+    }
+
+    private byte[] encodePresentationContextResultItem(int result, String transferSyntaxOid) {
+        byte[] resultBytes = integerBytes(result);
+        byte[] tsOidBytes = encodeOidValue(transferSyntaxOid);
+
+        byte[] resultField = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                false,
+                0,
+                0,
+                resultBytes.length,
+                resultBytes
+            )
+        );
+
+        byte[] transferSyntaxOidField = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_UNIVERSAL,
+                false,
+                6,
+                0,
+                tsOidBytes.length,
+                tsOidBytes
+            )
+        );
+
+        byte[] transferSyntaxField = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                true,
+                1,
+                0,
+                transferSyntaxOidField.length,
+                transferSyntaxOidField
+            )
+        );
+
+        byte[] itemValue = concat(List.of(resultField, transferSyntaxField));
+
+        return BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_UNIVERSAL,
+                true,
+                16,
+                0,
+                itemValue.length,
+                itemValue
+            )
+        );
+    }
+
+    private List<PresentationContextDefinition> parsePresentationContextDefinitions(BerTlv inboundListChild) {
+        List<PresentationContextDefinition> out = new ArrayList<>();
+
+        if (inboundListChild == null) {
+            return out;
+        }
+
+        List<BerTlv> items;
+
+        try {
+            List<BerTlv> directItems = BerCodec.decodeAll(inboundListChild.value());
+
+            // Two encodings are accepted:
+            //
+            // 1) [4] contains items directly:
+            //      A4 xx
+            //         30 ...
+            //         30 ...
+            //
+            // 2) [4] contains one outer SEQUENCE wrapping the items:
+            //      A4 xx
+            //         30 xx
+            //            30 ...
+            //            30 ...
+            //
+            if (directItems.size() == 1
+                && directItems.get(0).tagClass() == TAG_CLASS_UNIVERSAL
+                && directItems.get(0).constructed()
+                && directItems.get(0).tagNumber() == 16) {
+
+                BerTlv maybeWrapper = directItems.get(0);
+                List<BerTlv> nested = BerCodec.decodeAll(maybeWrapper.value());
+
+                boolean nestedAreItems = !nested.isEmpty();
+                for (BerTlv nestedItem : nested) {
+                    if (nestedItem.tagClass() != TAG_CLASS_UNIVERSAL
+                        || !nestedItem.constructed()
+                        || nestedItem.tagNumber() != 16) {
+                        nestedAreItems = false;
+                        break;
+                    }
+                }
+
+                items = nestedAreItems ? nested : directItems;
+            } else {
+                items = directItems;
+            }
+        } catch (RuntimeException ex) {
+            throw new IllegalArgumentException("Failed to decode presentation context definition list", ex);
+        }
+
+        for (BerTlv item : items) {
+            if (item.tagClass() != TAG_CLASS_UNIVERSAL || !item.constructed() || item.tagNumber() != 16) {
+                throw new IllegalArgumentException("Presentation context definition item must be SEQUENCE");
+            }
+
+            List<BerTlv> fields = BerCodec.decodeAll(item.value());
+            if (fields.size() < 3) {
+                throw new IllegalArgumentException(
+                    "Presentation context definition item must contain id, abstract syntax and transfer syntax list"
+                );
+            }
+
+            BerTlv idField = fields.get(0);
+            if (idField.tagClass() != TAG_CLASS_UNIVERSAL || idField.constructed() || idField.tagNumber() != 2) {
+                throw new IllegalArgumentException("Presentation context id must be INTEGER");
+            }
+
+            int contextId = decodeSmallPositiveInteger(idField.value());
+
+            BerTlv abstractSyntaxField = fields.get(1);
+            if (abstractSyntaxField.tagClass() != TAG_CLASS_UNIVERSAL
+                || abstractSyntaxField.constructed()
+                || abstractSyntaxField.tagNumber() != 6) {
+                throw new IllegalArgumentException("Presentation context abstract syntax must be OBJECT IDENTIFIER");
+            }
+
+            String abstractSyntaxOid = decodeOidValue(abstractSyntaxField.value());
+            out.add(new PresentationContextDefinition(contextId, abstractSyntaxOid));
+        }
+
+        return out;
+    }
+
+    private byte[] buildPresentationPayloadChildFromInbound(BerTlv inboundPayloadChild, byte[] acseApdu) {
+        if (acseApdu == null || acseApdu.length == 0) {
+            return null;
+        }
+
+        try {
+            if (inboundPayloadChild == null) {
+                logger.warn("No inbound presentation payload child found; synthesizing fully-encoded-data");
+                return buildPresentationUserDataFromAcse(acseApdu, 1);
+            }
+
+            byte[] inboundEncoded = BerCodec.encode(inboundPayloadChild);
+
+            byte[] rebuiltCarrier = rebuildPresentationResponseCarrier(inboundPayloadChild, acseApdu);
+            if (rebuiltCarrier != null) {
+                logger.info(
+                    "Inbound presentation payload child rebuilt as presentation carrier inbound-first-bytes={}",
+                    toHexPreview(inboundEncoded, 128)
+                );
+                return rebuiltCarrier;
+            }
+
+            logger.info(
+                "Presentation payload child fallback to synthesized fully-encoded-data inbound-first-bytes={}",
+                toHexPreview(inboundEncoded, 128)
+            );
+            return buildPresentationUserDataFromAcse(acseApdu, 1);
+
+        } catch (RuntimeException ex) {
+            logger.warn("Failed to rebuild presentation payload child: {}", ex.getMessage(), ex);
+            return buildPresentationUserDataFromAcse(acseApdu, 1);
+        }
+    }
+    
+    private byte[] rebuildPresentationResponseCarrier(BerTlv inboundPayloadChild, byte[] acseApdu) {
+        if (inboundPayloadChild == null || acseApdu == null || acseApdu.length == 0) {
+            return null;
+        }
+
+        try {
+            byte[] inboundEncoded = BerCodec.encode(inboundPayloadChild);
+
+            // If inbound child is already a valid Presentation fully-encoded-data carrier,
+            // preserve its shape and replace only the presentation-data-values branch.
+            if (inboundPayloadChild.tagClass() == TAG_CLASS_APPLICATION
+                && inboundPayloadChild.constructed()
+                && inboundPayloadChild.tagNumber() == 1
+                && !looksLikeTopLevelAcse(inboundEncoded)) {
+
+                List<BerTlv> pdvItems = BerCodec.decodeAll(inboundPayloadChild.value());
+                if (pdvItems.isEmpty()) {
+                    return null;
+                }
+
+                List<byte[]> rebuiltItems = new ArrayList<>();
+                boolean replaced = false;
+
+                for (BerTlv pdvItem : pdvItems) {
+                    byte[] rebuiltItem = rebuildPresentationPdvList(pdvItem, acseApdu);
+                    if (rebuiltItem != null) {
+                        rebuiltItems.add(rebuiltItem);
+                        replaced = true;
+                    } else {
+                        rebuiltItems.add(BerCodec.encode(pdvItem));
+                    }
+                }
+
+                if (replaced) {
+                    byte[] rebuiltValue = concat(rebuiltItems);
+                    return BerCodec.encode(
+                        new BerTlv(
+                            TAG_CLASS_APPLICATION,
+                            true,
+                            1,
+                            0,
+                            rebuiltValue.length,
+                            rebuiltValue
+                        )
+                    );
+                }
+            }
+
+            // Otherwise synthesize a clean fully-encoded-data wrapper.
+            return buildPresentationUserDataFromAcse(acseApdu, 1);
+
+        } catch (RuntimeException ex) {
+            logger.warn("Failed to rebuild presentation response carrier: {}", ex.getMessage(), ex);
+            return buildPresentationUserDataFromAcse(acseApdu, 1);
+        }
+    }
+
+    private byte[] rebuildPresentationPdvList(BerTlv pdvListNode, byte[] acseApdu) {
+        if (pdvListNode == null || acseApdu == null || acseApdu.length == 0) {
+            return null;
+        }
+
+        try {
+            if (pdvListNode.tagClass() != TAG_CLASS_UNIVERSAL
+                || !pdvListNode.constructed()
+                || pdvListNode.tagNumber() != 16) {
+                return null;
+            }
+
+            List<BerTlv> fields = BerCodec.decodeAll(pdvListNode.value());
+            if (fields.isEmpty()) {
+                return null;
+            }
+
+            List<byte[]> rebuiltFields = new ArrayList<>();
+            boolean replaced = false;
+            boolean sawContextId = false;
+
+            for (BerTlv field : fields) {
+                boolean isContextId =
+                    field.tagClass() == TAG_CLASS_UNIVERSAL
+                        && !field.constructed()
+                        && field.tagNumber() == 2;
+
+                boolean isPresentationDataValues =
+                    field.tagClass() == TAG_CLASS_CONTEXT
+                        && field.constructed()
+                        && (field.tagNumber() == 0 || field.tagNumber() == 1 || field.tagNumber() == 2);
+
+                if (isContextId) {
+                    sawContextId = true;
+                    rebuiltFields.add(BerCodec.encode(field));
+                    continue;
+                }
+
+                if (isPresentationDataValues && !replaced) {
+                    rebuiltFields.add(
+                        BerCodec.encode(
+                            new BerTlv(
+                                TAG_CLASS_CONTEXT,
+                                true,
+                                0,
+                                0,
+                                acseApdu.length,
+                                acseApdu
+                            )
+                        )
+                    );
+                    replaced = true;
+                    continue;
+                }
+
+                rebuiltFields.add(BerCodec.encode(field));
+            }
+
+            if (!replaced && sawContextId) {
+                rebuiltFields.add(
+                    BerCodec.encode(
+                        new BerTlv(
+                            TAG_CLASS_CONTEXT,
+                            true,
+                            0,
+                            0,
+                            acseApdu.length,
+                            acseApdu
+                        )
+                    )
+                );
+                replaced = true;
+            }
+
+            if (!replaced) {
+                return null;
+            }
+
+            byte[] rebuiltValue = concat(rebuiltFields);
+
+            return BerCodec.encode(
+                new BerTlv(
+                    TAG_CLASS_UNIVERSAL,
+                    true,
+                    16,
+                    0,
+                    rebuiltValue.length,
+                    rebuiltValue
+                )
+            );
+
+        } catch (RuntimeException ex) {
+            logger.debug("Failed to rebuild presentation PDV-list: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private int decodeSmallPositiveInteger(byte[] value) {
+        if (value == null || value.length == 0 || value.length > 4) {
+            throw new IllegalArgumentException("Invalid INTEGER length");
+        }
+
+        if ((value[0] & 0x80) != 0) {
+            throw new IllegalArgumentException("INTEGER must be non-negative");
+        }
+
+        int out = 0;
+        for (byte b : value) {
+            out = (out << 8) | (b & 0xFF);
+        }
+
+        if (out <= 0) {
+            throw new IllegalArgumentException("Presentation-context-id must be positive");
+        }
+
+        return out;
+    }
+
+    private byte[] encodeOidValue(String oid) {
+        String[] parts = oid.split("\\.");
+        if (parts.length < 2) {
+            throw new IllegalArgumentException("OID must contain at least two arcs");
+        }
+
+        int first = Integer.parseInt(parts[0]);
+        int second = Integer.parseInt(parts[1]);
+        if (first < 0 || first > 2 || second < 0 || (first < 2 && second > 39)) {
+            throw new IllegalArgumentException("Invalid first OID arcs");
+        }
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write((first * 40) + second);
+
+        for (int i = 2; i < parts.length; i++) {
+            long arc = Long.parseLong(parts[i]);
+            if (arc < 0) {
+                throw new IllegalArgumentException("OID arc must be >= 0");
+            }
+            writeBase128(out, arc);
+        }
+
+        return out.toByteArray();
+    }
+
+    private void writeBase128(ByteArrayOutputStream out, long value) {
+        int[] tmp = new int[10];
+        int count = 0;
+
+        tmp[count++] = (int) (value & 0x7F);
+        value >>= 7;
+
+        while (value > 0) {
+            tmp[count++] = (int) (value & 0x7F);
+            value >>= 7;
+        }
+
+        for (int i = count - 1; i >= 0; i--) {
+            int b = tmp[i];
+            if (i != 0) {
+                b |= 0x80;
+            }
+            out.write(b);
+        }
+    }
+
+    private byte[] integerBytes(int value) {
+        byte[] out = new byte[4];
+        out[0] = (byte) ((value >>> 24) & 0xFF);
+        out[1] = (byte) ((value >>> 16) & 0xFF);
+        out[2] = (byte) ((value >>> 8) & 0xFF);
+        out[3] = (byte) (value & 0xFF);
+
+        int start = 0;
+        while (start < 3 && out[start] == 0 && (out[start + 1] & 0x80) == 0) {
+            start++;
+        }
+
+        byte[] minimal = new byte[4 - start];
+        System.arraycopy(out, start, minimal, 0, minimal.length);
+        return minimal;
+    }
+
+    private byte[] concat(List<byte[]> parts) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        if (parts == null) {
+            return out.toByteArray();
+        }
+
+        for (byte[] part : parts) {
+            if (part != null && part.length > 0) {
+                out.write(part, 0, part.length);
+            }
+        }
+
+        return out.toByteArray();
+    }
 
     private boolean isRealAcseApdu(byte[] encoded) {
-        if (encoded == null || encoded.length < 10) {
+        if (encoded == null || encoded.length == 0) {
             return false;
         }
 
@@ -859,10 +1655,7 @@ public class P3GatewayServer {
                 return null;
             }
 
-            logger.info(
-                "P3 gateway presentation root first-bytes={}",
-                toHexPreview(ppdu, 192)
-            );
+            logger.info("P3 gateway presentation root first-bytes={}", toHexPreview(ppdu, 192));
 
             List<Integer> path = findPresentationPayloadPath(root);
             if (path == null) {
@@ -884,36 +1677,6 @@ public class P3GatewayServer {
         }
     }
 
-    private byte[] replacePresentationPayload(byte[] inboundPpdu, byte[] replacementPayload) {
-        try {
-            logger.info("presentation replace inbound={}", toHexPreview(inboundPpdu, 192));
-            logger.info("presentation replace replacement={}", toHexPreview(replacementPayload, 192));
-
-            BerTlv root = BerCodec.decodeSingle(inboundPpdu);
-
-            if (root.tagClass() != TAG_CLASS_UNIVERSAL || !root.constructed() || root.tagNumber() != 17) {
-                return null;
-            }
-
-            List<Integer> path = findPresentationPayloadPath(root);
-            if (path == null) {
-                logger.warn("presentation replace: no payload path found");
-                return null;
-            }
-
-            byte[] rebuilt = replaceNodeAtPath(root, path, replacementPayload);
-            logger.info("presentation replace rebuilt={}", toHexPreview(rebuilt, 192));
-            return rebuilt;
-        } catch (RuntimeException ex) {
-            logger.warn("Failed to rebuild presentation PPDU: {}", ex.getMessage(), ex);
-            return null;
-        }
-    }
-
-    /**
-     * Finds the path to the deepest real application payload inside the Presentation PPDU.
-     * The returned path is a list of child indexes from the Presentation root down to the target node.
-     */
     private List<Integer> findPresentationPayloadPath(BerTlv root) {
         try {
             List<BerTlv> children = BerCodec.decodeAll(root.value());
@@ -970,12 +1733,11 @@ public class P3GatewayServer {
 
         byte[] encoded = BerCodec.encode(node);
 
-        // Prefer real outer protocol APDUs first
         if (isRealAcseApdu(encoded)) {
             return new ArrayList<>();
         }
 
-        if (asn1GatewayProtocol.isSupportedApplicationApdu(encoded)) {
+        if (p3ProtocolCodec.isSupportedApplicationApdu(encoded)) {
             return new ArrayList<>();
         }
 
@@ -1002,9 +1764,6 @@ public class P3GatewayServer {
         return null;
     }
 
-    /**
-     * Extracts the BER node at the given child-index path.
-     */
     private byte[] extractNodeAtPath(BerTlv root, List<Integer> path) {
         BerTlv current = root;
 
@@ -1017,76 +1776,6 @@ public class P3GatewayServer {
         }
 
         return BerCodec.encode(current);
-    }
-
-    /**
-     * Rebuilds the entire Presentation PPDU, replacing only the nested node at the given path.
-     */
-    private byte[] replaceNodeAtPath(BerTlv root, List<Integer> path, byte[] replacementPayload) {
-        if (path == null || path.isEmpty()) {
-            return replacementPayload;
-        }
-
-        return replaceNodeAtPathRecursive(root, path, 0, replacementPayload);
-    }
-
-    private byte[] replaceNodeAtPathRecursive(BerTlv current, List<Integer> path, int depth, byte[] replacementPayload) {
-        if (depth == path.size()) {
-            return replacementPayload;
-        }
-
-        if (!current.constructed()) {
-            throw new IllegalArgumentException("Cannot descend into primitive BER node at depth " + depth);
-        }
-
-        List<BerTlv> children = BerCodec.decodeAll(current.value());
-        int wantedIndex = path.get(depth);
-
-        if (wantedIndex < 0 || wantedIndex >= children.size()) {
-            throw new IllegalArgumentException("Invalid child index " + wantedIndex + " at depth " + depth);
-        }
-
-        ByteArrayOutputStream rebuiltChildren = new ByteArrayOutputStream();
-
-        for (int i = 0; i < children.size(); i++) {
-            BerTlv child = children.get(i);
-
-            if (i == wantedIndex) {
-                rebuiltChildren.writeBytes(replaceNodeAtPathRecursive(child, path, depth + 1, replacementPayload));
-            } else {
-                rebuiltChildren.writeBytes(BerCodec.encode(child));
-            }
-        }
-
-        byte[] newValue = rebuiltChildren.toByteArray();
-
-        return BerCodec.encode(
-            new BerTlv(
-                current.tagClass(),
-                current.constructed(),
-                current.tagNumber(),
-                0,
-                newValue.length,
-                newValue
-            )
-        );
-    }
-
-    /**
-     * This method is no longer used for extraction logic, but keep it if other code still references it.
-     * It now delegates to the recursive path-based extraction.
-     */
-    private byte[] findPresentationFinalPayload(BerTlv node) {
-        if (node == null) {
-            return null;
-        }
-
-        List<Integer> path = findPayloadPathInNode(node);
-        if (path == null) {
-            return null;
-        }
-
-        return extractNodeAtPath(node, path);
     }
 
     private boolean isTinyPresentationControl(BerTlv tlv) {
@@ -1194,39 +1883,58 @@ public class P3GatewayServer {
         return null;
     }
 
-    private byte[] wrapAcseEnvelope(byte[] payload, byte[] inboundAcse) {
+    private byte[] wrapAcseEnvelope(byte[] rosPayload, byte[] inboundAcse) {
         logger.info(
-            "P3 ACSE wrapping payload len={} inbound-acse-first-bytes={}",
-            payload.length,
+            "P3 ACSE wrapping ROS payload len={} inbound-acse-first-bytes={}",
+            rosPayload == null ? -1 : rosPayload.length,
             inboundAcse == null ? "<null>" : toHexPreview(inboundAcse, 192)
         );
 
+        if (rosPayload != null && looksLikeTopLevelAcse(rosPayload)) {
+            return rosPayload;
+        }
+
+        Optional<String> applicationContextName = Optional.empty();
+
         try {
             if (inboundAcse != null && inboundAcse.length > 0) {
+                applicationContextName = extractApplicationContextNameFromAarq(inboundAcse);
+
                 Optional<AcseModels.AcseApdu> decoded = tryDecodeAcse(inboundAcse);
                 if (decoded.isPresent()) {
                     AcseModels.AcseApdu apdu = decoded.get();
 
                     if (apdu instanceof AcseModels.AARQApdu) {
-                        Optional<String> applicationContextName = extractApplicationContextNameFromAarq(inboundAcse);
                         AcseModels.AAREApdu aare = new AcseModels.AAREApdu(
                             applicationContextName,
                             true,
                             Optional.empty(),
                             Optional.of(new AcseModels.ResultSourceDiagnostic(1, 0)),
-                            Optional.of(payload),
+                            Optional.of(new AcseModels.ApTitle(DEFAULT_RESPONDING_AP_TITLE_OID)),
+                            Optional.empty(),
+                            Optional.empty(),
+                            Optional.ofNullable(rosPayload),
                             List.of(),
-                            Set.of()
+                            java.util.Set.of()
                         );
+
                         byte[] encoded = acseAssociationProtocol.encode(aare);
-                        logger.info("P3 ACSE built AARE len={} first-bytes={}", encoded.length, toHexPreview(encoded, 192));
+                        logger.info(
+                            "P3 ACSE built AARE len={} first-bytes={}",
+                            encoded.length,
+                            toHexPreview(encoded, 192)
+                        );
                         return encoded;
                     }
 
                     if (apdu instanceof AcseModels.RLRQApdu) {
                         AcseModels.RLREApdu rlre = new AcseModels.RLREApdu(true);
                         byte[] encoded = acseAssociationProtocol.encode(rlre);
-                        logger.info("P3 ACSE built RLRE len={} first-bytes={}", encoded.length, toHexPreview(encoded, 192));
+                        logger.info(
+                            "P3 ACSE built RLRE len={} first-bytes={}",
+                            encoded.length,
+                            toHexPreview(encoded, 192)
+                        );
                         return encoded;
                     }
                 }
@@ -1236,32 +1944,25 @@ public class P3GatewayServer {
         }
 
         AcseModels.AAREApdu fallback = new AcseModels.AAREApdu(
-            Optional.empty(),
+            applicationContextName,
             true,
             Optional.empty(),
             Optional.of(new AcseModels.ResultSourceDiagnostic(1, 0)),
-            Optional.of(payload),
+            Optional.of(new AcseModels.ApTitle(DEFAULT_RESPONDING_AP_TITLE_OID)),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.ofNullable(rosPayload),
             List.of(),
-            Set.of()
+            java.util.Set.of()
         );
 
         byte[] encoded = acseAssociationProtocol.encode(fallback);
-        logger.info("P3 ACSE built fallback AARE len={} first-bytes={}", encoded.length, toHexPreview(encoded, 192));
+        logger.info(
+            "P3 ACSE built fallback AARE len={} first-bytes={}",
+            encoded.length,
+            toHexPreview(encoded, 192)
+        );
         return encoded;
-    }
-
-    private byte[] wrapPresentationEnvelope(byte[] payload) {
-        if (payload == null) {
-            payload = new byte[0];
-        }
-
-        byte[] userData = BerCodec.encode(
-            new BerTlv(TAG_CLASS_CONTEXT, true, 30, 0, payload.length, payload)
-        );
-
-        return BerCodec.encode(
-            new BerTlv(TAG_CLASS_UNIVERSAL, true, 17, 0, userData.length, userData)
-        );
     }
 
     private Optional<AcseModels.AcseApdu> tryDecodeAcse(byte[] encoded) {
@@ -1438,6 +2139,7 @@ public class P3GatewayServer {
 
     private record CotpFrame(byte type, boolean endOfTsdu, byte[] userData, byte[] payload) {}
     private record SessionParameter(int pi, byte[] value) {}
+    private record PresentationContextDefinition(int presentationContextId, String abstractSyntaxOid) {}
 
     private static final class NamedDaemonThreadFactory implements ThreadFactory {
         private int counter = 0;

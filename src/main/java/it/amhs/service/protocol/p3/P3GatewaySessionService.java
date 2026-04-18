@@ -90,6 +90,13 @@ public class P3GatewaySessionService {
         this.defaultProtocolIndex = defaultProtocolIndex;
         this.defaultProtocolAddress = defaultProtocolAddress;
         this.defaultServerAddress = defaultServerAddress;
+        
+        logger.info(
+        	    "P3 auth config loaded authRequired={} expectedUsername='{}' expectedPasswordLength={}",
+        	    this.authRequired,
+        	    this.expectedUsername,
+        	    this.expectedPassword == null ? -1 : this.expectedPassword.length()
+        	);
     }
 
     public SessionState newSession() {
