@@ -413,32 +413,41 @@ public class P3GatewayServer {
 
 	        byte[] applicationPdu = extractApplicationPdu(payload, kind);
 	        
-	        if (isPeerRosReject(applicationPdu)) {
-	            logger.info("Peer sent ROS reject/control; ignoring");
-	            continue;
-	        }
-	        
 	        if (applicationPdu == null) {
 	            if (isSessionAbortSpdu(payload)) {
-	                logger.warn(
-	                    "P3 gateway connection #{} peer sent Session ABORT without decodable user-data payload={}",
+	                logger.info(
+	                    "P3 gateway connection #{} peer closed session payload={}",
 	                    connectionId,
 	                    toHexPreview(payload, 64)
 	                );
-	            } else {
-	                logger.warn(
-	                    "P3 gateway connection #{} payload #{} unsupported kind={} first-bytes={}",
-	                    connectionId,
-	                    pduIndex,
-	                    kind,
-	                    toHexPreview(payload, 192)
-	                );
+	                return;
 	            }
+
+	            logger.warn(
+	                "P3 gateway connection #{} payload #{} unsupported kind={} first-bytes={}",
+	                connectionId,
+	                pduIndex,
+	                kind,
+	                toHexPreview(payload, 192)
+	            );
 
 	            sendRfc1006Disconnect(output);
 	            return;
 	        }
 
+	        if (isTinyPostBindReleaseOrAckApdu(applicationPdu) || isWrappedTinyReleaseOrAckApdu(applicationPdu)) {
+        	    logger.info(
+        	        "Peer sent ACSE release/ack; closing gracefully first-bytes={}",
+        	        toHexPreview(applicationPdu, 64)
+        	    );
+        	    return;
+        	}
+	        
+	        if (isPeerRosReject(applicationPdu)) {
+	            logger.info("Peer sent ROS reject/control; ignoring");
+	            continue;
+	        }
+	        
 	        logger.info(
 	            "P3 gateway delivering application PDU to ASN.1 handler len={} first-bytes={}",
 	            applicationPdu.length,
@@ -458,7 +467,7 @@ public class P3GatewayServer {
 	        boolean p3Supported = p3ProtocolCodec.isSupportedApplicationApdu(applicationPdu);
 	        boolean p22Supported = p22ProtocolCodec.isSupportedApplicationApdu(applicationPdu);
 	        boolean smallControl = isSmallPostBindControlApdu(applicationPdu);
-	        boolean tinyReleaseOrAck = isTinyPostBindReleaseOrAckApdu(applicationPdu);
+	        boolean tinyReleaseOrAck = isTinyPostBindReleaseOrAckApdu(applicationPdu) || isWrappedTinyReleaseOrAckApdu(applicationPdu);
 	        boolean peerRejectControl = isPeerPostBindRejectControlApdu(applicationPdu);
 	        boolean benignZeroEnum = isBenignZeroEnumeratedControl(applicationPdu);
 
@@ -486,19 +495,10 @@ public class P3GatewayServer {
 	                toHexPreview(applicationPdu, 64)
 	            );
 	            continue;
-
-	        } else if (tinyReleaseOrAck) {
-	            logger.info(
-	                "Peer sent ACSE release/ack; closing gracefully first-bytes={}",
-	                toHexPreview(applicationPdu, 64)
-	            );
-	            return;
 	        } else if (p22Supported) {
 	            applicationResponse = p22ProtocolCodec.handle(applicationPdu);
-
 	        } else if (p3Supported) {
 	            applicationResponse = p3ProtocolCodec.handle(session, applicationPdu);
-
 	        } else {
 	            sendRfc1006Disconnect(output);
 	            return;
@@ -525,6 +525,25 @@ public class P3GatewayServer {
 	        }
 	    }
 	}
+    
+    private boolean isWrappedTinyReleaseOrAckApdu(byte[] apdu) {
+        if (apdu == null || apdu.length != 14) {
+            return false;
+        }
+
+        // 61 0C 30 0A 02 01 01 A0 05 62 03 80 01 00
+        return (apdu[0] & 0xFF) == 0x61
+            && (apdu[1] & 0xFF) == 0x0C
+            && (apdu[2] & 0xFF) == 0x30
+            && (apdu[3] & 0xFF) == 0x0A
+            && (apdu[7] & 0xFF) == 0xA0
+            && (apdu[8] & 0xFF) == 0x05
+            && (apdu[9] & 0xFF) == 0x62
+            && (apdu[10] & 0xFF) == 0x03
+            && (apdu[11] & 0xFF) == 0x80
+            && (apdu[12] & 0xFF) == 0x01
+            && (apdu[13] & 0xFF) == 0x00;
+    }
     
     private boolean isPeerRejectOrAbortControl(byte[] apdu) {
         if (apdu == null || apdu.length < 5 || apdu.length > 32) {
@@ -626,22 +645,72 @@ public class P3GatewayServer {
     }
     
     private boolean isTinyPostBindReleaseOrAckApdu(byte[] apdu) {
-        if (apdu == null || apdu.length < 3 || apdu.length > 16) {
+        if (apdu == null || apdu.length < 3 || apdu.length > 32) {
             return false;
         }
 
         try {
             BerTlv root = BerCodec.decodeSingle(apdu);
 
-            // observed: 62 03 80 01 00
-            return root.tagClass() == TAG_CLASS_APPLICATION
+            // direct ACSE release/ack: 62 03 80 01 00
+            if (root.tagClass() == TAG_CLASS_APPLICATION
                 && root.constructed()
                 && root.tagNumber() == 2
                 && root.value() != null
-                && root.value().length == 3;
+                && root.value().length == 3) {
+                return true;
+            }
+
+            // wrapped presentation carrier:
+            // 61 0C 30 0A 02 01 01 A0 05 62 03 80 01 00
+            if (root.tagClass() == TAG_CLASS_APPLICATION
+                && root.constructed()
+                && root.tagNumber() == 1) {
+
+                List<BerTlv> children = BerCodec.decodeAll(root.value());
+                children = unwrapSequenceIfPresent(children);
+
+                for (BerTlv child : children) {
+                    if (containsTinyReleaseAck(child)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         } catch (RuntimeException ex) {
             return false;
         }
+    }
+
+    private boolean containsTinyReleaseAck(BerTlv node) {
+        if (node == null) {
+            return false;
+        }
+
+        try {
+            byte[] encoded = BerCodec.encode(node);
+
+            if (encoded.length == 5
+                && (encoded[0] & 0xFF) == 0x62
+                && (encoded[1] & 0xFF) == 0x03
+                && (encoded[2] & 0xFF) == 0x80
+                && (encoded[3] & 0xFF) == 0x01
+                && (encoded[4] & 0xFF) == 0x00) {
+                return true;
+            }
+
+            if (node.constructed()) {
+                for (BerTlv child : BerCodec.decodeAll(node.value())) {
+                    if (containsTinyReleaseAck(child)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+
+        return false;
     }
     
     private boolean isSmallPostBindControlApdu(byte[] apdu) {
@@ -972,12 +1041,6 @@ public class P3GatewayServer {
             return null;
         }
         
-        logger.info(
-        	    "P3 gateway presentation fallback returning original carrier len={} first-bytes={}",
-        	    payload.length,
-        	    toHexPreview(payload, 128)
-        	);
-
         switch (kind) {
             case "BER_APDU":
                 return payload;
@@ -1062,6 +1125,10 @@ public class P3GatewayServer {
                     unwrapped.length,
                     toHexPreview(unwrapped, 192)
                 );
+                
+                if (isTinyPostBindReleaseOrAckApdu(unwrapped) || isWrappedTinyReleaseOrAckApdu(payload)) {
+                    return payload;
+                }
 
                 if (p3ProtocolCodec.isSupportedApplicationApdu(unwrapped)
                     || p22ProtocolCodec.isSupportedApplicationApdu(unwrapped)) {
@@ -1100,14 +1167,14 @@ public class P3GatewayServer {
                         return nested;
                     }
                 }
-
+                
                 /*
                  * Important:
                  * small release/control-like presentation payloads may not unwrap into a
                  * dispatchable native APDU, but the original presentation carrier can still
                  * be handled by the P22 compat/control path.
                  */
-                logger.warn(
+                logger.info(
                     "P3 gateway presentation unwrap did not yield a native APDU; falling back to original presentation carrier first-bytes={}",
                     toHexPreview(payload, 192)
                 );
