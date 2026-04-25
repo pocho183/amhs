@@ -436,7 +436,7 @@ public class P3GatewaySessionService {
             publicMessageId = submissionId;
         }
 
-        return "OK code=submitted submission-id=" + submissionId + " message-id=" + publicMessageId;
+        return "OK code=submitted" + " sender=" + state.senderOrAddress + " submission-id=" + submissionId + " message-id=" + publicMessageId;
     }
 
     private String retrieveStatus(SessionState state, Map<String, String> attributes) {

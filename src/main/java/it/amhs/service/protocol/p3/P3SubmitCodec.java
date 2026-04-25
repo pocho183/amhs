@@ -1,6 +1,12 @@
 package it.amhs.service.protocol.p3;
 
-import static it.amhs.service.protocol.p3.P3WireSupport.*;
+import static it.amhs.service.protocol.p3.P3WireSupport.TAG_CLASS_APPLICATION;
+import static it.amhs.service.protocol.p3.P3WireSupport.TAG_CLASS_CONTEXT;
+import static it.amhs.service.protocol.p3.P3WireSupport.TAG_CLASS_UNIVERSAL;
+import static it.amhs.service.protocol.p3.P3WireSupport.collectTextualAtoms;
+import static it.amhs.service.protocol.p3.P3WireSupport.concat;
+import static it.amhs.service.protocol.p3.P3WireSupport.decodeContextFieldList;
+import static it.amhs.service.protocol.p3.P3WireSupport.encodeUtf8ContextField;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -17,18 +23,29 @@ import org.springframework.util.StringUtils;
 
 import it.amhs.asn1.BerCodec;
 import it.amhs.asn1.BerTlv;
+import it.amhs.service.address.ORAddress;
 import it.amhs.service.protocol.p3.P3OperationModels.P3Error;
 import it.amhs.service.protocol.p3.P3OperationModels.SubmitRequest;
 import it.amhs.service.protocol.p3.P3OperationModels.SubmitResult;
+import org.springframework.beans.factory.annotation.Value;
 
 @Component
 public class P3SubmitCodec {
 
     private static final int SUBMIT_REQUEST_TAG = 2;
-    private static final int SUBMIT_RESPONSE_TAG = 3;
     private static final int ERROR_TAG = 8;
-    private static final DateTimeFormatter X400_TIME_FORMAT = DateTimeFormatter.ofPattern("yyMMddHHmmss'Z'").withZone(ZoneOffset.UTC);
-
+    private static final DateTimeFormatter X400_LOCAL_ID_TIME_FORMAT = DateTimeFormatter.ofPattern("yyMMddHHmmss'Z'").withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter X400_SUBMISSION_TIME_FORMAT = DateTimeFormatter.ofPattern("yyMMddHHmm'Z'").withZone(ZoneOffset.UTC);
+    
+    @Value("${amhs.p3.mts.local-id.country}")
+    private String localIdCountry;
+    @Value("${amhs.p3.mts.local-id.city}")
+    private String localIdCity;
+    @Value("${amhs.p3.mts.local-id.node}")
+    private String localIdNode;
+    @Value("${amhs.p3.mts.local-id.sequence}")
+    private String localIdSequence;
+    
     public boolean isLikelySubmitRequest(byte[] encodedApdu) {
         if (encodedApdu == null || encodedApdu.length == 0) {
             return false;
@@ -233,7 +250,7 @@ public class P3SubmitCodec {
         return null;
     }
 
-    public byte[] encodeSubmitResult(SubmitResult result) {
+    public byte[] encodeSubmitResult(SubmitResult result, String senderOrAddress) {
         String id = StringUtils.hasText(result.internalMessageId())
             ? result.internalMessageId()
             : result.submissionId();
@@ -242,7 +259,7 @@ public class P3SubmitCodec {
             new BerTlv(TAG_CLASS_UNIVERSAL, false, 2, 0, 1, new byte[] { 0x03 })
         );
 
-        byte[] mtsResult = encodeMtsResult(id);
+        byte[] mtsResult = encodeMtsResult(id, senderOrAddress);
 
         byte[] resultValue = concat(List.of(opCode, mtsResult));
 
@@ -251,57 +268,34 @@ public class P3SubmitCodec {
         );
     }
     
-    private byte[] encodeMtsResult(String id) {
+    private byte[] encodeMtsResult(String id, String senderOrAddress) {
         String safe = StringUtils.hasText(id) ? id : UUID.randomUUID().toString();
+        ORAddress sender = ORAddress.parse(senderOrAddress);
 
-        byte[] localIdString = BerCodec.encode(
+        String timestampWithSeconds = X400_LOCAL_ID_TIME_FORMAT.format(Instant.now());
+        String timestampWithoutSeconds = X400_SUBMISSION_TIME_FORMAT.format(Instant.now());
+
+        String localId = buildLocalIdentifier(timestampWithSeconds);
+
+        byte[] globalDomainIdentifier = encodeGlobalDomainIdentifier(sender);
+
+        byte[] localIdentifier = BerCodec.encode(
             new BerTlv(
                 TAG_CLASS_UNIVERSAL,
                 false,
-                19,
+                22,
                 0,
-                safe.length(),
-                safe.getBytes(StandardCharsets.US_ASCII)
+                localId.length(),
+                localId.getBytes(StandardCharsets.US_ASCII)
             )
         );
 
-        byte[] localId = BerCodec.encode(
-            new BerTlv(
-                TAG_CLASS_APPLICATION,
-                true,
-                3,
-                0,
-                localIdString.length,
-                localIdString
-            )
-        );
+        byte[] submissionIdentifierValue = concat(List.of(
+            globalDomainIdentifier,
+            localIdentifier
+        ));
 
-        byte[] submissionId = BerCodec.encode(
-            new BerTlv(
-                TAG_CLASS_CONTEXT,
-                true,
-                0,
-                0,
-                localId.length,
-                localId
-            )
-        );
-
-        String timestamp = X400_TIME_FORMAT.format(Instant.now());
-        byte[] submissionTime = BerCodec.encode(
-            new BerTlv(
-                TAG_CLASS_CONTEXT,
-                false,
-                1,
-                0,
-                timestamp.length(),
-                timestamp.getBytes(StandardCharsets.US_ASCII)
-            )
-        );
-
-        byte[] submissionIdentifierValue = concat(List.of(submissionId, submissionTime));
-
-        byte[] submissionIdentifier = BerCodec.encode(
+        byte[] messageSubmissionIdentifier = BerCodec.encode(
             new BerTlv(
                 TAG_CLASS_APPLICATION,
                 true,
@@ -312,15 +306,90 @@ public class P3SubmitCodec {
             )
         );
 
+        
+        byte[] messageSubmissionTime = BerCodec.encode(
+    	    new BerTlv(
+    	        TAG_CLASS_CONTEXT,
+    	        false,
+    	        0,
+    	        0,
+    	        timestampWithoutSeconds.length(),
+    	        timestampWithoutSeconds.getBytes(StandardCharsets.US_ASCII)
+    	    )
+    	);
+
+        byte[] mtsResultValue = concat(List.of(
+            messageSubmissionIdentifier,
+            messageSubmissionTime
+        ));
+
         return BerCodec.encode(
             new BerTlv(
                 TAG_CLASS_UNIVERSAL,
                 true,
                 17,
                 0,
-                submissionIdentifier.length,
-                submissionIdentifier
+                mtsResultValue.length,
+                mtsResultValue
             )
+        );
+    }
+    
+    private String buildLocalIdentifier(String timestamp) {
+        String date = timestamp.substring(0, 6);
+        String time = timestamp.substring(6, 12);
+
+        return localIdCountry
+            + "-"
+            + localIdCity
+            + "-"
+            + localIdNode
+            + "."
+            + localIdSequence
+            + "-"
+            + date
+            + "."
+            + time;
+    }
+
+    private byte[] encodeGlobalDomainIdentifier(ORAddress sender) {
+        List<byte[]> parts = new ArrayList<>();
+
+        addPrintableApplication(parts, 1, sender.get("C"));
+        addPrintableApplication(parts, 2, sender.get("ADMD"));
+
+        String prmd = sender.get("PRMD");
+        if (StringUtils.hasText(prmd)) {
+            parts.add(encodePrintableString(prmd)); // IMPORTANT: bare 13 xx, not A2
+        }
+
+        byte[] value = concat(parts);
+
+        return BerCodec.encode(
+            new BerTlv(TAG_CLASS_APPLICATION, true, 3, 0, value.length, value)
+        );
+    }
+
+    private void addPrintableApplication(List<byte[]> parts, int tag, String value) {
+        if (!StringUtils.hasText(value)) {
+            return;
+        }
+
+        byte[] inner = BerCodec.encode(
+            new BerTlv(TAG_CLASS_UNIVERSAL, false, 19, 0,
+                value.length(),
+                value.getBytes(StandardCharsets.US_ASCII))
+        );
+
+        parts.add(BerCodec.encode(
+            new BerTlv(TAG_CLASS_APPLICATION, true, tag, 0, inner.length, inner)
+        ));
+    }
+
+    private byte[] encodePrintableString(String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
+        return BerCodec.encode(
+            new BerTlv(TAG_CLASS_UNIVERSAL, false, 19, 0, bytes.length, bytes)
         );
     }
 

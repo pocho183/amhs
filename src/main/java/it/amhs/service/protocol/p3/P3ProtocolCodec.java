@@ -110,14 +110,12 @@ public class P3ProtocolCodec {
                 if (response.startsWith("OK")) {
                     String submissionId = parseField(response, "submission-id", "");
                     String messageId = parseField(response, "message-id", "");
-
-                    byte[] nativeResult = submitCodec.encodeSubmitResult(
-                        new SubmitResult(submissionId, messageId)
-                    );
+                    String senderOrAddress = parseField(response, "sender", "");
+                    byte[] nativeResult = submitCodec.encodeSubmitResult(new SubmitResult(submissionId, messageId), senderOrAddress);
 
                     return wrapRoseResultIfNeeded(rosInvoke, nativeResult);
                 }
-
+                
                 return wrapRoseErrorIfNeeded(
                     rosInvoke,
                     submitCodec.encodeSubmitError(toError(response))
@@ -247,9 +245,11 @@ public class P3ProtocolCodec {
         if (response.startsWith("OK")) {
             String submissionId = parseField(response, "submission-id", "");
             String messageId = parseField(response, "message-id", "");
+            String senderOrAddress = parseField(response, "sender", "");
 
             byte[] nativeResult = submitCodec.encodeSubmitResult(
-                new SubmitResult(submissionId, messageId)
+                new SubmitResult(submissionId, messageId),
+                senderOrAddress
             );
 
             return wrapRoseResultIfNeeded(encodedApdu, nativeResult);
@@ -270,11 +270,7 @@ public class P3ProtocolCodec {
             new BerTlv(BerCodec.TAG_CLASS_UNIVERSAL, false, 2, 0, 1, new byte[] { (byte) invokeId })
         );
 
-        // returnResult ::= [2] { invokeId, result }
-        // result ::= SEQUENCE { operationCode, resultParameter }
-        byte[] resultSeq = nativeResult;
-
-        byte[] value = concat(invokeIdTlv, resultSeq);
+        byte[] value = concat(invokeIdTlv, nativeResult);
 
         return BerCodec.encode(
             new BerTlv(BerCodec.TAG_CLASS_CONTEXT, true, 2, 0, value.length, value)
