@@ -417,7 +417,10 @@ public class P3GatewaySessionService {
         );
 
         AMHSMessage storedMessage = x400MessageService.storeFromP3(request);
-        submissionCorrelationTable.put(submissionId, storedMessage.getId());
+        Long storedId = storedMessage.getId();
+        if (storedId != null) {
+            submissionCorrelationTable.put(submissionId, storedId);
+        }
 
         logger.info(
             "P3 submit accepted sender={} recipient={} channel={} submissionId={} messageId={}",
@@ -427,7 +430,13 @@ public class P3GatewaySessionService {
             submissionId,
             storedMessage.getId()
         );
-        return "OK code=submitted submission-id=" + submissionId + " message-id=" + storedMessage.getId();
+
+        String publicMessageId = storedMessage.getMessageId();
+        if (!StringUtils.hasText(publicMessageId)) {
+            publicMessageId = submissionId;
+        }
+
+        return "OK code=submitted submission-id=" + submissionId + " message-id=" + publicMessageId;
     }
 
     private String retrieveStatus(SessionState state, Map<String, String> attributes) {
@@ -516,7 +525,9 @@ public class P3GatewaySessionService {
         }
 
         AMHSMessage message = maybeMessage.get();
-        submissionCorrelationTable.put(submissionId, message.getId());
+        if (message.getId() != null) {
+            submissionCorrelationTable.put(submissionId, message.getId());
+        }
 
         Optional<AMHSDeliveryReport> latestReport = deliveryReportRepository.findByMessage(message).stream()
             .max((left, right) -> left.getGeneratedAt().compareTo(right.getGeneratedAt()));

@@ -7,6 +7,10 @@ import java.util.Optional;
 
 public final class BerCodec {
 
+    public static final int TAG_CLASS_UNIVERSAL = 0;
+    public static final int TAG_CLASS_APPLICATION = 1;
+    public static final int TAG_CLASS_CONTEXT = 2;
+
     private BerCodec() {
     }
 

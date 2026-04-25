@@ -28,6 +28,22 @@ public class P3BindCodec {
 
     private static final int NATIVE_BIND_REQUEST_OUTER_TAG = 2;
     private static final int NATIVE_BIND_ERROR_OUTER_TAG = 8;
+    private static final int NATIVE_BIND_RESULT_OUTER_TAG = 17;
+
+    private static final int MTS_BIND_REQUEST_OUTER_TAG = 16;
+
+    public boolean isLikelyBindRequest(byte[] encodedApdu) {
+        if (encodedApdu == null || encodedApdu.length == 0) {
+            return false;
+        }
+
+        try {
+            BerTlv apdu = BerCodec.decodeSingle(encodedApdu);
+            return isLikelyNativeBind(apdu) || isLikelyMtsBind(apdu);
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
 
     public boolean isLikelyNativeBind(byte[] encodedApdu) {
         if (encodedApdu == null || encodedApdu.length == 0) {
@@ -35,30 +51,109 @@ public class P3BindCodec {
         }
 
         try {
-            BerTlv apdu = BerCodec.decodeSingle(encodedApdu);
-            if (apdu.tagClass() != TAG_CLASS_CONTEXT
-                || !apdu.constructed()
-                || apdu.tagNumber() != NATIVE_BIND_REQUEST_OUTER_TAG) {
-                return false;
-            }
-
-            String sender = extractSenderFromBind(apdu);
-            String password = extractPasswordFromBind(apdu);
-            return StringUtils.hasText(sender) && StringUtils.hasText(password);
+            return isLikelyNativeBind(BerCodec.decodeSingle(encodedApdu));
         } catch (RuntimeException ex) {
             return false;
         }
     }
 
     public BindRequest decodeBindRequest(byte[] encodedApdu) {
+        if (encodedApdu == null || encodedApdu.length == 0) {
+            throw new IllegalArgumentException("Not a bind APDU");
+        }
+
         BerTlv apdu = BerCodec.decodeSingle(encodedApdu);
+
+        if (isLikelyNativeBind(apdu)) {
+            return decodeNativeBindRequest(apdu, encodedApdu);
+        }
+
+        if (isLikelyMtsBind(apdu)) {
+            return decodeMtsBindRequest(apdu, encodedApdu);
+        }
+
+        throw new IllegalArgumentException("Not a supported bind APDU");
+    }
+
+    public byte[] encodeBindResult(byte[] inboundBindApdu, BindResult result) {
+        if (inboundBindApdu == null || inboundBindApdu.length == 0) {
+            throw new IllegalArgumentException("Invalid bind APDU");
+        }
+
+        BerTlv inboundRoot = BerCodec.decodeSingle(inboundBindApdu);
+
+        if (isLikelyNativeBind(inboundRoot)) {
+            byte[] bindResultApdu = encodeNativeBindResultApdu(inboundRoot, result);
+            logger.info("P3 native bind result encoded={}", toHex(bindResultApdu));
+            return bindResultApdu;
+        }
+
+        if (isLikelyMtsBind(inboundRoot)) {
+            byte[] bindResultApdu = encodeMtsBindResultApdu(inboundRoot, result);
+            logger.info("P3 MTS bind result encoded={}", toHex(bindResultApdu));
+            return bindResultApdu;
+        }
+
+        throw new IllegalArgumentException("Invalid bind APDU");
+    }
+
+    public byte[] encodeBindError(byte[] inboundBindApdu, P3Error error) {
+        List<byte[]> children = new ArrayList<>();
+        children.add(encodeUtf8ContextField(0, value(error.code())));
+        children.add(encodeUtf8ContextField(1, value(error.detail())));
+        children.add(encodeUtf8ContextField(2, Boolean.toString(error.retryable())));
+
+        byte[] payload = concat(children.toArray(new byte[0][]));
+
+        byte[] encoded = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                true,
+                NATIVE_BIND_ERROR_OUTER_TAG,
+                0,
+                payload.length,
+                payload
+            )
+        );
+
+        logger.info("P3 native bind error encoded={}", toHex(encoded));
+        return encoded;
+    }
+
+    private boolean isLikelyNativeBind(BerTlv apdu) {
+        if (apdu == null) {
+            return false;
+        }
 
         if (apdu.tagClass() != TAG_CLASS_CONTEXT
             || !apdu.constructed()
             || apdu.tagNumber() != NATIVE_BIND_REQUEST_OUTER_TAG) {
-            throw new IllegalArgumentException("Not a native P3 bind APDU");
+            return false;
         }
 
+        String sender = extractSenderFromBind(apdu);
+        String password = extractPasswordFromBind(apdu);
+        return StringUtils.hasText(sender) && StringUtils.hasText(password);
+    }
+
+    private boolean isLikelyMtsBind(BerTlv apdu) {
+        if (apdu == null) {
+            return false;
+        }
+
+        if (apdu.tagClass() != TAG_CLASS_CONTEXT
+            || !apdu.constructed()
+            || apdu.tagNumber() != MTS_BIND_REQUEST_OUTER_TAG) {
+            return false;
+        }
+
+        String sender = extractSenderFromMtsBind(apdu);
+        String password = extractPasswordFromMtsBind(apdu);
+
+        return StringUtils.hasText(sender) && StringUtils.hasText(password);
+    }
+
+    private BindRequest decodeNativeBindRequest(BerTlv apdu, byte[] originalApdu) {
         String sender = extractSenderFromBind(apdu);
         String password = extractPasswordFromBind(apdu);
         String username = extractUsernameFromBind(apdu);
@@ -72,7 +167,7 @@ public class P3BindCodec {
         }
 
         logger.info(
-            "P3 bind decoded authenticatedIdentity={} sender={} channel={} password='{}' password-length={}",
+            "P3 native bind decoded authenticatedIdentity={} sender={} channel={} password='{}' password-length={}",
             safe(username),
             sender,
             safe(channel),
@@ -80,11 +175,35 @@ public class P3BindCodec {
             password.length()
         );
 
+        return new BindRequest(
+            trimToNull(username),
+            password,
+            sender,
+            Optional.ofNullable(trimToNull(channel)),
+            originalApdu
+        );
+    }
+
+    private BindRequest decodeMtsBindRequest(BerTlv apdu, byte[] originalApdu) {
+        String sender = extractSenderFromMtsBind(apdu);
+        String password = extractPasswordFromMtsBind(apdu);
+        String username = extractUsernameFromMtsBind(apdu);
+        String channel = extractChannelFromMtsBind(apdu);
+
+        if (!StringUtils.hasText(sender)) {
+            throw new IllegalArgumentException("MTS bind does not contain sender O/R address");
+        }
+        if (!StringUtils.hasText(password)) {
+            throw new IllegalArgumentException("MTS bind does not contain password");
+        }
+
         logger.info(
-            "P3 bind decoded authenticatedIdentity={} sender={} channel={} password-present=true",
+            "P3 MTS bind decoded authenticatedIdentity={} sender={} channel={} password='{}' password-length={}",
             safe(username),
             sender,
-            safe(channel)
+            safe(channel),
+            password,
+            password.length()
         );
 
         return new BindRequest(
@@ -92,39 +211,71 @@ public class P3BindCodec {
             password,
             sender,
             Optional.ofNullable(trimToNull(channel)),
-            encodedApdu
+            originalApdu
         );
     }
 
-    public byte[] encodeBindResult(byte[] inboundBindApdu, BindResult result) {
-        if (inboundBindApdu == null || inboundBindApdu.length == 0) {
-            throw new IllegalArgumentException("Invalid native bind APDU");
-        }
+    private byte[] encodeNativeBindResultApdu(BerTlv inboundBindRoot, BindResult result) {
+        byte[] innerSet = encodeNativeBindResultSet(inboundBindRoot, result);
 
-        BerTlv inboundRoot = BerCodec.decodeSingle(inboundBindApdu);
+        return BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                true,
+                NATIVE_BIND_RESULT_OUTER_TAG,
+                0,
+                innerSet.length,
+                innerSet
+            )
+        );
+    }
 
-        if (inboundRoot.tagClass() != TAG_CLASS_CONTEXT
-            || !inboundRoot.constructed()
-            || inboundRoot.tagNumber() != NATIVE_BIND_REQUEST_OUTER_TAG) {
-            throw new IllegalArgumentException("Invalid native bind APDU");
-        }
+    private byte[] encodeNativeBindResultSet(BerTlv inboundBindRoot, BindResult result) {
+        byte[] resultField = encodeBindResultOutcomeField();
+        byte[] diagnosticField = encodeBindResultDiagnosticField();
+        byte[] localField = encodeBindResultLocalField(generateFallbackLocalIdentifier());
 
-        byte[] mtsBindResult = encodeMtsBindResultFromInbound(inboundRoot, result);
+        byte[] setValue = concat(resultField, diagnosticField, localField);
 
-        logger.info("P3 bind result encoded as bare MTSBindResult={}", toHex(mtsBindResult));
-        return mtsBindResult;
+        return BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_UNIVERSAL,
+                true,
+                17,
+                0,
+                setValue.length,
+                setValue
+            )
+        );
+    }
+
+    private byte[] encodeMtsBindResultApdu(BerTlv inboundBindRoot, BindResult result) {
+        byte[] mtsSet = encodeMtsBindResultFromInbound(inboundBindRoot, result);
+
+        return BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                true,
+                NATIVE_BIND_RESULT_OUTER_TAG,
+                0,
+                mtsSet.length,
+                mtsSet
+            )
+        );
     }
 
     private byte[] encodeMtsBindResultFromInbound(BerTlv inboundBindRoot, BindResult result) {
         List<byte[]> children = new ArrayList<>();
 
         children.add(encodeResponderNameFromInbound(inboundBindRoot));
+        children.add(encodeBindResultOutcomeField());
+        children.add(encodeBindResultDiagnosticField());
 
-        resolveBindResultLocalIdentifier(inboundBindRoot, result)
-            .map(this::encodeBindResultLocalField)
-            .ifPresent(children::add);
+        String localId = generateFallbackLocalIdentifier();
+        logger.info("P3 bind result local identifier generated fallback={}", localId);
+        children.add(encodeBindResultLocalField(localId));
 
-        byte[] payload = concat(children);
+        byte[] payload = concat(children.toArray(new byte[0][]));
 
         return BerCodec.encode(
             new BerTlv(
@@ -138,16 +289,56 @@ public class P3BindCodec {
         );
     }
 
-    private Optional<String> resolveBindResultLocalIdentifier(BerTlv inboundBindRoot, BindResult result) {
-        String inbound = extractLastIa5OrGraphicStringByContextTag(inboundBindRoot, 2);
-        if (StringUtils.hasText(inbound)) {
-            String normalized = inbound.trim();
-            logger.info("P3 bind result local identifier resolved from inbound context[2]={}", normalized);
-            return Optional.of(normalized);
-        }
+    private byte[] encodeBindResultOutcomeField() {
+        return BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                false,
+                0,
+                0,
+                1,
+                new byte[] { 0x20 }
+            )
+        );
+    }
 
-        logger.info("P3 bind result local identifier not available from inbound bind");
-        return Optional.empty();
+    private byte[] encodeBindResultDiagnosticField() {
+        byte[] a0 = encodeContextZeroValue(0);
+        byte[] a1 = encodeContextZeroValue(1);
+        byte[] a2 = encodeContextZeroValue(2);
+
+        byte[] setValue = concat(a0, a1, a2);
+        byte[] set = BerCodec.encode(
+            new BerTlv(TAG_CLASS_UNIVERSAL, true, 17, 0, setValue.length, setValue)
+        );
+
+        return BerCodec.encode(
+            new BerTlv(TAG_CLASS_CONTEXT, true, 1, 0, set.length, set)
+        );
+    }
+
+    private byte[] encodeContextZeroValue(int tagNumber) {
+        byte[] primitiveZero = BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                false,
+                0,
+                0,
+                1,
+                new byte[] { 0x00 }
+            )
+        );
+
+        return BerCodec.encode(
+            new BerTlv(
+                TAG_CLASS_CONTEXT,
+                true,
+                tagNumber,
+                0,
+                primitiveZero.length,
+                primitiveZero
+            )
+        );
     }
 
     private byte[] encodeBindResultLocalField(String value) {
@@ -181,85 +372,15 @@ public class P3BindCodec {
         );
     }
 
-    public byte[] encodeBindError(byte[] inboundBindApdu, P3Error error) {
-        List<byte[]> children = new ArrayList<>();
-        children.add(encodeUtf8ContextField(0, value(error.code())));
-        children.add(encodeUtf8ContextField(1, value(error.detail())));
-        children.add(encodeUtf8ContextField(2, Boolean.toString(error.retryable())));
+    private String generateFallbackLocalIdentifier() {
+        String raw = Long.toHexString(System.currentTimeMillis()) + Long.toHexString(System.nanoTime());
+        String compact = raw.replaceAll("[^A-Fa-f0-9]", "").toLowerCase();
 
-        byte[] payload = concat(children);
-
-        byte[] encoded = BerCodec.encode(
-            new BerTlv(
-                TAG_CLASS_CONTEXT,
-                true,
-                NATIVE_BIND_ERROR_OUTER_TAG,
-                0,
-                payload.length,
-                payload
-            )
-        );
-
-        logger.info("P3 native bind error encoded={}", toHex(encoded));
-        return encoded;
-    }
-
-    private String extractLastIa5OrGraphicStringByContextTag(BerTlv node, int wantedTag) {
-        if (node == null) {
-            return null;
+        if (compact.length() >= 24) {
+            return compact.substring(0, 24);
         }
 
-        String found = null;
-
-        if (node.constructed()) {
-            try {
-                List<BerTlv> children = BerCodec.decodeAll(node.value());
-                for (BerTlv child : children) {
-                    String nested = extractLastIa5OrGraphicStringByContextTag(child, wantedTag);
-                    if (StringUtils.hasText(nested)) {
-                        found = nested;
-                    }
-                }
-            } catch (RuntimeException ignored) {
-            }
-        }
-
-        if (node.tagClass() == TAG_CLASS_CONTEXT && node.tagNumber() == wantedTag) {
-            try {
-                if (node.constructed()) {
-                    List<BerTlv> nested = BerCodec.decodeAll(node.value());
-                    if (nested.size() == 1 && !nested.get(0).constructed()) {
-                        String decoded = decodeIa5OrGraphicString(nested.get(0));
-                        if (StringUtils.hasText(decoded)) {
-                            found = decoded;
-                        }
-                    }
-                } else {
-                    String decoded = new String(node.value(), StandardCharsets.US_ASCII).trim();
-                    if (StringUtils.hasText(decoded)) {
-                        found = decoded;
-                    }
-                }
-            } catch (RuntimeException ignored) {
-            }
-        }
-
-        return found;
-    }
-
-    private String decodeIa5OrGraphicString(BerTlv tlv) {
-        if (tlv == null || tlv.constructed()) {
-            return null;
-        }
-
-        return switch (tlv.tagClass()) {
-            case TAG_CLASS_UNIVERSAL -> switch (tlv.tagNumber()) {
-                case 22, 25, 19, 20, 26 -> new String(tlv.value(), StandardCharsets.US_ASCII).trim();
-                case 12 -> new String(tlv.value(), StandardCharsets.UTF_8).trim();
-                default -> null;
-            };
-            default -> null;
-        };
+        return String.format("%-24s", compact).replace(' ', '0');
     }
 
     private byte[] encodeResponderNameFromInbound(BerTlv inboundBindRoot) {
@@ -369,10 +490,188 @@ public class P3BindCodec {
         return findUtf8ContextValueOutsideAddress(root, addressNode, 3);
     }
 
-    private String findLastUtf8ContextValueOutsideAddress(BerTlv node, BerTlv addressNode, int wantedTag) {
-        if (node == null || node == addressNode) {
+    private String extractSenderFromMtsBind(BerTlv root) {
+        BerTlv addressNode = findAddressContainer(root);
+        if (addressNode == null) {
             return null;
         }
+
+        Map<String, String> attrs = new LinkedHashMap<>();
+        collectNativeOrAddressAttributes(addressNode, attrs);
+        normalizeNativeOrAddressAttributes(attrs);
+
+        logger.info("P3 bind normalized MTS attrs={}", attrs);
+
+        if (!looksLikeAddressCandidate(attrs)) {
+            return null;
+        }
+
+        try {
+            return ORAddress.of(attrs).toCanonicalString();
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private String extractPasswordFromMtsBind(BerTlv root) {
+        BerTlv addressNode = findAddressContainer(root);
+        return findLastIa5OrGraphicStringOutsideAddress(root, addressNode, 2);
+    }
+
+    private String extractUsernameFromMtsBind(BerTlv root) {
+        BerTlv addressNode = findAddressContainer(root);
+        return findFirstIa5OrGraphicStringOutsideAddress(root, addressNode, 0);
+    }
+
+    private String extractChannelFromMtsBind(BerTlv root) {
+        BerTlv addressNode = findAddressContainer(root);
+        return findFirstIa5OrGraphicStringOutsideAddress(root, addressNode, 3);
+    }
+    
+    private String findLastIa5OrGraphicStringOutsideAddress(BerTlv node, BerTlv addressNode, int wantedTag) {
+        if (node == null) {
+            return null;
+        }
+
+        if (isSameNode(node, addressNode) || looksLikeOrAddressSequence(node) || findAddressContainer(node) == node) {
+            return null;
+        }
+
+        if (node.constructed()) {
+            try {
+                List<BerTlv> children = BerCodec.decodeAll(node.value());
+
+                for (int i = children.size() - 1; i >= 0; i--) {
+                    BerTlv child = children.get(i);
+
+                    if (isSameNode(child, addressNode)) {
+                        continue;
+                    }
+
+                    String nested = findLastIa5OrGraphicStringOutsideAddress(child, addressNode, wantedTag);
+                    if (StringUtils.hasText(nested)) {
+                        return nested;
+                    }
+                }
+            } catch (RuntimeException ignored) {
+            }
+        }
+
+        if (node.tagClass() == TAG_CLASS_CONTEXT && node.tagNumber() == wantedTag) {
+            try {
+                if (node.constructed()) {
+                    List<BerTlv> nested = BerCodec.decodeAll(node.value());
+                    if (nested.size() == 1 && !nested.get(0).constructed()) {
+                        String decoded = decodeIa5OrGraphicString(nested.get(0));
+                        if (StringUtils.hasText(decoded)) {
+                            return decoded;
+                        }
+                    }
+                } else {
+                    String decoded = new String(node.value(), StandardCharsets.US_ASCII).trim();
+                    if (StringUtils.hasText(decoded)) {
+                        return decoded;
+                    }
+                }
+            } catch (RuntimeException ignored) {
+            }
+        }
+
+        return null;
+    }
+
+    private String findFirstIa5OrGraphicStringOutsideAddress(BerTlv node, BerTlv addressNode, int wantedTag) {
+        if (node == null) {
+            return null;
+        }
+
+        if (isSameNode(node, addressNode) || looksLikeOrAddressSequence(node) || findAddressContainer(node) == node) {
+            return null;
+        }
+
+        if (node.tagClass() == TAG_CLASS_CONTEXT && node.tagNumber() == wantedTag) {
+            try {
+                if (node.constructed()) {
+                    List<BerTlv> nested = BerCodec.decodeAll(node.value());
+                    if (nested.size() == 1 && !nested.get(0).constructed()) {
+                        String decoded = decodeIa5OrGraphicString(nested.get(0));
+                        if (StringUtils.hasText(decoded)) {
+                            return decoded;
+                        }
+                    }
+                } else {
+                    String decoded = new String(node.value(), StandardCharsets.US_ASCII).trim();
+                    if (StringUtils.hasText(decoded)) {
+                        return decoded;
+                    }
+                }
+            } catch (RuntimeException ignored) {
+            }
+        }
+
+        if (!node.constructed()) {
+            return null;
+        }
+
+        try {
+            for (BerTlv child : BerCodec.decodeAll(node.value())) {
+                if (isSameNode(child, addressNode)) {
+                    continue;
+                }
+
+                String nested = findFirstIa5OrGraphicStringOutsideAddress(child, addressNode, wantedTag);
+                if (StringUtils.hasText(nested)) {
+                    return nested;
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+
+        return null;
+    }
+    
+    private boolean isSameNode(BerTlv left, BerTlv right) {
+        if (left == null || right == null) {
+            return false;
+        }
+
+        try {
+            byte[] l = BerCodec.encode(left);
+            byte[] r = BerCodec.encode(right);
+            if (l.length != r.length) {
+                return false;
+            }
+
+            for (int i = 0; i < l.length; i++) {
+                if (l[i] != r[i]) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private String decodeIa5OrGraphicString(BerTlv tlv) {
+        if (tlv == null || tlv.constructed()) {
+            return null;
+        }
+
+        return switch (tlv.tagClass()) {
+            case TAG_CLASS_UNIVERSAL -> switch (tlv.tagNumber()) {
+                case 22, 25, 19, 20, 26 -> new String(tlv.value(), StandardCharsets.US_ASCII).trim();
+                case 12 -> new String(tlv.value(), StandardCharsets.UTF_8).trim();
+                default -> null;
+            };
+            default -> null;
+        };
+    }
+
+    private String findLastUtf8ContextValueOutsideAddress(BerTlv node, BerTlv addressNode, int wantedTag) {
+    	if (node == null || isSameNode(node, addressNode)) {
+    	    return null;
+    	}
 
         String found = null;
 
@@ -382,7 +681,7 @@ public class P3BindCodec {
 
                 for (int i = children.size() - 1; i >= 0; i--) {
                     BerTlv child = children.get(i);
-                    if (child == addressNode) {
+                    if (isSameNode(child, addressNode)) {
                         continue;
                     }
 
@@ -419,9 +718,9 @@ public class P3BindCodec {
     }
 
     private String findUtf8ContextValueOutsideAddress(BerTlv node, BerTlv addressNode, int wantedTag) {
-        if (node == null || node == addressNode || !node.constructed()) {
-            return null;
-        }
+    	if (node == null || isSameNode(node, addressNode)) {
+    	    return null;
+    	}
 
         if (node.tagClass() == TAG_CLASS_CONTEXT && node.tagNumber() == wantedTag) {
             try {
@@ -438,7 +737,7 @@ public class P3BindCodec {
 
         try {
             for (BerTlv child : BerCodec.decodeAll(node.value())) {
-                if (child == addressNode) {
+            	if (isSameNode(child, addressNode)) {
                     continue;
                 }
                 String found = findUtf8ContextValueOutsideAddress(child, addressNode, wantedTag);
@@ -595,6 +894,10 @@ public class P3BindCodec {
 
     private String value(String value) {
         return value == null ? "" : value;
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private String toHex(byte[] value) {

@@ -300,8 +300,8 @@ public class AcseAssociationProtocol {
         }
 
         Optional<AcseModels.ApTitle> respondingApTitle =
-            BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 4)
-                .map(v -> new AcseModels.ApTitle(decodeOid(v)));
+        	    BerCodec.findOptional(fields, TAG_CLASS_CONTEXT, 4)
+        	        .map(this::decodeApTitleField);
 
         Optional<String> respondingAeTitle = Optional.empty();
         Optional<AcseModels.AeQualifier> respondingAeQualifier = Optional.empty();
@@ -342,6 +342,27 @@ public class AcseAssociationProtocol {
             presentationContexts.abstractSyntaxOids(),
             presentationContexts.acceptedContextIdentifiers()
         );
+    }
+    
+    private AcseModels.ApTitle decodeApTitleField(BerTlv wrapped) {
+        if (wrapped == null || wrapped.tagClass() != TAG_CLASS_CONTEXT || !wrapped.constructed()) {
+            throw new IllegalArgumentException("ACSE AP-title must be explicit context-specific");
+        }
+
+        byte[] inner = wrapped.value();
+        if (inner.length == 0) {
+            throw new IllegalArgumentException("ACSE AP-title is empty");
+        }
+
+        try {
+            BerTlv tlv = BerCodec.decodeSingle(inner);
+            if (tlv.isUniversal() && tlv.tagNumber() == 6) {
+                return AcseModels.ApTitle.fromOid(decodeOid(wrapped));
+            }
+        } catch (RuntimeException ignored) {
+        }
+
+        return AcseModels.ApTitle.fromRawBer(inner);
     }
 
     private byte[] encodeRlrq(AcseModels.RLRQApdu rlrq) {
@@ -797,8 +818,8 @@ public class AcseAssociationProtocol {
         );
 
         byte[] indirectReference = BerCodec.encode(
-            new BerTlv(TAG_CLASS_UNIVERSAL, false, 2, 0, 1, new byte[] { 0x07 })
-        );
+    	    new BerTlv(TAG_CLASS_UNIVERSAL, false, 2, 0, 1, new byte[] { 0x09 })
+    	);
 
         /*
          * Correct EXTERNAL encoding for ACSE user-information:

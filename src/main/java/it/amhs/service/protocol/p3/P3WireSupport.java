@@ -145,18 +145,36 @@ final class P3WireSupport {
         return builder.toString().trim();
     }
 
-    static byte[] concat(List<byte[]> chunks) {
-        int total = 0;
-        for (byte[] chunk : chunks) {
-            total += chunk.length;
+    public static byte[] concat(byte[]... arrays) {
+        if (arrays == null || arrays.length == 0) {
+            return new byte[0];
         }
-        byte[] out = new byte[total];
+
+        int totalLength = 0;
+        for (byte[] arr : arrays) {
+            if (arr != null) {
+                totalLength += arr.length;
+            }
+        }
+
+        byte[] result = new byte[totalLength];
         int offset = 0;
-        for (byte[] chunk : chunks) {
-            System.arraycopy(chunk, 0, out, offset, chunk.length);
-            offset += chunk.length;
+
+        for (byte[] arr : arrays) {
+            if (arr != null && arr.length > 0) {
+                System.arraycopy(arr, 0, result, offset, arr.length);
+                offset += arr.length;
+            }
         }
-        return out;
+
+        return result;
+    }
+
+    static byte[] concat(List<byte[]> arrays) {
+        if (arrays == null || arrays.isEmpty()) {
+            return new byte[0];
+        }
+        return concat(arrays.toArray(new byte[0][]));
     }
 
     static String trimToNull(String value) {

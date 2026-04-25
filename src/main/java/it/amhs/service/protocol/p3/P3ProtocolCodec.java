@@ -1,19 +1,24 @@
 package it.amhs.service.protocol.p3;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import it.amhs.asn1.BerCodec;
+import it.amhs.asn1.BerTlv;
 import it.amhs.service.protocol.p3.P3OperationModels.BindRequest;
 import it.amhs.service.protocol.p3.P3OperationModels.BindResult;
 import it.amhs.service.protocol.p3.P3OperationModels.P3Error;
 import it.amhs.service.protocol.p3.P3OperationModels.ReleaseResult;
 import it.amhs.service.protocol.p3.P3OperationModels.SubmitRequest;
 import it.amhs.service.protocol.p3.P3OperationModels.SubmitResult;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 @Component
 public class P3ProtocolCodec {
 
     private static final Logger logger = LoggerFactory.getLogger(P3ProtocolCodec.class);
+
+    private static final int MIN_REASONABLE_P3_APDU_LEN = 16;
 
     private final P3BindCodec bindCodec;
     private final P3SubmitCodec submitCodec;
@@ -32,15 +37,33 @@ public class P3ProtocolCodec {
         this.sessionService = sessionService;
     }
 
-    public boolean isSupportedApplicationApdu(byte[] encodedPdu) {
-        return bindCodec.isLikelyNativeBind(encodedPdu)
-            || submitCodec.isLikelySubmitRequest(encodedPdu)
-            || releaseCodec.isLikelyReleaseRequest(encodedPdu);
+    public boolean isSupportedApplicationApdu(byte[] encodedApdu) {
+        if (encodedApdu == null || encodedApdu.length < 4) {
+            return false;
+        }
+
+        try {
+            if (isRoseInvoke(encodedApdu)) {
+                return true;
+            }
+
+            return bindCodec.isLikelyBindRequest(encodedApdu)
+                || submitCodec.isLikelySubmitRequest(encodedApdu)
+                || releaseCodec.isLikelyReleaseRequest(encodedApdu);
+        } catch (RuntimeException ex) {
+            return false;
+        }
     }
 
     public byte[] handle(P3GatewaySessionService.SessionState session, byte[] encodedApdu) {
         try {
-            if (bindCodec.isLikelyNativeBind(encodedApdu)) {
+            logInboundApdu(encodedApdu);
+
+            if (isRoseInvoke(encodedApdu)) {
+                return handleRoseInvoke(session, encodedApdu);
+            }
+
+            if (bindCodec.isLikelyBindRequest(encodedApdu)) {
                 return handleBind(session, encodedApdu);
             }
 
@@ -53,24 +76,134 @@ public class P3ProtocolCodec {
             }
 
             logger.warn("Unsupported P3 APDU");
-            return bindCodec.encodeBindError(
-                null,
-                new P3Error(
-                    "unsupported-operation",
-                    "Unsupported P3 operation",
-                    false
-                )
-            );
+            return bindCodec.encodeBindError(null, new P3Error("unsupported-operation", "Unsupported P3 operation", false));
         } catch (IllegalArgumentException ex) {
             logger.warn("Malformed P3 APDU: {}", ex.getMessage());
-            return bindCodec.encodeBindError(
-                null,
-                new P3Error(
-                    "malformed-apdu",
-                    ex.getMessage(),
-                    false
+            return bindCodec.encodeBindError(null, new P3Error("malformed-apdu", ex.getMessage(), false));
+        }
+    }
+    
+    private byte[] handleRoseInvoke(P3GatewaySessionService.SessionState session, byte[] rosInvoke) {
+        int opCode = extractRoseOperationCode(rosInvoke, -1);
+        byte[] operationArg = extractRoseInvokeArgument(rosInvoke);
+
+        if (operationArg == null || operationArg.length == 0) {
+            return wrapRoseErrorIfNeeded(
+                rosInvoke,
+                submitCodec.encodeSubmitError(
+                    new P3Error("malformed-apdu", "Missing ROS argument", false)
                 )
             );
+        }
+
+        try {
+            if (opCode == 3 || submitCodec.isLikelySubmitRequest(operationArg)) {
+                SubmitRequest request = submitCodec.decodeSubmitRequest(operationArg);
+
+                String command = "SUBMIT"
+                    + " recipient=" + value(request.recipientOrAddress())
+                    + ";subject=" + value(request.subject())
+                    + ";body=" + value(request.body());
+
+                String response = sessionService.handleCommand(session, command);
+
+                if (response.startsWith("OK")) {
+                    String submissionId = parseField(response, "submission-id", "");
+                    String messageId = parseField(response, "message-id", "");
+
+                    byte[] nativeResult = submitCodec.encodeSubmitResult(
+                        new SubmitResult(submissionId, messageId)
+                    );
+
+                    return wrapRoseResultIfNeeded(rosInvoke, nativeResult);
+                }
+
+                return wrapRoseErrorIfNeeded(
+                    rosInvoke,
+                    submitCodec.encodeSubmitError(toError(response))
+                );
+            }
+
+            if (releaseCodec.isLikelyReleaseRequest(operationArg)) {
+                byte[] nativeResult = handleRelease(session, operationArg);
+                return wrapRoseResultIfNeeded(rosInvoke, nativeResult);
+            }
+
+            return wrapRoseErrorIfNeeded(
+                rosInvoke,
+                submitCodec.encodeSubmitError(
+                    new P3Error(
+                        "unsupported-operation",
+                        "Unsupported ROS operation code=" + opCode,
+                        false
+                    )
+                )
+            );
+
+        } catch (RuntimeException ex) {
+            return wrapRoseErrorIfNeeded(
+                rosInvoke,
+                submitCodec.encodeSubmitError(
+                    new P3Error("malformed-apdu", ex.getMessage(), false)
+                )
+            );
+        }
+    }
+    
+    private int extractRoseOperationCode(byte[] rosInvoke, int fallback) {
+        try {
+            BerTlv root = BerCodec.decodeSingle(rosInvoke);
+            int integerCount = 0;
+
+            for (BerTlv child : BerCodec.decodeAll(root.value())) {
+                if (child.tagClass() == BerCodec.TAG_CLASS_UNIVERSAL
+                    && !child.constructed()
+                    && child.tagNumber() == 2) {
+
+                    integerCount++;
+                    if (integerCount == 2) {
+                        return child.value()[child.value().length - 1] & 0xFF;
+                    }
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+
+        return fallback;
+    }
+
+    private byte[] extractRoseInvokeArgument(byte[] rosInvoke) {
+        try {
+            BerTlv root = BerCodec.decodeSingle(rosInvoke);
+            int integerCount = 0;
+
+            for (BerTlv child : BerCodec.decodeAll(root.value())) {
+                if (child.tagClass() == BerCodec.TAG_CLASS_UNIVERSAL
+                    && !child.constructed()
+                    && child.tagNumber() == 2) {
+                    integerCount++;
+                    continue;
+                }
+
+                if (integerCount >= 2) {
+                    return BerCodec.encode(child);
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+
+        return null;
+    }
+
+    private boolean isRoseApdu(byte[] apdu) {
+        try {
+            BerTlv root = BerCodec.decodeSingle(apdu);
+            return root.tagClass() == BerCodec.TAG_CLASS_CONTEXT
+                && root.constructed()
+                && root.tagNumber() >= 1
+                && root.tagNumber() <= 4;
+        } catch (RuntimeException ex) {
+            return false;
         }
     }
 
@@ -114,10 +247,110 @@ public class P3ProtocolCodec {
         if (response.startsWith("OK")) {
             String submissionId = parseField(response, "submission-id", "");
             String messageId = parseField(response, "message-id", "");
-            return submitCodec.encodeSubmitResult(new SubmitResult(submissionId, messageId));
+
+            byte[] nativeResult = submitCodec.encodeSubmitResult(
+                new SubmitResult(submissionId, messageId)
+            );
+
+            return wrapRoseResultIfNeeded(encodedApdu, nativeResult);
         }
 
-        return submitCodec.encodeSubmitError(toError(response));
+        byte[] nativeError = submitCodec.encodeSubmitError(toError(response));
+        return wrapRoseErrorIfNeeded(encodedApdu, nativeError);
+    }
+    
+    private byte[] wrapRoseResultIfNeeded(byte[] requestApdu, byte[] nativeResult) {
+        if (!isRoseInvoke(requestApdu)) {
+            return nativeResult;
+        }
+
+        int invokeId = extractRoseInvokeId(requestApdu, 1);
+
+        byte[] invokeIdTlv = BerCodec.encode(
+            new BerTlv(BerCodec.TAG_CLASS_UNIVERSAL, false, 2, 0, 1, new byte[] { (byte) invokeId })
+        );
+
+        // returnResult ::= [2] { invokeId, result }
+        // result ::= SEQUENCE { operationCode, resultParameter }
+        byte[] resultSeq = nativeResult;
+
+        byte[] value = concat(invokeIdTlv, resultSeq);
+
+        return BerCodec.encode(
+            new BerTlv(BerCodec.TAG_CLASS_CONTEXT, true, 2, 0, value.length, value)
+        );
+    }
+
+    private byte[] wrapRoseErrorIfNeeded(byte[] requestApdu, byte[] nativeError) {
+        if (!isRoseInvoke(requestApdu)) {
+            return nativeError;
+        }
+
+        int invokeId = extractRoseInvokeId(requestApdu, 1);
+
+        byte[] invokeIdTlv = BerCodec.encode(
+            new BerTlv(BerCodec.TAG_CLASS_UNIVERSAL, false, 2, 0, 1, new byte[] { (byte) invokeId })
+        );
+
+        byte[] errorCode = BerCodec.encode(
+            new BerTlv(BerCodec.TAG_CLASS_UNIVERSAL, false, 2, 0, 1, new byte[] { 1 })
+        );
+
+        byte[] parameter = BerCodec.encode(
+            new BerTlv(BerCodec.TAG_CLASS_CONTEXT, true, 0, 0, nativeError.length, nativeError)
+        );
+
+        byte[] value = concat(invokeIdTlv, errorCode, parameter);
+
+        return BerCodec.encode(
+            new BerTlv(BerCodec.TAG_CLASS_CONTEXT, true, 3, 0, value.length, value)
+        );
+    }
+
+    private boolean isRoseInvoke(byte[] apdu) {
+        try {
+            BerTlv root = BerCodec.decodeSingle(apdu);
+            return root.tagClass() == BerCodec.TAG_CLASS_CONTEXT
+                && root.constructed()
+                && root.tagNumber() == 1;
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private int extractRoseInvokeId(byte[] apdu, int fallback) {
+        try {
+            BerTlv root = BerCodec.decodeSingle(apdu);
+            for (BerTlv child : BerCodec.decodeAll(root.value())) {
+                if (child.tagClass() == BerCodec.TAG_CLASS_UNIVERSAL
+                    && !child.constructed()
+                    && child.tagNumber() == 2
+                    && child.value().length > 0) {
+                    return child.value()[child.value().length - 1] & 0xFF;
+                }
+            }
+        } catch (RuntimeException ignored) {
+        }
+        return fallback;
+    }
+
+    private byte[] concat(byte[]... parts) {
+        int len = 0;
+        for (byte[] p : parts) {
+            if (p != null) len += p.length;
+        }
+
+        byte[] out = new byte[len];
+        int pos = 0;
+
+        for (byte[] p : parts) {
+            if (p != null && p.length > 0) {
+                System.arraycopy(p, 0, out, pos, p.length);
+                pos += p.length;
+            }
+        }
+
+        return out;
     }
 
     private byte[] handleRelease(P3GatewaySessionService.SessionState session, byte[] encodedApdu) {
@@ -163,5 +396,25 @@ public class P3ProtocolCodec {
 
     private String value(String maybeNull) {
         return maybeNull == null ? "" : maybeNull;
+    }
+
+    private void logInboundApdu(byte[] encodedApdu) {
+        if (encodedApdu == null || encodedApdu.length == 0) {
+            logger.info("P3 application decode empty APDU");
+            return;
+        }
+
+        try {
+            BerTlv tlv = BerCodec.decodeSingle(encodedApdu);
+            logger.info(
+                "P3 application decode tagClass={} constructed={} tagNumber={} len={}",
+                tlv.tagClass(),
+                tlv.constructed(),
+                tlv.tagNumber(),
+                tlv.length()
+            );
+        } catch (RuntimeException ex) {
+            logger.info("P3 application decode could not parse BER: {}", ex.getMessage());
+        }
     }
 }
