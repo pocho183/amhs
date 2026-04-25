@@ -164,6 +164,7 @@ public class P3GatewayServer {
             PushbackInputStream input = new PushbackInputStream(socket.getInputStream(), 16);
             OutputStream output = socket.getOutputStream()
         ) {
+        	socket.setTcpNoDelay(false);
             P3GatewaySessionService.SessionState session = sessionService.newSession();
 
             byte[] preview = input.readNBytes(8);
@@ -866,17 +867,23 @@ public class P3GatewayServer {
         output.flush();
     }
 
+    // Send to the channel
     private void sendTpktFrame(OutputStream output, byte[] tpdu) throws Exception {
         int length = 4 + tpdu.length;
         if (length > MAX_TPKT_LENGTH) {
             throw new IllegalArgumentException("TPKT frame too large: " + length);
         }
 
-        output.write(TPKT_VERSION);
-        output.write(TPKT_RESERVED);
-        output.write((length >> 8) & 0xFF);
-        output.write(length & 0xFF);
-        output.write(tpdu);
+        byte[] frame = new byte[length];
+
+        frame[0] = TPKT_VERSION;
+        frame[1] = TPKT_RESERVED;
+        frame[2] = (byte) ((length >> 8) & 0xFF);
+        frame[3] = (byte) (length & 0xFF);
+
+        System.arraycopy(tpdu, 0, frame, 4, tpdu.length);
+
+        output.write(frame);
     }
 
     private void sendRfc1006Disconnect(OutputStream output) throws Exception {

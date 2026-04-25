@@ -15,7 +15,8 @@ import it.amhs.service.address.ORAddress;
 @Component
 public class AMHSComplianceValidator {
 
-    private static final Pattern ICAO_8_CHAR = Pattern.compile("^[A-Z]{8}$");
+    //private static final Pattern ICAO_8_CHAR = Pattern.compile("^[A-Z]{8}$");
+    private static final Pattern ICAO_8_CHAR = Pattern.compile("^[A-Z]{4,8}$");
     private static final Pattern NUMERIC_COUNTRY = Pattern.compile("^\\d{3}$");
     private static final Set<String> ISO_COUNTRIES = Set.of(Locale.getISOCountries());
 
